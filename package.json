@@ -1,0 +1,16 @@
+{
+  "name": "keiba-index-generator",
+  "version": "0.1.0",
+  "description": "JRA-VAN DataLabのデータから予想指数表(HTML+スコアJSON)を自動生成するツール",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "generate": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

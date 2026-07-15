@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "score-export",
+  "description": "指数表ジェネレーターが出力するスコアJSON。期待値アプリ(keiba-ev)が読み込む正のスキーマ。",
+  "type": "object",
+  "required": ["race_id", "race_info", "horses"],
+  "properties": {
+    "race_id": { "type": "string", "description": "例: 202607040611" },
+    "race_info": {
+      "type": "object",
+      "required": ["course", "surface", "distance", "pace", "condition"],
+      "properties": {
+        "course": { "type": "string" },
+        "surface": { "type": "string", "enum": ["芝", "ダ"] },
+        "distance": { "type": "integer" },
+        "pace": { "type": "string", "enum": ["S", "M", "H"], "description": "想定ペース（手入力）" },
+        "condition": { "type": "string", "enum": ["良", "稍", "重", "不"], "description": "馬場状態（手入力）" },
+        "name": { "type": "string" }
+      }
+    },
+    "horses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["number", "name", "score", "rank", "mark", "win_prob", "place_prob", "flags"],
+        "properties": {
+          "number": { "type": "integer" },
+          "name": { "type": "string" },
+          "score": { "type": "number" },
+          "rank": { "type": "string", "enum": ["S+", "S", "A", "B", "C"] },
+          "mark": { "type": "string", "description": "◎○▲△× または空文字" },
+          "win_prob": { "type": "number", "minimum": 0, "maximum": 1, "description": "レース内スコアのsoftmax正規化（合計=1）" },
+          "place_prob": { "type": "number", "minimum": 0, "maximum": 1, "description": "複勝圏内率（初期は簡易推定、Phase 3でキャリブレーション）" },
+          "flags": {
+            "type": "object",
+            "required": ["plus", "minus"],
+            "properties": {
+              "plus": { "type": "array", "items": { "type": "string" } },
+              "minus": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

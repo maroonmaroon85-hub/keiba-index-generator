@@ -1,0 +1,204 @@
+{
+  "_comment": "Phase 1 用ダミーデータ。函館6R ダ1700m 14頭（参考画像ベースの手起こし・馬名等は架空）。PreRaceData と同形。PostRaceData(着順・払戻等)は一切含めない。",
+  "race": {
+    "raceId": "202607040611",
+    "course": "函館",
+    "surface": "ダ",
+    "distance": 1700,
+    "pace": "H",
+    "condition": "良",
+    "name": "3歳未勝利"
+  },
+  "horses": [
+    {
+      "number": 1, "frame": 1, "name": "ヒダカブライト", "blinker": false,
+      "jockey": { "name": "斎藤", "reductionMark": "☆", "reductionKg": 1 },
+      "sex": "牡", "age": 3, "weightCarry": 55, "prevWeightCarry": 55, "odds": 8.4,
+      "pastRuns": [
+        { "finish": 4, "fieldSize": 13, "surface": "ダ", "distance": 1700, "course": "函館", "passing": [2, 2], "margin": 0.6, "blinker": false },
+        { "finish": 6, "fieldSize": 15, "surface": "ダ", "distance": 1800, "course": "札幌", "passing": [3, 3], "margin": 1.1, "blinker": false },
+        { "finish": 5, "fieldSize": 14, "surface": "ダ", "distance": 1700, "course": "函館", "passing": [4, 4], "margin": 0.9, "blinker": false }
+      ],
+      "weeksSinceLastRun": 3, "weeksBeforeLastRun": 4,
+      "sireLine": "キンカメ系", "damSireLine": "ミスプロ系",
+      "training": { "evaluation": "B", "trend": "up" },
+      "producer": "日高", "trainer": "田中"
+    },
+    {
+      "number": 2, "frame": 2, "name": "サツキノユメ", "blinker": false,
+      "jockey": { "name": "武", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牝", "age": 3, "weightCarry": 54, "prevWeightCarry": 52, "odds": 12.0,
+      "pastRuns": [
+        { "finish": 3, "fieldSize": 12, "surface": "芝", "distance": 1500, "course": "函館", "passing": [8, 9], "margin": 0.4, "blinker": false },
+        { "finish": 7, "fieldSize": 16, "surface": "芝", "distance": 1200, "course": "札幌", "passing": [12, 12], "margin": 1.0, "blinker": false }
+      ],
+      "weeksSinceLastRun": 5, "weeksBeforeLastRun": 3,
+      "sireLine": "サンデー系", "damSireLine": "ノーザン系",
+      "training": { "evaluation": "C", "trend": "flat" },
+      "producer": "千歳", "trainer": "佐々木"
+    },
+    {
+      "number": 3, "frame": 2, "name": "コパノフウジン", "blinker": true,
+      "jockey": { "name": "横山", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牡", "age": 3, "weightCarry": 56, "prevWeightCarry": 56, "odds": 15.0,
+      "pastRuns": [
+        { "finish": 8, "fieldSize": 14, "surface": "ダ", "distance": 1700, "course": "函館", "passing": [13, 13], "margin": 1.4, "blinker": true },
+        { "finish": 10, "fieldSize": 15, "surface": "ダ", "distance": 1700, "course": "札幌", "passing": [14, 14], "margin": 2.0, "blinker": true },
+        { "finish": 9, "fieldSize": 13, "surface": "ダ", "distance": 1800, "course": "函館", "passing": [12, 13], "margin": 1.8, "blinker": false }
+      ],
+      "weeksSinceLastRun": 2, "weeksBeforeLastRun": 3,
+      "sireLine": "ストームキャット系", "damSireLine": "ヘイロー系",
+      "training": { "evaluation": "C", "trend": "down" },
+      "producer": "浦河", "trainer": "小林"
+    },
+    {
+      "number": 4, "frame": 3, "name": "テイオーガイア", "blinker": false,
+      "jockey": { "name": "川田", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牡", "age": 3, "weightCarry": 56, "prevWeightCarry": 56, "odds": 20.0,
+      "pastRuns": [
+        { "finish": 2, "fieldSize": 10, "surface": "芝", "distance": 1800, "course": "函館", "passing": [5, 5], "margin": 0.2, "blinker": false },
+        { "finish": 3, "fieldSize": 12, "surface": "芝", "distance": 2000, "course": "札幌", "passing": [6, 6], "margin": 0.3, "blinker": false }
+      ],
+      "weeksSinceLastRun": 4, "weeksBeforeLastRun": 5,
+      "sireLine": "ディープ系", "damSireLine": "サドラー系",
+      "training": { "evaluation": "B", "trend": "flat" },
+      "producer": "安平", "trainer": "藤原"
+    },
+    {
+      "number": 5, "frame": 3, "name": "レッドフロイデ", "blinker": false,
+      "jockey": { "name": "ルメール", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牡", "age": 3, "weightCarry": 56, "prevWeightCarry": 56, "odds": 3.2,
+      "pastRuns": [
+        { "finish": 2, "fieldSize": 14, "surface": "ダ", "distance": 1700, "course": "函館", "passing": [2, 2], "margin": 0.1, "blinker": false },
+        { "finish": 1, "fieldSize": 12, "surface": "ダ", "distance": 1700, "course": "札幌", "passing": [1, 1], "margin": 0.5, "blinker": false },
+        { "finish": 3, "fieldSize": 13, "surface": "ダ", "distance": 1600, "course": "函館", "passing": [3, 3], "margin": 0.4, "blinker": false }
+      ],
+      "weeksSinceLastRun": 3, "weeksBeforeLastRun": 4,
+      "sireLine": "ミスプロ系", "damSireLine": "ファピアノ系",
+      "training": { "evaluation": "A", "trend": "up" },
+      "producer": "新ひだか", "trainer": "音無"
+    },
+    {
+      "number": 6, "frame": 4, "name": "マルターズゲイル", "blinker": false,
+      "jockey": { "name": "池添", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牝", "age": 3, "weightCarry": 54, "prevWeightCarry": 54, "odds": 25.0,
+      "pastRuns": [
+        { "finish": 11, "fieldSize": 14, "surface": "ダ", "distance": 1200, "course": "函館", "passing": [10, 11], "margin": 1.6, "blinker": false },
+        { "finish": 12, "fieldSize": 16, "surface": "ダ", "distance": 1400, "course": "札幌", "passing": [11, 12], "margin": 1.9, "blinker": false }
+      ],
+      "weeksSinceLastRun": 30, "weeksBeforeLastRun": 4,
+      "sireLine": "ヘイロー系", "damSireLine": "ナスルーラ系",
+      "training": { "evaluation": "C", "trend": "flat" },
+      "producer": "新冠", "trainer": "中内田"
+    },
+    {
+      "number": 7, "frame": 4, "name": "エイシンボルト", "blinker": false,
+      "jockey": { "name": "岩田", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牡", "age": 3, "weightCarry": 56, "prevWeightCarry": 54, "odds": 6.8,
+      "pastRuns": [
+        { "finish": 1, "fieldSize": 13, "surface": "ダ", "distance": 1000, "course": "函館", "passing": [1, 1], "margin": 0.7, "blinker": false },
+        { "finish": 4, "fieldSize": 14, "surface": "ダ", "distance": 1200, "course": "札幌", "passing": [2, 3], "margin": 0.5, "blinker": false },
+        { "finish": 2, "fieldSize": 12, "surface": "ダ", "distance": 1000, "course": "函館", "passing": [1, 2], "margin": 0.2, "blinker": false }
+      ],
+      "weeksSinceLastRun": 3, "weeksBeforeLastRun": 4,
+      "sireLine": "ダンチヒ系", "damSireLine": "ストームキャット系",
+      "training": { "evaluation": "B", "trend": "up" },
+      "producer": "日高", "trainer": "杉山"
+    },
+    {
+      "number": 8, "frame": 5, "name": "ナリタシンゲン", "blinker": false,
+      "jockey": { "name": "松山", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牡", "age": 3, "weightCarry": 56, "prevWeightCarry": 56, "odds": 9.5,
+      "pastRuns": [
+        { "finish": 3, "fieldSize": 14, "surface": "ダ", "distance": 1700, "course": "函館", "passing": [6, 5], "margin": 0.5, "blinker": false },
+        { "finish": 5, "fieldSize": 13, "surface": "ダ", "distance": 1700, "course": "札幌", "passing": [7, 6], "margin": 0.8, "blinker": false },
+        { "finish": 4, "fieldSize": 15, "surface": "ダ", "distance": 1800, "course": "函館", "passing": [8, 7], "margin": 0.7, "blinker": false }
+      ],
+      "weeksSinceLastRun": 4, "weeksBeforeLastRun": 3,
+      "sireLine": "ロベルト系", "damSireLine": "ミスプロ系",
+      "training": { "evaluation": "B", "trend": "flat" },
+      "producer": "新ひだか", "trainer": "友道"
+    },
+    {
+      "number": 9, "frame": 5, "name": "ブルーメンタール", "blinker": false,
+      "jockey": { "name": "西村", "reductionMark": "△", "reductionKg": 2 },
+      "sex": "牝", "age": 3, "weightCarry": 52, "prevWeightCarry": 54, "odds": 18.0,
+      "pastRuns": [
+        { "finish": 2, "fieldSize": 12, "surface": "ダ", "distance": 1700, "course": "函館", "passing": [4, 4], "margin": 0.3, "blinker": false },
+        { "finish": 6, "fieldSize": 14, "surface": "ダ", "distance": 1700, "course": "札幌", "passing": [5, 5], "margin": 0.9, "blinker": false }
+      ],
+      "weeksSinceLastRun": 3, "weeksBeforeLastRun": 20,
+      "sireLine": "ハーツ系", "damSireLine": "ノーザン系",
+      "training": { "evaluation": "A", "trend": "up" },
+      "producer": "むかわ", "trainer": "堀"
+    },
+    {
+      "number": 10, "frame": 6, "name": "キョウエイダッシュ", "blinker": true,
+      "jockey": { "name": "幸", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牡", "age": 4, "weightCarry": 57, "prevWeightCarry": 57, "odds": 40.0,
+      "pastRuns": [
+        { "finish": 13, "fieldSize": 14, "surface": "ダ", "distance": 1700, "course": "函館", "passing": [14, 14], "margin": 2.5, "blinker": true },
+        { "finish": 12, "fieldSize": 13, "surface": "ダ", "distance": 1700, "course": "札幌", "passing": [13, 13], "margin": 2.2, "blinker": true },
+        { "finish": 14, "fieldSize": 15, "surface": "ダ", "distance": 1800, "course": "函館", "passing": [15, 15], "margin": 3.0, "blinker": true }
+      ],
+      "weeksSinceLastRun": 2, "weeksBeforeLastRun": 3,
+      "sireLine": "その他", "damSireLine": "その他",
+      "training": { "evaluation": "C", "trend": "down" },
+      "producer": "新冠", "trainer": "牧"
+    },
+    {
+      "number": 11, "frame": 6, "name": "トーセンリバティ", "blinker": false,
+      "jockey": { "name": "戸崎", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牡", "age": 3, "weightCarry": 56, "prevWeightCarry": 56, "odds": 5.1,
+      "pastRuns": [
+        { "finish": 1, "fieldSize": 12, "surface": "ダ", "distance": 1700, "course": "函館", "passing": [3, 2], "margin": 0.9, "blinker": false },
+        { "finish": 2, "fieldSize": 14, "surface": "ダ", "distance": 1700, "course": "札幌", "passing": [4, 3], "margin": 0.2, "blinker": false },
+        { "finish": 5, "fieldSize": 13, "surface": "ダ", "distance": 1800, "course": "函館", "passing": [6, 5], "margin": 0.6, "blinker": false }
+      ],
+      "weeksSinceLastRun": 3, "weeksBeforeLastRun": 4,
+      "sireLine": "キンカメ系", "damSireLine": "ファピアノ系",
+      "training": { "evaluation": "A", "trend": "flat" },
+      "producer": "安平", "trainer": "国枝"
+    },
+    {
+      "number": 12, "frame": 7, "name": "サンレイポップ", "blinker": false,
+      "jockey": { "name": "菅原", "reductionMark": "☆", "reductionKg": 1 },
+      "sex": "牝", "age": 3, "weightCarry": 53, "prevWeightCarry": 53, "odds": 30.0,
+      "pastRuns": [
+        { "finish": 7, "fieldSize": 14, "surface": "芝", "distance": 1200, "course": "函館", "passing": [9, 10], "margin": 0.8, "blinker": false },
+        { "finish": 5, "fieldSize": 12, "surface": "芝", "distance": 1200, "course": "札幌", "passing": [7, 8], "margin": 0.6, "blinker": false }
+      ],
+      "weeksSinceLastRun": 4, "weeksBeforeLastRun": 3,
+      "sireLine": "ヘイロー系", "damSireLine": "ナスルーラ系",
+      "training": { "evaluation": "B", "trend": "up" },
+      "producer": "浦河", "trainer": "高柳"
+    },
+    {
+      "number": 13, "frame": 7, "name": "ゴールドアクター", "blinker": false,
+      "jockey": { "name": "田辺", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牡", "age": 3, "weightCarry": 56, "prevWeightCarry": 56, "odds": 11.0,
+      "pastRuns": [
+        { "finish": 3, "fieldSize": 13, "surface": "ダ", "distance": 1700, "course": "函館", "passing": [9, 7], "margin": 0.5, "blinker": false },
+        { "finish": 8, "fieldSize": 15, "surface": "ダ", "distance": 1700, "course": "札幌", "passing": [12, 10], "margin": 1.2, "blinker": false },
+        { "finish": 6, "fieldSize": 14, "surface": "ダ", "distance": 1800, "course": "函館", "passing": [11, 9], "margin": 0.9, "blinker": false }
+      ],
+      "weeksSinceLastRun": 3, "weeksBeforeLastRun": 4,
+      "sireLine": "ノーザン系", "damSireLine": "ロベルト系",
+      "training": { "evaluation": "B", "trend": "flat" },
+      "producer": "新ひだか", "trainer": "手塚"
+    },
+    {
+      "number": 14, "frame": 8, "name": "メイショウカイザー", "blinker": false,
+      "jockey": { "name": "浜中", "reductionMark": "", "reductionKg": 0 },
+      "sex": "牡", "age": 3, "weightCarry": 56, "prevWeightCarry": 54, "odds": 16.0,
+      "pastRuns": [
+        { "finish": 4, "fieldSize": 12, "surface": "芝", "distance": 1800, "course": "函館", "passing": [10, 11], "margin": 0.7, "blinker": false },
+        { "finish": 3, "fieldSize": 14, "surface": "芝", "distance": 2000, "course": "札幌", "passing": [11, 10], "margin": 0.4, "blinker": false }
+      ],
+      "weeksSinceLastRun": 4, "weeksBeforeLastRun": 5,
+      "sireLine": "サンデー系", "damSireLine": "ミスプロ系",
+      "training": { "evaluation": "B", "trend": "up" },
+      "producer": "日高", "trainer": "本田"
+    }
+  ]
+}

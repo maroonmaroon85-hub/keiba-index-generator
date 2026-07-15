@@ -1,0 +1,89 @@
+{
+  "_comment": "全ての weight / 閾値 / 色 / softmax温度 をここに外出し。妥当性は Phase 3 のバックテストで検証・調整する（初期値は仮置き）。",
+
+  "scoring": {
+    "base": {
+      "_comment": "基礎点: 近走着順の加重平均。直近ほど重い。着順→点は (出走頭数-着順+1)/出走頭数*100 の加重和。",
+      "recencyWeights": [0.5, 0.3, 0.2],
+      "scale": 1.0
+    },
+    "training": {
+      "_comment": "調教評価ボーナス。evaluation(A/B/C) と 調子(up/flat/down) の合算。",
+      "evaluation": { "A": 6, "B": 3, "C": 0 },
+      "trend": { "up": 3, "flat": 0, "down": -2 }
+    },
+    "pedigree": {
+      "_comment": "血統適性ボーナスの倍率。pedigree/aptitude の 0..1 スコアにこの係数を掛けて父系・母父系を合算。",
+      "sireWeight": 8,
+      "damSireWeight": 4
+    },
+    "softmaxTemperature": 12.0,
+    "placeProb": {
+      "_comment": "複勝圏内率の簡易推定（Phase 3でキャリブレーション）。win_prob から単調変換: min(cap, winProb*mult + base*正規化)。",
+      "multiplier": 1.9,
+      "cap": 0.92
+    }
+  },
+
+  "rank": {
+    "_comment": "総合評価の閾値（score以上でそのランク）。上から評価される。",
+    "thresholds": [
+      { "rank": "S+", "min": 100 },
+      { "rank": "S", "min": 88 },
+      { "rank": "A", "min": 74 },
+      { "rank": "B", "min": 55 },
+      { "rank": "C", "min": 0 }
+    ]
+  },
+
+  "marks": {
+    "_comment": "印はスコア上位から順に付与。× は最下位側で、かつトップとの差が gapForCross 以上の馬に付ける。",
+    "order": ["◎", "○", "▲", "△"],
+    "crossCount": 2,
+    "gapForCross": 18
+  },
+
+  "rules": {
+    "_comment": "各条件フラグの weight。plus は加点、minus は減点として使われる（scoring側で符号処理）。",
+    "延長△": 4,
+    "初ダ△": 5,
+    "増量△": 3,
+    "後方△": 5,
+    "ローテ△": 4,
+    "同2◎": 5,
+    "内枠先行◎": 4,
+    "減量◎": 3,
+    "叩き2◎": 5,
+    "人気落ち◎": 4
+  },
+
+  "ruleParams": {
+    "_comment": "各ルールの判定パラメータ。",
+    "延長_minMeters": 200,
+    "増量_minKg": 2,
+    "ローテ_shortWeeks": 1,
+    "ローテ_longWeeks": 26,
+    "叩き_layoffWeeks": 10,
+    "叩き_freshWeeks": 6,
+    "内枠_maxFrame": 3,
+    "人気落ち_recentTopN": 3,
+    "人気落ち_minPopularity": 5
+  },
+
+  "popularityColors": {
+    "_comment": "予想人気の背景色（HTML）。1=黄, 2=青, 3=橙, 4-5=緑, それ以外=無色。",
+    "1": "#ffe066",
+    "2": "#a5d8ff",
+    "3": "#ffc078",
+    "4": "#b2f2bb",
+    "5": "#b2f2bb"
+  },
+
+  "pastEvalColors": {
+    "_comment": "前走・二前・三前の着順評価マークの色。",
+    "◎": "#e64980",
+    "○": "#2f9e44",
+    "△": "#f08c00",
+    "×": "#868e96"
+  }
+}

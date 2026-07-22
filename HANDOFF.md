@@ -21,7 +21,11 @@
 - **単調較正(isotonic)は効果なし**: `npm run calibrate`（train前半/test後半で分離学習・評価）で検証。temp=45で win_prob は既に十分較正されており、較正後EV回収率は 72.9→72.5%（改善なし）。較正は収益性のボトルネックではない。`src/backtest/isotonic.ts` `calibrate.ts` は分析用に残置（scoringには未統合＝効果ないため）。
 - **アウトオブサンプルは約73%**: 全年で最適化したweightの**in-sample 84% は一部オーバーフィット**。test期間の正直な単勝EV回収率は**約73%**（非利益）。weightの微調整で越えるのは困難。
 - **示唆**: 回収率100%超えはルールベースの微調整では届かない。**Phase 5(ML化)＝より強い特徴量/モデル**が本命の道。指数の「順位付け・印」は既に有用なので、そのまま予想補助としては使える。
-- **Phase 5（構想）**: scoring層をML化。PreRace/PostRaceの型分離とバックテスト基盤はそのまま流用する前提。
+- **Phase 5（実現可能性 実証済み・本実装は今後）**: scoring層をLightGBM等に差し替える。`ml/feasibility.py` で検証済み。
+  - **結果（アウトオブサンプル28338頭・日付分割）**: ルールベースを全指標で上回る。top-pick複勝率 47→**56.2%**、勝率19→**26.9%**、**単勝EV≥1回収率 73→90.3%**、AUC 0.748。まだ非利益(100%未満)だが微調整の限界を大きく突破。
+  - **最重要特徴量は 母父(damsire)→父(sire)**。血統がML最大の信号＝血統特徴の深掘りが有望。
+  - 特徴量は「近走(prior runs)＋条件」のみ、**単勝オッズは特徴に入れない**（市場追随回避、EV評価にだけ使用）。実行: `pip install lightgbm scikit-learn pandas numpy` → `python3 ml/feasibility.py`（リポ直下のDS*.CSVを読む）。
+  - **次の本実装**: ①特徴量拡充(血統の深掘り・コース別適性・調教CSV) ②複勝/エキゾチック予測 ③モデルを scoring interface(PreRaceData→win_prob)に統合（TS↔Python連携 or 予測JSONをTSが読む）。回収率100%超えが最終目標。
 
 ## 設計の要（崩さない）
 - **リーク防止の型分離**: `src/model/pre-race.ts`(発走前) と `post-race.ts`(着順・払戻)。scoring/rules は PreRaceData しか受け取れない。PostRace はバックテストの答え合わせ専用。

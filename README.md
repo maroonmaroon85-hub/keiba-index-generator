@@ -7,10 +7,12 @@ JRA-VAN DataLab のデータ（Windows VM上の TARGET frontierJV が出力す�
 - 取得層（Windows/TARGET でのCSV出力）は人間作業。**本リポの実装対象は Mac 側の生成層のみ。**
 - 詳細仕様はフェーズ別指示書（`keibaspec/`）に基づく。**1フェーズずつ**実装し、完了条件でレビューする方針。
 
-## 現在の状態: Phase 1 完了（ダミーデータ）
+## 現在の状態: Phase 3 実装中（バックテスト）
 
-ダミーデータ 1レース分（函館6R ダ1700m 14頭）から HTML 指数表とスコア JSON を生成できる。
-実データ（TARGET CSV）接続は Phase 2 以降。
+- **Phase 1**: ダミーデータから HTML 指数表＋スコア JSON を生成（完了）
+- **Phase 2**: TARGET 実CSV（出馬表＋全馬全成績）を接続。実データで指数表を生成（完了）
+- **Phase 3**: 過去成績CSVを一括バックテストし、ランク別回収率・フラグ有効性・確率
+  キャリブレーションを算出（エンジン実装済み。大規模な過去データで検証中）
 
 ## セットアップ
 
@@ -33,6 +35,20 @@ npm run generate -- --input data/sample/race-dummy.json --pace H --condition 良
 出力:
 - `out/<race_id>.html` … 12列の指数表（外部依存なし・インラインCSS）
 - `out/<race_id>.score.json` … keiba-ev 用スコア JSON（`schema/score-export.json` 準拠）
+
+### バックテスト（Phase 3）
+
+```bash
+# 過去成績フルセットCSV（期間まとめ）を一括評価
+npm run backtest -- --input <成績フルセットCSV> [--odds-col 列番号] [--min-horses 5]
+```
+- 入力: TARGET「全馬全成績 → 成績フルセット（＋単オッズ）」を期間分まとめた1CSV
+- `--odds-col`: 単オッズの列番号（フルセット+単オッズ export のとき）。指定すると単勝回収率を算出
+- 出力: コンソールのサマリー＋ `out/backtest_{rank,mark,flag,calibration}.csv`
+  - ランク別（S+〜C）の勝率・連対率・複勝率・単勝回収率
+  - 条件フラグ別成績（(全体)と比較して効いている/逆効果かが分かる）
+  - 印別成績、win_prob キャリブレーション（予測 vs 実測）
+- `config.json` の weight/閾値/softmax温度を変えて再実行 → 比較、が数コマンドで回る
 
 型チェック: `npm run typecheck`
 

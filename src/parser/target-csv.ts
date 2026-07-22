@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import iconv from "iconv-lite";
+import { readCsvShiftJis, toInt, toNum } from "./csv.js";
 import type {
   PreRaceData,
   PreRaceHorse,
@@ -30,41 +29,6 @@ export interface TargetRaceHeader {
   /** 当該レース発走日 YYYY-MM-DD。ローテ間隔の算出に使用。 */
   date: string;
   name?: string;
-}
-
-/** Shift_JIS CSV を読み、行×列に分解（ダブルクォート対応）。 */
-function readCsv(path: string): string[][] {
-  let buf: Buffer;
-  try {
-    buf = readFileSync(path);
-  } catch {
-    throw new Error(`CSVを読めません: ${path}`);
-  }
-  const text = iconv.decode(buf, "Shift_JIS");
-  return text
-    .split(/\r?\n/)
-    .filter((line) => line.trim() !== "")
-    .map(splitCsvLine);
-}
-
-/** 1行をカンマ分割（"..." 内のカンマは無視）。値の前後空白と囲みクォートは除去。 */
-function splitCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let cur = "";
-  let inQuote = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      inQuote = !inQuote;
-    } else if (ch === "," && !inQuote) {
-      out.push(cur.trim());
-      cur = "";
-    } else {
-      cur += ch;
-    }
-  }
-  out.push(cur.trim());
-  return out;
 }
 
 interface SeisekiHorse {
@@ -133,8 +97,8 @@ export function parseTargetCsv(
   seisekiPath: string,
   header: TargetRaceHeader,
 ): PreRaceData {
-  const shutubaRows = readCsv(shutubaPath);
-  const seisekiRows = readCsv(seisekiPath);
+  const shutubaRows = readCsvShiftJis(shutubaPath);
+  const seisekiRows = readCsvShiftJis(seisekiPath);
   if (shutubaRows.length < 2) {
     throw new Error(`出馬表CSVに馬データがありません: ${shutubaPath}`);
   }
@@ -207,14 +171,6 @@ function normalizeSex(v: string | undefined): Sex {
   return "牡";
 }
 
-function toInt(v: string | undefined): number {
-  const n = parseInt((v ?? "").trim(), 10);
-  return Number.isFinite(n) ? n : 0;
-}
-function toNum(v: string | undefined): number {
-  const n = parseFloat((v ?? "").trim());
-  return Number.isFinite(n) ? n : 0;
-}
 /** seiseki の 年,月,日（2桁年）→ Date。 */
 function toDate(y: string | undefined, m: string | undefined, d: string | undefined): Date {
   const year = 2000 + toInt(y);

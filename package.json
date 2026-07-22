@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "generate": "tsx src/cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "backtest": "tsx src/backtest/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

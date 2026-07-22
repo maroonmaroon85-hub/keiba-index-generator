@@ -11,7 +11,11 @@
 - **Phase 1**: ダミーデータで指数表ジェネレーター。`npm run generate -- --input data/sample/race-dummy.json --pace H --condition 良`
 - **Phase 2**: TARGET実CSV接続。`npm run generate -- --shutuba <出馬表.csv> --seiseki <成績.csv> --course 函館 --surface ダ --distance 1700 --date 2026-07-19 --pace M --condition 稍`
 - **Phase 3**: バックテスト基盤。`npm run backtest -- --input <成績CSV> [--input ...複数可] --odds-col 49 --min-horses 6`
-- **Phase 4（未着手）**: keiba-ev 連携（EV=確率×オッズ、買い目出力）。ユーザーの keiba-ev.jsx を受領してから。
+- **Phase 4（実装済み・単勝/複勝）**: EV=想定確率×オッズ で買い目出力＋バックテストにEV購入シミュ追加。keiba-ev.jsx は無しでツール内蔵。`src/ev/ev.ts`。
+  - 生成時: `npm run generate ...` の末尾に「買い目（EV≥threshold）」を表示。単勝は出馬表CSVの単勝オッズ使用。複勝は複勝オッズ受領後に対応（現状 単勝のみ稼働）。
+  - `config.ev`: `threshold`(1.0), `evBands`, `contenderOnly`(true=モデルが平均以上(win_prob≥1/頭数)と見た馬のみ買い。人気薄×高オッズでEVだけ跳ねる馬を除外)。
+  - **実測（1年）**: 単勝EV≥1戦略の回収率は **81〜86%**（contenderOnly=trueで81%）＝**まだ非利益**。ルールベース＋仮weightでは市場(控除率約20%)を越えられない、という正直な現状。買い目自体は妥当な人気馬に出る。
+  - 収益化には: 特徴量/weightの改善、低確率帯の過信補正（温度だけでは全帯較正できない→isotonic等）、Phase 5(ML化)。券種拡張(複勝の複勝オッズ、馬連=Harville)も候補。
 - **Phase 5（構想）**: scoring層をML化。PreRace/PostRaceの型分離とバックテスト基盤はそのまま流用する前提。
 
 ## 設計の要（崩さない）

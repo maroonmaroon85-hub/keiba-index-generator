@@ -6,6 +6,7 @@ import { parseTargetCsv, type TargetRaceHeader } from "./parser/target-csv.js";
 import { scoreRace } from "./scoring/score.js";
 import { renderHtml } from "./render/html.js";
 import { toScoreExport } from "./export.js";
+import { buyList, winOddsFromHorses } from "./ev/ev.js";
 import type { PreRaceData, Pace, TrackCondition, Surface } from "./model/pre-race.js";
 
 interface Args {
@@ -119,6 +120,18 @@ function main(): void {
         `評${h.rank.padEnd(2)} 指数${String(h.score).padStart(5)} ` +
         `単${(h.winProb * 100).toFixed(1)}% 複${(h.placeProb * 100).toFixed(1)}%`,
     );
+  }
+  console.log("─".repeat(52));
+
+  // EV買い目（単勝。出馬表の単勝オッズを使用）。複勝は複勝オッズ受領後に対応。
+  const bets = buyList(scored, winOddsFromHorses(pre.horses), config);
+  if (bets.length > 0) {
+    console.log(`\n■ 買い目（EV ≥ ${config.ev.threshold}）`);
+    for (const b of bets) {
+      console.log(`  ${b.type} ${String(b.number).padStart(2)} ${b.name.padEnd(10)} 確率${(b.prob * 100).toFixed(1)}% × オッズ${b.odds} = EV ${b.ev}`);
+    }
+  } else {
+    console.log(`\n■ 買い目: なし（EV ≥ ${config.ev.threshold} の馬なし）`);
   }
   console.log("─".repeat(52));
   console.log(`HTML: ${htmlPath}`);

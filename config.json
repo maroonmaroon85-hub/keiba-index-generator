@@ -25,6 +25,13 @@
     }
   },
 
+  "ev": {
+    "_comment": "期待値(EV=想定確率×オッズ)による買い目判定。EV>=threshold を買い目とする。単勝はwin_prob×単勝オッズ、複勝はplace_prob×複勝オッズ。",
+    "threshold": 1.0,
+    "evBands": [1.0, 1.2, 1.5, 2.0, 100.0],
+    "contenderOnly": true
+  },
+
   "rank": {
     "_comment": "総合評価の閾値（score以上でそのランク）。上から評価される。",
     "thresholds": [

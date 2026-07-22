@@ -8,6 +8,8 @@ import {
   byMark,
   byFlag,
   calibration,
+  evSimulation,
+  evStrategy,
   type Sample,
   type GroupStat,
 } from "./metrics.js";
@@ -112,6 +114,16 @@ function main(): void {
   printGroupTable("総合評価ランク別", rankRows);
   printGroupTable("印別", markRows);
   printGroupTable("条件フラグ別（(全体)と比較して効いているか）", flagRows);
+
+  // EV購入シミュレーション（単勝）。Phase 4: EV戦略の回収率を実測。
+  const evBands = evSimulation(samples, config.ev.evBands, config.ev.contenderOnly);
+  const evTotal = evStrategy(samples, config.ev.threshold, config.ev.contenderOnly);
+  console.log(`\n■ 単勝EV購入シミュレーション（各帯を100円ずつ / contenderOnly=${config.ev.contenderOnly}）`);
+  console.log("  EV帯          点数   的中率  回収率");
+  for (const e of evBands) {
+    console.log(`  ${e.label.padEnd(12)}${String(e.bets).padStart(6)}  ${fmt(e.hitRate)}  ${roi(e.roi)}`);
+  }
+  console.log(`  ${evTotal.label.padEnd(12)}${String(evTotal.bets).padStart(6)}  ${fmt(evTotal.hitRate)}  ${roi(evTotal.roi)}  ← EV戦略の総合回収率`);
 
   console.log("\n■ win_prob キャリブレーション（予測 vs 実測）");
   console.log("  予測帯       n    予測平均  実勝率  実複勝率");

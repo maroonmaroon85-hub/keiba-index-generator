@@ -20,6 +20,7 @@ export interface Config {
     softmaxTemperature: number;
     placeProb: { multiplier: number; cap: number };
   };
+  ev: { threshold: number; evBands: number[]; contenderOnly: boolean };
   rank: { thresholds: RankThreshold[] };
   marks: {
     order: string[];

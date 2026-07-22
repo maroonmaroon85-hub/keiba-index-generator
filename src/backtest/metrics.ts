@@ -63,6 +63,49 @@ export function byFlag(samples: Sample[]): GroupStat[] {
   return [baseline, ...rows];
 }
 
+export interface EvBandStat {
+  label: string;
+  bets: number;
+  hitRate: number; // 的中率(1着率)
+  roi: number; // 単勝回収率(%)
+}
+
+/**
+ * 単勝EV購入シミュレーション。
+ * 各馬 EV = win_prob × 確定単勝オッズ。EV帯ごとに「その帯を全部100円買ったら」の的中率・回収率。
+ * threshold 以上を買う戦略の総合回収率が 100% を超えるかが、システムの収益性の答え。
+ */
+export function evSimulation(samples: Sample[], bands: number[], contenderOnly = false): EvBandStat[] {
+  const withOdds = samples.filter((s) => s.winOdds > 0 && (!contenderOnly || s.winProb >= 1 / s.fieldSize));
+  const rows: EvBandStat[] = [];
+  for (let i = 0; i < bands.length - 1; i++) {
+    const lo = bands[i]!;
+    const hi = bands[i + 1]!;
+    const inBand = withOdds.filter((s) => {
+      const ev = s.winProb * s.winOdds;
+      return ev >= lo && ev < hi;
+    });
+    rows.push(evStat(`EV ${lo.toFixed(1)}-${hi.toFixed(1)}`, inBand));
+  }
+  return rows;
+}
+
+/** threshold 以上を全部買う戦略の総合成績。 */
+export function evStrategy(samples: Sample[], threshold: number, contenderOnly = false): EvBandStat {
+  const bets = samples.filter(
+    (s) => s.winOdds > 0 && (!contenderOnly || s.winProb >= 1 / s.fieldSize) && s.winProb * s.winOdds >= threshold,
+  );
+  return evStat(`EV≥${threshold} 総合`, bets);
+}
+
+function evStat(label: string, bets: Sample[]): EvBandStat {
+  const n = bets.length;
+  if (n === 0) return { label, bets: 0, hitRate: 0, roi: 0 };
+  const hits = bets.filter((s) => s.finish === 1).length;
+  const ret = bets.reduce((a, s) => a + (s.finish === 1 ? s.winOdds * 100 : 0), 0);
+  return { label, bets: n, hitRate: (hits / n) * 100, roi: (ret / (n * 100)) * 100 };
+}
+
 export interface CalibrationBin {
   label: string;
   n: number;

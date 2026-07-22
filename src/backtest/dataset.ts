@@ -141,11 +141,22 @@ function buildHorse(row: Row, priorRuns: Row[]): PreRaceHorse {
  * 成績CSV → バックテスト用レース群。
  * minHorses 未満の（フィールドが揃わない）レースは除外。
  */
-export function buildDataset(path: string, opts: { oddsCol?: number; minHorses?: number } = {}): BacktestRace[] {
+export function buildDataset(paths: string | string[], opts: { oddsCol?: number; minHorses?: number } = {}): BacktestRace[] {
   const minHorses = opts.minHorses ?? 5;
-  const rows = readCsvShiftJis(path)
-    .map((r) => parseRow(r, opts.oddsCol))
-    .filter((x): x is Row => x !== null);
+  const files = Array.isArray(paths) ? paths : [paths];
+  // 複数日ファイルを結合。同一の馬レース結果(raceId+馬番)は重複除去。
+  const seen = new Set<string>();
+  const rows: Row[] = [];
+  for (const p of files) {
+    for (const r of readCsvShiftJis(p)) {
+      const row = parseRow(r, opts.oddsCol);
+      if (!row) continue;
+      const key = `${row.raceId}_${row.umaban}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push(row);
+    }
+  }
 
   // 馬ごとに時系列（昇順）で索引。
   const byHorse = new Map<string, Row[]>();

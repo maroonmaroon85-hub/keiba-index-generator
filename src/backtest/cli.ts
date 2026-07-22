@@ -13,7 +13,7 @@ import {
 } from "./metrics.js";
 
 interface Args {
-  input?: string;
+  input: string[];
   oddsCol?: number;
   minHorses?: number;
   outDir: string;
@@ -21,12 +21,12 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { outDir: "out" };
+  const args: Args = { input: [], outDir: "out" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = argv[i + 1];
     switch (a) {
-      case "--input": args.input = next; i++; break;
+      case "--input": if (next) args.input.push(next); i++; break;
       case "--odds-col": args.oddsCol = Number(next) - 1; i++; break; // 1始まり列番号→0始まり
       case "--min-horses": args.minHorses = Number(next); i++; break;
       case "--out": args.outDir = next ?? "out"; i++; break;
@@ -63,13 +63,13 @@ function toCsv(rows: GroupStat[]): string {
 
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.input) {
-    console.error("使い方: npm run backtest -- --input <成績フルセットCSV> [--odds-col 列番号] [--min-horses 5] [--out out] [--config config.json]");
+  if (args.input.length === 0) {
+    console.error("使い方: npm run backtest -- --input <成績フルセットCSV> [--input ...(複数可)] [--odds-col 列番号] [--min-horses 5] [--out out] [--config config.json]");
     process.exit(1);
     return;
   }
   const config = loadConfig(args.config);
-  const races = buildDataset(resolve(args.input), {
+  const races = buildDataset(args.input.map((p) => resolve(p)), {
     oddsCol: args.oddsCol,
     minHorses: args.minHorses,
   });

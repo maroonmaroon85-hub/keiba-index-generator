@@ -2,13 +2,25 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadConfig } from "./config.js";
 import { loadPreRaceFromJson, overrideRaceParams } from "./parser/json.js";
+import { parseTargetCsv, type TargetRaceHeader } from "./parser/target-csv.js";
 import { scoreRace } from "./scoring/score.js";
 import { renderHtml } from "./render/html.js";
 import { toScoreExport } from "./export.js";
-import type { Pace, TrackCondition } from "./model/pre-race.js";
+import type { PreRaceData, Pace, TrackCondition, Surface } from "./model/pre-race.js";
 
 interface Args {
+  // JSONモード（Phase 1）
   input?: string;
+  // TARGET CSVモード（Phase 2）
+  shutuba?: string;
+  seiseki?: string;
+  raceId?: string;
+  course?: string;
+  surface?: Surface;
+  distance?: number;
+  date?: string;
+  name?: string;
+  // 共通（手入力）
   pace?: Pace;
   condition?: TrackCondition;
   outDir: string;
@@ -22,6 +34,14 @@ function parseArgs(argv: string[]): Args {
     const next = argv[i + 1];
     switch (a) {
       case "--input": args.input = next; i++; break;
+      case "--shutuba": args.shutuba = next; i++; break;
+      case "--seiseki": args.seiseki = next; i++; break;
+      case "--race-id": args.raceId = next; i++; break;
+      case "--course": args.course = next; i++; break;
+      case "--surface": args.surface = next as Surface; i++; break;
+      case "--distance": args.distance = Number(next); i++; break;
+      case "--date": args.date = next; i++; break;
+      case "--name": args.name = next; i++; break;
       case "--pace": args.pace = next as Pace; i++; break;
       case "--condition": args.condition = next as TrackCondition; i++; break;
       case "--out": args.outDir = next ?? "out"; i++; break;
@@ -31,17 +51,52 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
+const USAGE = `使い方:
+  JSONダミー:  npm run generate -- --input <race.json> [--pace H] [--condition 良]
+  TARGET実CSV: npm run generate -- --shutuba <出馬表.csv> --seiseki <成績.csv> \\
+                 --course 函館 --surface ダ --distance 1700 --date 2026-07-19 \\
+                 --pace M --condition 稍 [--race-id ...] [--name 駒場特別]
+  共通: [--out out] [--config config.json]`;
+
+function loadPreRace(args: Args): PreRaceData {
+  if (args.shutuba || args.seiseki) {
+    if (!args.shutuba || !args.seiseki) {
+      throw new Error("TARGET CSVモードは --shutuba と --seiseki の両方が必要です");
+    }
+    if (!args.course || !args.surface || !args.distance || !args.date) {
+      throw new Error("TARGET CSVモードは --course --surface --distance --date が必要です");
+    }
+    const header: TargetRaceHeader = {
+      raceId: args.raceId ?? `${args.date.replace(/-/g, "")}_${args.course}`,
+      course: args.course,
+      surface: args.surface,
+      distance: args.distance,
+      pace: args.pace ?? "M",
+      condition: args.condition ?? "良",
+      date: args.date,
+      ...(args.name ? { name: args.name } : {}),
+    };
+    return parseTargetCsv(resolve(args.shutuba), resolve(args.seiseki), header);
+  }
+  if (args.input) {
+    const pre = loadPreRaceFromJson(resolve(args.input));
+    return overrideRaceParams(pre, args.pace, args.condition);
+  }
+  throw new Error("入力がありません（--input か --shutuba/--seiseki）");
+}
+
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.input) {
-    console.error("使い方: npm run generate -- --input <race.json> [--pace H] [--condition 良] [--out out] [--config config.json]");
+  let pre: PreRaceData;
+  try {
+    pre = loadPreRace(args);
+  } catch (e) {
+    console.error((e as Error).message + "\n\n" + USAGE);
     process.exit(1);
+    return;
   }
 
   const config = loadConfig(args.config);
-  let pre = loadPreRaceFromJson(resolve(args.input));
-  pre = overrideRaceParams(pre, args.pace, args.condition);
-
   const scored = scoreRace(pre, config);
   const html = renderHtml(pre, scored, config);
   const json = toScoreExport(scored);

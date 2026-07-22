@@ -154,7 +154,7 @@ export function renderHtml(pre: PreRaceData, scored: ScoredRace, config: Config)
     </thead>
     <tbody>${bodyRows}
     </tbody>
-    <caption>keiba-index-generator (Phase 1 / ダミーデータ)。weight・閾値は仮置きで Phase 3 のバックテストで調整する。</caption>
+    <caption>keiba-index-generator。weight・閾値は仮置きで Phase 3 のバックテストで調整する。</caption>
   </table>
 </body>
 </html>

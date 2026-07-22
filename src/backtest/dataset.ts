@@ -31,6 +31,7 @@ interface Row {
   condition: TrackCondition;
   raceName: string;
   fieldSize: number;
+  umaban: number;
   horseKey: string; // 血統登録番号（無ければ馬名）
   horseName: string;
   sex: string;
@@ -63,7 +64,10 @@ function parseRow(r: string[], oddsCol?: number): Row | null {
   if (r.length < 48) return null;
   const finish = toInt(r[20]);
   const fieldSize = toInt(r[18]);
-  const raceId = (r[40] ?? "").trim();
+  // col41 = レースID + 馬番（末尾2桁が馬番）。フィールド復元のため馬番を切り離す。
+  const rawKey = (r[40] ?? "").trim();
+  const raceId = rawKey.length > 2 ? rawKey.slice(0, -2) : rawKey;
+  const umaban = rawKey.length > 2 ? toInt(rawKey.slice(-2)) : 0;
   const horseName = (r[13] ?? "").trim();
   if (!raceId || !horseName) return null;
   const key = (r[37] ?? "").trim() || horseName;
@@ -79,6 +83,7 @@ function parseRow(r: string[], oddsCol?: number): Row | null {
     condition: mapCondition(r[12] ?? ""),
     raceName: (r[7] ?? "").trim(),
     fieldSize,
+    umaban,
     horseKey: key,
     horseName,
     sex: (r[14] ?? "").trim(),
@@ -165,10 +170,11 @@ export function buildDataset(path: string, opts: { oddsCol?: number; minHorses?:
       const hist = byHorse.get(row.horseKey) ?? [];
       const prior = hist.filter((h) => h.date.getTime() < row.date.getTime()).reverse(); // 新しい順
       const horse = buildHorse(row, prior);
-      horse.number = i + 1; // 相対順位付けのための便宜的な馬番
+      const num = row.umaban || i + 1;
+      horse.number = num;
       horses.push(horse);
       post.push({
-        number: i + 1,
+        number: num,
         finish: row.finish,
         finalWinOdds: row.winOdds ?? 0,
         winPayout: row.winOdds && row.finish === 1 ? Math.round(row.winOdds * 100) : 0,

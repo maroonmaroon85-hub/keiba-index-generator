@@ -40,6 +40,9 @@ def load():
     p = raw[[28, 29, 30, 31]].apply(pd.to_numeric, errors="coerce")
     p = p.where(p > 0)
     d["passavg"] = p.mean(axis=1)
+    d["agari"] = pd.to_numeric(raw[32], errors="coerce")   # 上がり3F(col33)
+    d["prize"] = pd.to_numeric(raw[36], errors="coerce")   # 賞金(col37)＝クラス目安
+    d["distband"] = pd.cut(pd.to_numeric(raw[11], errors="coerce"), [0, 1300, 1700, 2200, 9999], labels=["s", "m", "mid", "l"])
     d["raceid"] = raw[40].str[:-2]
     d["sire"] = raw[43].str.strip()
     d["damsire"] = raw[45].str.strip()
@@ -63,6 +66,11 @@ def features(d):
     f["last_margin"] = g["margin"].shift(1)
     f["last_passratio"] = g["passratio"].shift(1)
     f["avg3_passratio"] = g["passratio"].shift(1).rolling(3, min_periods=1).mean().reset_index(level=0, drop=True)
+    f["last_agari"] = g["agari"].shift(1)
+    f["best3_agari"] = g["agari"].shift(1).rolling(3, min_periods=1).min().reset_index(level=0, drop=True)
+    f["avg3_prize"] = g["prize"].shift(1).rolling(3, min_periods=1).mean().reset_index(level=0, drop=True)
+    f["fin_std"] = g["finratio"].shift(1).rolling(3, min_periods=2).std().reset_index(level=0, drop=True)
+    f["month"] = d["date"].dt.month
     last_dist = g["distance"].shift(1)
     f["dist_change"] = d["distance"] - last_dist
     f["same_dist"] = (d["distance"] == last_dist).astype(float)
@@ -93,6 +101,25 @@ def main():
     tr, te = d["date"] < cut, d["date"] >= cut
     cats = ["sex", "cond", "course", "sire", "damsire"]
     print(f"train {tr.sum()}頭 / test {te.sum()}頭  分割日 {cut.date()}  勝率(base) {y.mean():.3f}")
+
+    # 血統の深掘り: sire/damsire の 全体・コース種別・距離帯 別の勝率をターゲットエンコーディング。
+    # リーク防止のため train のみで学習し、平滑化(m-estimate)。未知は全体平均。
+    d["_distband"] = d["distband"].astype(str)
+    d["_surf"] = d["surface"].astype(str)
+    gmean = y[tr].mean()
+    def te_encode(keys, name, m=30):
+        key = d[keys].astype(str).agg("|".join, axis=1)
+        tmp = pd.DataFrame({"k": key[tr], "y": y[tr].values})
+        agg = tmp.groupby("k")["y"].agg(["sum", "count"])
+        enc = (agg["sum"] + m * gmean) / (agg["count"] + m)
+        f[name] = key.map(enc).fillna(gmean).astype(float)
+    import sys
+    if "te" in sys.argv:
+        te_encode(["sire"], "te_sire")
+        te_encode(["damsire"], "te_damsire")
+        te_encode(["sire", "_surf"], "te_sire_surf")
+        te_encode(["damsire", "_surf"], "te_damsire_surf")
+        te_encode(["sire", "_distband"], "te_sire_dist")
 
     model = lgb.LGBMClassifier(
         n_estimators=400, learning_rate=0.03, num_leaves=31,

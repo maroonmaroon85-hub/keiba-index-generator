@@ -50,6 +50,8 @@ interface Row {
 export interface BacktestRace {
   pre: PreRaceData;
   post: PostRaceData;
+  /** 発走日（train/test分割用）。 */
+  date: Date;
 }
 
 function mapCondition(v: string): TrackCondition {
@@ -206,6 +208,7 @@ export function buildDataset(paths: string | string[], opts: { oddsCol?: number;
         horses,
       },
       post: { raceId, horses: post },
+      date: head.date,
     });
   }
   return races;

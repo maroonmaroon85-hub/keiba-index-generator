@@ -17,10 +17,10 @@
       "sireWeight": 8,
       "damSireWeight": 4
     },
-    "softmaxTemperature": 20.0,
+    "softmaxTemperature": 45.0,
     "placeProb": {
-      "_comment": "複勝圏内率の簡易推定（Phase 3でキャリブレーション）。win_prob から単調変換: min(cap, winProb*mult + base*正規化)。",
-      "multiplier": 1.9,
+      "_comment": "複勝圏内率の簡易推定。win_prob から単調変換 min(cap, winProb*mult)。約1年77522頭のキャリブレーションで temp=45時 winProb→実複勝率の比が中位で約2.4だったため multiplier=2.4。",
+      "multiplier": 2.4,
       "cap": 0.92
     }
   },

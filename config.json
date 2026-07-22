@@ -17,7 +17,7 @@
       "sireWeight": 8,
       "damSireWeight": 4
     },
-    "softmaxTemperature": 12.0,
+    "softmaxTemperature": 20.0,
     "placeProb": {
       "_comment": "複勝圏内率の簡易推定（Phase 3でキャリブレーション）。win_prob から単調変換: min(cap, winProb*mult + base*正規化)。",
       "multiplier": 1.9,

@@ -19,16 +19,20 @@
 - **scoring interface**: `scoreRace(PreRaceData, config) → ScoredRace`（各馬 winProb/placeProb）。中身をルール合算→ML に差し替え可能に保つ。
 - **設定は全て `config.json`**（weight/閾値/色/softmax温度）。src に直書きしない。
 
-## 実測で得た知見（6開催日=627レース/4424頭で検証済み）
-- 総合評価ランクは機能（複勝率 S+39%→C13% 単調）。印も ◎37.5%>○>▲>△>×10.5% と正しい順序。
-- **効かないフラグを特定して調整済み**: `人気落ち◎`・`叩き2◎` は複勝率が全体基準以下 → **config で weight=0 に**（S+の勝率が19→22%改善）。
-- **win_prob が過信**だったため **softmax温度 12→20 に暫定調整**。指数が実オッズほど鋭くないため完全較正はデータ蓄積＋weight改善で詰める。
-- これらは1〜6開催日ぶんの暫定調整。**データを増やして再検証する前提**（16→627レースで印別・較正が本番化したのが実証済み）。
+## 実測で得た知見（約1年=98開催日 / 7,709レース / 77,522頭で検証済み）
+- 総合評価ランクは機能（複勝率 **S+47%→C15%** 単調）。印も **◎47%>○41%>▲36%>△31%>×12%** と正しい順序。統計的に安定。
+- フラグ調整（実測反映済み・config/コードに反映）:
+  - `叩き2◎` は複勝率26.1%≒全体26.0% で無効 → **weight=0**。
+  - `人気落ち` は複勝率17.7%≪全体26.0%（8,107サンプル）で**負のシグナル**と判明 → **`人気落ち△`(minus, weight4)に反転**。反転後 S+ 複勝率42.7→47.2%・勝率17.4→19.7%と上位ランク改善。
+  - 効くフラグ: `内枠先行◎`(32%)・`同2◎`(29%)、マイナス材料は全部正しく機能（`後方△`17%等）。
+- **win_prob**: softmax温度 12→**20** に調整済み。5-20%帯はよく較正（予測≒実測）、上位帯はまだ過信気味。さらに詰めるならデータ増＋weight改善＋温度微調整。
+- **バックテストの回し方**: `npm run backtest -- $(for f in DS*.CSV; do echo -n "--input $f "; done) --odds-col 49 --min-horses 6`（`--input`複数対応。raceId+馬番で重複除去）。
 
 ## データ取得（人間作業・環境は構築済み）
 - **環境**: Mac(Intel 2017) に VMware Fusion 13 + Windows 11 Pro。JV-Link + TARGET frontier JV 導入済み。DataLab 無料体験中。
 - ⏰ **無料期間 〜2026/08/03頃**。この間に過去データを取れるだけ一括出力しておく（期間後も検証・学習は継続可）。
 - **共有フォルダ**: Windows `Z:` = Mac `~/keiba-data`。TARGETのCSV出力先。
+- **取得済みデータ**: 2025/07〜2026/05 の約1年・98開催日を **リポ直下 `DS*.CSV`**（TARGET既定名 DSyymmdd.CSV、Shift_JIS・52列・単オッズ col49）としてコミット済み。直近の `data/sample/2026*_all.csv` 6日分も同形式。バックテストはこれらを全部 `--input` に渡す。
 - **CSVをClaudeに渡す方法**: Mac側 `~/keiba-data` の CSV を GitHub にアップ →
   `https://github.com/maroonmaroon85-hub/keiba-index-generator/upload/claude/new-session-h4ydgl/data/sample`
   にドラッグ→Commit。Claude が `git pull` して取り込む。（リモート実行環境はネット制限でDL不可）

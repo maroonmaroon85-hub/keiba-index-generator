@@ -7,7 +7,7 @@
 - 作業ブランチ: `claude/new-session-h4ydgl`（全成果をここにpush済み）
 - 目的: JRA-VAN DataLab のデータ → 予想指数表(HTML+スコアJSON) → 最終的に期待値アプリ keiba-ev へ接続し「印」でなく「買い目」を出す
 
-## 進捗（Phase 1〜3 完了、実データ稼働）
+## 進捗（Phase 1〜5 実装・実データ稼働。残るは連系の払戻収集のみ）
 - **Phase 1**: ダミーデータで指数表ジェネレーター。`npm run generate -- --input data/sample/race-dummy.json --pace H --condition 良`
 - **Phase 2**: TARGET実CSV接続。`npm run generate -- --shutuba <出馬表.csv> --seiseki <成績.csv> --course 函館 --surface ダ --distance 1700 --date 2026-07-19 --pace M --condition 稍`
 - **Phase 3**: バックテスト基盤。`npm run backtest -- --input <成績CSV> [--input ...複数可] --odds-col 49 --min-horses 6`
@@ -48,7 +48,7 @@
 - **環境**: Mac(Intel 2017) に VMware Fusion 13 + Windows 11 Pro。JV-Link + TARGET frontier JV 導入済み。DataLab 無料体験中。
 - ⏰ **無料期間 〜2026/08/03頃**。この間に過去データを取れるだけ一括出力しておく（期間後も検証・学習は継続可）。
 - **共有フォルダ**: Windows `Z:` = Mac `~/keiba-data`。TARGETのCSV出力先。
-- **取得済みデータ**: 2025/07〜2026/05 の約1年・98開催日を **リポ直下 `DS*.CSV`**（TARGET既定名 DSyymmdd.CSV、Shift_JIS・52列・単オッズ col49）としてコミット済み。直近の `data/sample/2026*_all.csv` 6日分も同形式。バックテストはこれらを全部 `--input` に渡す。
+- **取得済みデータ（約2年・完了）**: 2024/07〜2026/05 の **205ファイル `DS*.CSV`**（リポ直下, DS240706〜DS260523, Shift_JIS・52列・単オッズ col49）＋ `data/sample/2026*_all.csv` 6日分。バックテスト/ML はこれらを全部 `--input`/glob で拾う。**単勝データ収集は2年で頭打ち確認済み＝一区切り**（1→2年でAUC+0.004のみ）。
 - **CSVをClaudeに渡す方法**: Mac側 `~/keiba-data` の CSV を GitHub にアップ →
   `https://github.com/maroonmaroon85-hub/keiba-index-generator/upload/claude/new-session-h4ydgl/data/sample`
   にドラッグ→Commit。Claude が `git pull` して取り込む。（リモート実行環境はネット制限でDL不可）
@@ -80,18 +80,25 @@ config.json     weight/閾値/温度  ／ schema/score-export.json 出力スキ�
 data/sample/    実CSV各種（20260704〜19_all.csv 等）
 ```
 
-## 進行中のデータ収集プラン（ユーザー合意済み）
-1. **単勝2年分**を先に集める: 全馬成績→4(フルセット+単オッズ)を **2024年半ば〜** まで遡って一括出力（既存は2025/07〜2026/05）。操作は既存と同じ、新データ種別ではない。溜まったら `ml/feasibility.py`（DS*.CSVを自動で全部拾う）で再学習し、ML OOS回収率90%が動くか測る。分布ずれ解消で伸びる仮説。
-2. **その後 連系(払戻)データ**: この実行環境はネット制限で**JRA/netkeiba等に一切アクセス不可**（WebFetchが全ドメイン403。ユーザーのMacなら閲覧可）。→ 払戻はユーザーがJRA結果ページを貼る運用。**`src/backtest/jra-payout.ts` の `parseJraResult(text)` でJRA結果ページのテキスト→RacePayout を抽出（実データで検証済み）。** 連系の 確率(harville.ts)・購入シミュ(exotic-sim.ts)・払戻パース(jra-payout.ts) は完成・テスト済み。
-   - **買い方研究フレームワーク完成**: `src/ev/strategies.ts`(box/formation/topK生成) + `src/backtest/exotic-research.ts`(戦略総当たり→回収率降順)。ボックス上位N頭・軸×相手・Harville上位K点を券種別に一括比較し「馬連はbox何頭が最適か」等を実測できる。実払戻でテスト済み(三連複box3→470%等)。
-   - **残りの本実装**: ①多数レースの払戻を集める（JRA結果ページを貼る→`parseJraResult`）②(日付+開催場+レース番号)↔TARGET raceId の対応で払戻を scoredレースに結合 ③`research()` を回して最適な買い方を決定。scoreは rule/ML どちらの win_prob でも可。ユーザーのゴールは「連系の最適な買い方の研究」。
-- ⏰ 無料期間〜2026/08/03。CSV化すれば期限後も再学習/検証は無制限。
+## ユーザーの最終ゴールと現状
+**ゴール = 連系(馬連/三連複など)の「最適な買い方」を研究する**。単勝の利益ではなく、連系の券種×買い方×点数で回収率を最大化する研究。
 
-## 次にやること（優先順）
-1. **開催日データを増やす**（無料期間中）→ 全部結合してバックテスト（`--input` 複数）。印別・キャリブレーション・weightを本格調整。
-2. weight調整の続き: `人気落ち◎` は符号反転（minus化）も検討余地。softmax温度の再詰め。
-3. **Phase 4**: keiba-ev.jsx 受領 → スコアJSON接続 → EV>1.0 の買い目出力 → バックテストにEV購入シミュ追加。
-4. 注意: 生成物を外部公開する構想があるなら JRA-VAN の外部提供規約確認が先（実装と別件）。
+- **単勝データ収集: 完了**（2年・頭打ち確認済み）。ML再学習は `python3 ml/train.py`（DS*.CSV自動収集）でいつでも。
+- **連系の部品: 全部完成・テスト済み** — 確率(`src/ev/harville.ts`)・買い方生成(`src/ev/strategies.ts` box/formation/topK)・購入シミュ(`src/backtest/exotic-sim.ts`)・研究エンジン(`src/backtest/exotic-research.ts` 戦略総当たり→回収率降順)・払戻パース(`src/backtest/jra-payout.ts` JRA結果ページ→RacePayout, 実データ検証済み)。
+- **唯一の残り = 連系の払戻データを集める**。この環境はネット全面ブロック(WebFetch全403)なのでClaudeは取得不可。ユーザー側で:
+  - **本命: TARGETの払戻一括export を探す**（成績/レース結果画面のF8一括出力に払戻CSVがないか。未特定＝次セッションで画面を見て特定）。1日1ファイルなら単勝と同手間。
+  - 代替: JRA結果ページを貼る→`parseJraResult`（量的に大変。動作確認向き）。
+  - 必要量: 馬連/ワイド 10〜20開催日、三連複/三連単は30日〜（連系は配当のブレ大）。
+
+## 連系研究を動かす残り実装（払戻が来たら）
+1. 払戻CSV(TARGET) or JRA結果テキスト → `Map<raceId, RacePayout>`（TARGET形式なら新パーサ、JRA形式は完成済み）。
+2. (日付+開催場+レース番号) ↔ TARGET raceId(col41先頭8桁) の対応表で払戻を scoredレースに結合。
+3. `research(races, payouts, config, standardStrategies([...]))` を回して券種別・買い方別の回収率ランキングを出力（CLI化）。win_probは rule/ML どちらでも可（MLの方が精度上）。
+
+## 補足
+- ⏰ DataLab無料期間〜2026/08/03。CSV化済みなら期限後も再学習/検証は無制限。
+- 生成物を外部公開する構想があるなら JRA-VAN 外部提供規約の確認が先（実装と別件）。
+- 未完の任意タスク: MLの単一レース推論(predict.py)＋TS `--ml` 統合（`ml/README.md` 参照。生成ツールでML版買い目を出す）。
 
 ## トークン節約（CLAUDE.md方針）
 1タスク1セッション。長い作業は /compact。大きいファイルは必要な行だけ読む。セッション間はこの md 経由で引き継ぐ。

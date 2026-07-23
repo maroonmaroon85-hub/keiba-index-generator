@@ -7,6 +7,7 @@ import { scoreRace } from "./scoring/score.js";
 import { renderHtml } from "./render/html.js";
 import { toScoreExport } from "./export.js";
 import { buyList, winOddsFromHorses } from "./ev/ev.js";
+import { exoticCombos, type ExoticType } from "./ev/harville.js";
 import type { PreRaceData, Pace, TrackCondition, Surface } from "./model/pre-race.js";
 
 interface Args {
@@ -133,6 +134,18 @@ function main(): void {
   } else {
     console.log(`\n■ 買い目: なし（EV ≥ ${config.ev.threshold} の馬なし）`);
   }
+  // 連系券種の確率上位候補（Harville）。オッズ無しでも「買うならこの組み合わせ」を提示。
+  // EV判定は各券種オッズを渡せば可能（現状は確率順の候補まで）。
+  console.log(`\n■ 連系の確率上位候補（オッズ照合前）`);
+  const nameOf = new Map(pre.horses.map((h) => [h.number, h.name]));
+  for (const t of ["馬連", "馬単", "ワイド", "三連複"] as ExoticType[]) {
+    const combos = exoticCombos(scored, t, 3);
+    const s = combos
+      .map((c) => `${c.horses.join(t === "馬単" ? "→" : "-")}(${(c.prob * 100).toFixed(1)}%)`)
+      .join("  ");
+    console.log(`  ${t.padEnd(4)}: ${s}`);
+  }
+  void nameOf;
   console.log("─".repeat(52));
   console.log(`HTML: ${htmlPath}`);
   console.log(`JSON: ${jsonPath}\n`);

@@ -10,10 +10,10 @@ import pandas as pd
 
 CAT_COLS = ["sex", "cond", "course", "sire", "damsire"]
 
-def load_files(pattern="DS*.CSV"):
+def load_files(pattern="*.CSV"):
     frames = []
     for f in sorted(glob.glob(pattern)):
-        frames.append(pd.read_csv(f, header=None, encoding="shift_jis", dtype=str, keep_default_na=False))
+        frames.append(pd.read_csv(f, header=None, encoding="shift_jis", encoding_errors="replace", dtype=str, keep_default_na=False))
     return pd.concat(frames, ignore_index=True)
 
 def to_model(raw):

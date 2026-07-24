@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { readdirSync } from "node:fs";
 import { loadConfig } from "../config.js";
 import { buildDataset } from "./dataset.js";
 import { loadPayouts } from "./payout-parser.js";
@@ -10,9 +11,10 @@ import type { ExoticType } from "../ev/harville.js";
  * 成績フルセットCSV（scored races）× 払戻CSV（配当A/B）で、券種別に買い方の回収率を実測する。
  *
  * 使い方:
- *   npm run exotic -- --input DS*.CSV [--input ...] \
+ *   npm run exotic -- --dir . \
  *     --payout-b data/payout/haraimodoshiB.csv [--payout-a data/payout/haraimodoshiA.csv] \
  *     [--odds-col 49] [--min-horses 8] [--types 馬連,ワイド,三連複]
+ *   （--dir はフォルダ内 *.CSV を全読み。zshで $args が単語分割されない問題を回避。）
  */
 
 interface Args {
@@ -34,6 +36,16 @@ function parseArgs(argv: string[]): Args {
     const next = argv[i + 1];
     switch (a) {
       case "--input": if (next) args.input.push(next); i++; break;
+      case "--dir": {
+        // フォルダ内の *.CSV を全部 input に追加（zshの$args単語分割問題を回避）。
+        if (next) {
+          for (const f of readdirSync(next)) {
+            if (/\.csv$/i.test(f)) args.input.push(resolve(next, f));
+          }
+        }
+        i++;
+        break;
+      }
       case "--payout-a": args.payoutA = next; i++; break;
       case "--payout-b": args.payoutB = next; i++; break;
       case "--odds-col": args.oddsCol = Number(next) - 1; i++; break;
@@ -49,7 +61,8 @@ function main(): void {
   const args = parseArgs(process.argv.slice(2));
   if (args.input.length === 0 || (!args.payoutA && !args.payoutB)) {
     console.error(
-      "使い方: npm run exotic -- --input <成績CSV>[複数可] --payout-b <配当B.csv> [--payout-a <配当A.csv>] [--odds-col 49] [--min-horses 8] [--types 馬連,ワイド]",
+      "使い方: npm run exotic -- --dir <成績CSVのフォルダ> --payout-b <配当B.csv> [--payout-a <配当A.csv>] [--odds-col 49] [--min-horses 8] [--types 馬連,ワイド]\n" +
+      "  （個別指定は --input <CSV> も可・複数回）",
     );
     process.exit(1);
     return;

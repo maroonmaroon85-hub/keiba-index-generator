@@ -2,6 +2,15 @@
 
 次セッションはこの文書を最初に読めば再開できる。詳細仕様は `keibaspec/`、CSV列対応は `data/sample/schema.md`。
 
+## ★最新の最終結論（2026-07-24・以降の節は履歴。まずここを読む）
+研究は一区切り。**下記①〜⑥（本文後半）で全手法を実測済み**。要点:
+- **市場に勝てないことが確定**。EV/オーバーレイ検証(⑤)で「モデル/市場≥閾値の組ほど回収率が下がる」＝市場のオッズ由来確率>ML＝構造的に勝てない。
+- 最良でも**回収率~89%**（ワイド・gap≥0.2&人気馬2-5倍&ダートのポケット、過学習チェック済みで本物だが100%超は1年のみ）。
+- MLは順位付けは優秀（top-pick複勝率58%）＝**予想補助・娯楽用途としては有用**。収益ツールとしては非成立。
+- **稼働物**: `ml/train.py`(13年学習→`out/ml_test_pred.csv`)、`npm run exotic`(連系買い方研究)、`npm run exotic-filter`(条件別ROI)、`ml/predict.py`(未来レース→win_prob→ワイド買い目・★選抜)。払戻は `data/payout/haraimodoshi{A,B}.csv`。
+- **残る唯一の道**（推奨せず）: 大衆が過小評価する新情報（直前オッズ変動・私的情報）の収集。新データ必須・勝てる保証なし。
+- **未来レース予想の実運用手順**: TARGETで「出馬表・画面イメージ一括出力(CSV)基本データ」=DG と「全馬成績CSV→フルセット+単オッズ」=DS を出力→`data/upcoming/`→`python3 ml/predict.py --shutuba DG*.CSV --seiseki data/upcoming/DS*.CSV`。土曜朝の単勝オッズが出れば★内を「ダート&人気馬2-5倍」で更に絞れる。
+
 ## リポジトリ / ブランチ
 - リポ: `maroonmaroon85-hub/keiba-index-generator`（game-zatsugaku-pipeline とは無関係の別プロジェクト）
 - 作業ブランチ: `claude/new-session-h4ydgl`（全成果をここにpush済み）

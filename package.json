@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "backtest": "tsx src/backtest/cli.ts",
     "calibrate": "tsx src/backtest/calibrate.ts",
-    "exotic": "tsx src/backtest/exotic-cli.ts"
+    "exotic": "tsx src/backtest/exotic-cli.ts",
+    "exotic-filter": "tsx src/backtest/exotic-filter-cli.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

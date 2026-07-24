@@ -10,6 +10,20 @@ import pandas as pd
 
 CAT_COLS = ["sex", "cond", "course", "sire", "damsire"]
 
+def _classcode(s):
+    """レース名/クラス文字列(col7)→格の序数。新馬0/未勝利1/1勝2/2勝3/3勝4/OP5/L6/G3 7/G2 8/G1 9。"""
+    s = str(s)
+    if "新馬" in s: return 0
+    if "未勝利" in s: return 1
+    if "１勝" in s or "1勝" in s: return 2
+    if "２勝" in s or "2勝" in s: return 3
+    if "３勝" in s or "3勝" in s: return 4
+    if "G1" in s or "Ｇ１" in s: return 9
+    if "G2" in s or "Ｇ２" in s: return 8
+    if "G3" in s or "Ｇ３" in s: return 7
+    if "(L)" in s or "(Ｌ)" in s: return 6
+    return 5  # その他=オープン特別/古馬混合特別等
+
 def load_files(pattern="*.CSV"):
     frames = []
     for f in sorted(glob.glob(pattern)):
@@ -40,6 +54,7 @@ def to_model(raw):
     d["umaban"] = pd.to_numeric(raw[40].str[-2:], errors="coerce")
     d["sire"] = raw[43].str.strip()
     d["damsire"] = raw[45].str.strip()
+    d["raceclass"] = raw[7].map(_classcode)  # クラス(格)の序数: 新馬0..G1 9
     d["odds"] = pd.to_numeric(raw[48], errors="coerce")
     d = d.dropna(subset=["date", "distance", "finish", "fieldsize", "horse"])
     d = d.drop_duplicates(subset=["raceid", "horse"])
@@ -102,6 +117,10 @@ def build_features(d):
     f["weeks_before"] = (g["date"].shift(1) - g["date"].shift(2)).dt.days / 7.0
     f["month"] = d["date"].dt.month
     f["season"] = _season(d["date"])
+    # クラス(格)と昇降級。class_change>0=昇級, <0=降級。近走の格からの上げ下げは予想に効く。
+    f["raceclass"] = d["raceclass"]
+    f["class_change"] = d["raceclass"] - g["raceclass"].shift(1)
+    f["last_class"] = g["raceclass"].shift(1)
     # 血統の季節リフト（リーク防止・地力を差し引いた季節上振れ）。「夏に強い父」等を明示的に与える。
     f["sire_season_lift"] = _prior_season_lift(d, "sire")
     f["damsire_season_lift"] = _prior_season_lift(d, "damsire")

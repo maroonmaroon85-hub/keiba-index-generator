@@ -39,17 +39,27 @@ export function standardStrategies(types: ExoticType[]): StrategySpec[] {
   return specs;
 }
 
-/** 各戦略を回して回収率降順で返す。 */
+/** 各戦略を回して回収率降順で返す。
+ * overrideProb を渡すと各馬の winProb を（raceId→馬番→確率）で差し替える。
+ * ML予測(out/ml_test_pred.csv)を渡してML順位付けで買い方を評価する用途。
+ * override がある場合、その raceId のレースだけを対象にする（＝MLのOOS期間に自動で絞られる）。 */
 export function research(
   races: BacktestRace[],
   payouts: Map<string, RacePayout>,
   config: Config,
   specs: StrategySpec[],
+  overrideProb?: Map<string, Map<number, number>>,
 ): StrategyReport[] {
   // 払戻のあるレースだけ、一度スコアしてキャッシュ。
   const scored = races
     .filter((r) => payouts.has(r.pre.race.raceId))
-    .map((r) => ({ raceId: r.pre.race.raceId, sc: scoreRace(r.pre, config) }));
+    .filter((r) => !overrideProb || overrideProb.has(r.pre.race.raceId))
+    .map((r) => {
+      const sc = scoreRace(r.pre, config);
+      const ov = overrideProb?.get(r.pre.race.raceId);
+      if (ov) for (const h of sc.horses) h.winProb = ov.get(h.number) ?? 0;
+      return { raceId: r.pre.race.raceId, sc };
+    });
 
   const reports: StrategyReport[] = specs.map((spec) => {
     const entries = scored.map((x) => ({ raceId: x.raceId, combos: spec.gen(x.sc) }));

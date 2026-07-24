@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { readdirSync } from "node:fs";
+import { readCsvShiftJis } from "../parser/csv.js";
 import { loadConfig } from "../config.js";
 import { buildDataset } from "./dataset.js";
 import { loadPayouts } from "./payout-parser.js";
@@ -25,6 +26,8 @@ interface Args {
   minHorses?: number;
   types: ExoticType[];
   config?: string;
+  ml?: string; // ML予測CSV(out/ml_test_pred.csv: raceid,umaban,prob,...)
+  prob?: "rule" | "ml"; // どのwin_probで買い方を作るか
 }
 
 const ALL_TYPES: ExoticType[] = ["馬連", "馬単", "ワイド", "三連複", "三連単"];
@@ -52,6 +55,8 @@ function parseArgs(argv: string[]): Args {
       case "--min-horses": args.minHorses = Number(next); i++; break;
       case "--types": args.types = (next ?? "").split(",").filter(Boolean) as ExoticType[]; i++; break;
       case "--config": args.config = next; i++; break;
+      case "--ml": args.ml = next; i++; break;
+      case "--prob": args.prob = (next === "rule" ? "rule" : "ml"); i++; break;
     }
   }
   return args;
@@ -89,6 +94,27 @@ function main(): void {
     return;
   }
 
+  // --ml: ML予測CSV(raceid,umaban,prob,...)を Map<raceId, Map<umaban, prob>> に。
+  // これがある場合、ML評価期間(OOS)のレースだけが対象になる。--prob rule なら同一レース群を
+  // ルールwin_probで評価（＝ML vs ルールの公平比較）、--prob ml(既定)ならMLで評価。
+  let overrideProb: Map<string, Map<number, number>> | undefined;
+  const useProb = args.prob ?? (args.ml ? "ml" : "rule");
+  if (args.ml) {
+    overrideProb = new Map();
+    const rows = readCsvShiftJis(resolve(args.ml));
+    for (let i = 1; i < rows.length; i++) {
+      const [raceId, umaban, prob] = rows[i]!;
+      if (!raceId || raceId === "raceid") continue;
+      const rid = raceId.trim();
+      const m = overrideProb.get(rid) ?? new Map<number, number>();
+      m.set(Number(umaban), Number(prob));
+      overrideProb.set(rid, m);
+    }
+    console.log(`ML予測: ${overrideProb.size}レース（評価はこの期間=OOSに限定, 使用確率=${useProb}）`);
+  }
+  // ML群での評価かつ --prob rule のときは、絞り込みだけ override で行い、確率はルールのまま。
+  const subsetOnly = args.ml && useProb === "rule";
+
   // 券種ごとに「その払戻を持つレースだけ」を対象にする。
   // 配当Bは馬連/ワイド=全13年、配当Aの三連系=768レースのみ。混ぜると三連系ROIが
   // 「払戻データの無いレースでも買った」扱いになり不当に下がるため、券種別にpayoutsを絞る。
@@ -100,18 +126,26 @@ function main(): void {
     return Array.isArray(v) ? v.length > 0 : Boolean(v);
   };
 
+  // --prob rule かつ --ml のときは、レースをML群に絞り、確率はルールのまま渡す。
+  const evalRaces = subsetOnly && overrideProb
+    ? races.filter((r) => overrideProb!.has(r.pre.race.raceId))
+    : races;
+  const passOverride = useProb === "ml" ? overrideProb : undefined;
+
   const allReports = [] as ReturnType<typeof research>;
   const covered: string[] = [];
   for (const t of types) {
     const sub = new Map(Array.from(payouts).filter(([, p]) => hasType(p, t)));
     if (sub.size === 0) continue;
-    covered.push(`${t}:${sub.size}R`);
     const specs = standardStrategies([t]);
-    allReports.push(...research(races, sub, config, specs));
+    const rep = research(evalRaces, sub, config, specs, passOverride);
+    if (rep[0]) covered.push(`${t}:${rep[0].races}R`);
+    allReports.push(...rep);
   }
   const reports = allReports.sort((a, b) => b.roi - a.roi);
 
-  console.log(`\n=== 連系 買い方研究（回収率降順） 券種別対象レース数: ${covered.join(", ")} ===`);
+  const label = args.ml ? `win_prob=${useProb.toUpperCase()}（OOS期間）` : "win_prob=RULE（全期間）";
+  console.log(`\n=== 連系 買い方研究（回収率降順） ${label} 券種別対象レース数: ${covered.join(", ")} ===`);
   console.log(formatReports(reports));
 
   console.log(

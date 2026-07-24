@@ -47,6 +47,36 @@ def to_model(raw):
     d["passratio"] = d["passavg"] / d["fieldsize"]
     return d.sort_values(["horse", "date"]).reset_index(drop=True)
 
+def _season(dt):
+    """月→季節コード 0=冬(12,1,2) 1=春(3-5) 2=夏(6-8) 3=秋(9-11)。"""
+    return (dt.dt.month % 12) // 3
+
+def _prior_mean(d, keys):
+    """keys（列名リスト）で決まるグループの finratio を、そのレースより前だけで拡張平均。
+    リーク防止: 日付順に累積し自分の結果を引く(cumsum-own / cumcount)。初出はNaN。
+    最低サンプルに満たないグループはNaN扱いにできるよう cumcount も返す。"""
+    key = d[keys[0]].astype(str)
+    for k in keys[1:]:
+        key = key + "|" + d[k].astype(str)
+    tmp = pd.DataFrame({"date": d["date"], "fr": d["finratio"], "key": key})
+    tmp = tmp.sort_values("date", kind="mergesort")
+    gk = tmp.groupby("key")["fr"]
+    n = gk.cumcount()
+    prior = (gk.cumsum() - tmp["fr"]) / n
+    return prior.reindex(d.index), n.reindex(d.index)
+
+def _prior_season_lift(d, keycol, min_n=30):
+    """血統の「季節リフト」= (血統×季節の過去平均) − (血統全体の過去平均)。
+    その父/母父の"地力"（カテゴリで既にモデルが持つ）を差し引き、季節による上振れ/下振れだけを抽出。
+    「夏に強い父」ならプラス、苦手ならマイナス。標本が min_n 未満の季節枠はNaN（信頼できないため）。"""
+    d = d.copy()
+    d["season"] = _season(d["date"])
+    season_mean, season_n = _prior_mean(d, [keycol, "season"])
+    overall_mean, _ = _prior_mean(d, [keycol])
+    lift = season_mean - overall_mean
+    lift[season_n < min_n] = np.nan
+    return lift
+
 def build_features(d):
     """整形テーブル → 特徴量(数値＋カテゴリは文字列のまま)。近走はshift(prior)のみ。"""
     g = d.groupby("horse", sort=False)
@@ -71,6 +101,10 @@ def build_features(d):
     f["weeks_since"] = (d["date"] - g["date"].shift(1)).dt.days / 7.0
     f["weeks_before"] = (g["date"].shift(1) - g["date"].shift(2)).dt.days / 7.0
     f["month"] = d["date"].dt.month
+    f["season"] = _season(d["date"])
+    # 血統の季節リフト（リーク防止・地力を差し引いた季節上振れ）。「夏に強い父」等を明示的に与える。
+    f["sire_season_lift"] = _prior_season_lift(d, "sire")
+    f["damsire_season_lift"] = _prior_season_lift(d, "damsire")
     f["distance"] = d["distance"]
     f["surface"] = d["surface"]
     f["fieldsize"] = d["fieldsize"]

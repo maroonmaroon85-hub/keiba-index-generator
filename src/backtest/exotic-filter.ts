@@ -23,6 +23,7 @@ export interface RaceRecord {
   surface: string; // 芝/ダ
   distance: number;
   favOdds: number; // win_prob最上位馬の市場オッズ
+  month: number; // 発走月（季節絞り込み用）
 }
 
 /** 券種×買い方を1つ固定して、払戻のあるレースごとのコスト/払戻/条件を出す。 */
@@ -64,6 +65,7 @@ export function perRaceRecords(
       surface: r.pre.race.surface,
       distance: r.pre.race.distance,
       favOdds,
+      month: r.date.getMonth() + 1,
     });
   }
   return out;
@@ -129,6 +131,10 @@ export function analyze(records: RaceRecord[]): string {
   parts.push(formatBuckets("人気馬オッズ(win_prob最上位馬)", bucketBy(records, (r) =>
     r.favOdds <= 0 ? null : r.favOdds < 2 ? "<2.0" : r.favOdds < 3 ? "2.0-3.0" : r.favOdds < 5 ? "3.0-5.0" : r.favOdds < 10 ? "5.0-10" : "≥10",
     ["<2.0", "2.0-3.0", "3.0-5.0", "5.0-10", "≥10"])));
+
+  parts.push(formatBuckets("季節", bucketBy(records, (r) =>
+    [12, 1, 2].includes(r.month) ? "冬(12-2)" : [3, 4, 5].includes(r.month) ? "春(3-5)" : [6, 7, 8].includes(r.month) ? "夏(6-8)" : "秋(9-11)",
+    ["冬(12-2)", "春(3-5)", "夏(6-8)", "秋(9-11)"])));
 
   parts.push(formatBuckets("馬場", bucketBy(records, (r) => (r.surface === "芝" ? "芝" : "ダート"), ["芝", "ダート"])));
 

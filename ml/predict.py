@@ -55,6 +55,8 @@ def main():
     ap.add_argument("--shutuba", required=True)
     ap.add_argument("--seiseki", required=True)
     ap.add_argument("--topbox", type=int, default=4)
+    ap.add_argument("--date", required=True, help="開催日 YYYY-MM-DD（出馬表の日付）")
+    ap.add_argument("--out", default=None, help="推奨をJSON保存するパス（後日 check_result.py で答え合わせ）")
     args = ap.parse_args()
 
     model = lgb.Booster(model_file=f"{MODEL_DIR}/model.txt")
@@ -66,7 +68,7 @@ def main():
     d = F.to_model(raw)
     name2reg = dict(zip(raw[13].str.strip(), raw[37].str.strip()))
     last_of = d.sort_values("date").groupby("horse").tail(1).set_index("horse")
-    TODAY = pd.Timestamp("2026-07-25")
+    TODAY = pd.Timestamp(args.date)
 
     synth, tags = [], []
     for ri, rc in enumerate(races):
@@ -100,7 +102,7 @@ def main():
     d2 = d2.assign(pred=model.predict(fx.values))
     today = d2[is_today]
 
-    print(f"\n===== 2026-07-25 予想（ML win_prob / 実オッズ・実条件） =====")
+    print(f"\n===== {args.date} 予想（ML win_prob / 実オッズ・実条件） =====")
     print(f"※★=好ポケット合致（gap≥{GAP_TH:.2f} & 本命2-5倍 & ダート）。◎gap=1番人気の抜け具合\n")
     pockets = []
     for ri, rc in enumerate(races):
@@ -126,11 +128,11 @@ def main():
                 status = "★合致" if 2 <= favOdds < 5 else ("除外(堅すぎ)" if favOdds < 2 else "除外(人気薄)")
             else:
                 status = "△要オッズ確認(2-5倍なら合致)"
-            pockets.append((lab, favN, favnm, od, gap, pairs, status))
+            pockets.append((lab, favN, favnm, od, gap, pairs, status, m["track"], m["r"]))
         star = "◆" if entry else ("・" if gap >= GAP_TH else "  ")
         print(f"{star}{lab:8s} {m['surface']}{m['distance']} {m['cls'][:6]:6s} 頭{len(sub):2d} gap{gap*100:2.0f}% ◎{favN}{favnm}({od})")
     print(f"\n===== ◆好ポケット入口(gap≥{GAP_TH:.2f}&ダート)のレース: {len(pockets)} =====")
-    for lab, favN, nm, od, gap, pairs, status in pockets:
+    for lab, favN, nm, od, gap, pairs, status, _tr, _r in pockets:
         print(f"  {lab} {status}  ◎{favN}{nm}({od}) gap{gap*100:.0f}%")
         print(f"      ワイド上位{args.topbox}頭ボックス: {'  '.join(pairs)}")
     if not pockets:
@@ -156,6 +158,17 @@ def main():
                 found += 1
     if not found:
         print("  なし（オッズ未取得のレースは判定不可。オッズ確定後に再実行）")
+
+    # 推奨をJSON保存（後日 ml/check_result.py で実払戻と突合＝成績の記録を残す）。
+    if args.out:
+        reco = {"date": args.date, "topbox": args.topbox,
+                "races": [{"track": tr, "r": r, "label": lab, "status": st,
+                           "fav": favN, "fav_name": nm, "fav_odds": od,
+                           "gap": round(gap, 4), "wide": pairs}
+                          for lab, favN, nm, od, gap, pairs, st, tr, r in pockets]}
+        with open(args.out, "w", encoding="utf-8") as fh:
+            json.dump(reco, fh, ensure_ascii=False, indent=1)
+        print(f"\n推奨を保存: {args.out}（レース後に ml/check_result.py で答え合わせ）")
 
 if __name__ == "__main__":
     main()

@@ -19,6 +19,29 @@ import features as F
 MODEL_DIR = "ml/model"
 GAP_TH = 0.20
 
+# 好ポケット168Rの実測から求めたケリー最適f（1レースに資金の何%を賭けるか）と対数成長。
+# 券種ごとに (最適f, 対数成長, 点数, 表示名)。predict はこれを分数ケリーで割り引いて金額を出す。
+KELLY = {
+    "sanrentan": (0.026, 4.21, 36, "三連単 一軸マルチ"),
+    "sanrenpuku": (0.023, 2.20, 6, "三連複 軸1×紐4"),
+    "umaren": (0.021, 1.69, 4, "馬連 軸1×紐4"),
+}
+
+def stake_line(key, bankroll, kfrac, points):
+    """分数ケリーでの賭け金と1点あたりを返す。資金不足なら理由つきで警告。"""
+    f, growth, _, name = KELLY[key]
+    if bankroll <= 0:
+        return f"({points}点/{points*100}円・成長{growth:.2f})"
+    target = bankroll * f * kfrac          # 理論上の投下額
+    minimum = points * 100                  # 100円×点数（JRAの最小単位）
+    if target < minimum:
+        need = int(minimum / (f * kfrac))
+        return (f"({points}点・成長{growth:.2f}) ⚠資金不足: 適正{int(target):,}円 < 最低{minimum:,}円"
+                f"／この券種には資金{need:,}円必要")
+    per = int(target / points / 100) * 100  # 1点あたり(100円単位に丸め)
+    total = per * points
+    return f"({points}点 × {per:,}円 = {total:,}円・成長{growth:.2f})"
+
 def _f(x):
     try: return float(str(x).strip())
     except: return np.nan
@@ -57,6 +80,8 @@ def main():
     ap.add_argument("--topbox", type=int, default=4)
     ap.add_argument("--date", required=True, help="開催日 YYYY-MM-DD（出馬表の日付）")
     ap.add_argument("--out", default=None, help="推奨をJSON保存するパス（後日 check_result.py で答え合わせ）")
+    ap.add_argument("--bankroll", type=int, default=0, help="資金(円)。指定すると分数ケリーで各券種の賭け金を出す")
+    ap.add_argument("--kelly", type=float, default=0.5, help="分数ケリー係数(既定0.5=半ケリー。1/4なら0.25)")
     args = ap.parse_args()
 
     model = lgb.Booster(model_file=f"{MODEL_DIR}/model.txt")
@@ -103,7 +128,12 @@ def main():
     today = d2[is_today]
 
     print(f"\n===== {args.date} 予想（ML win_prob / 実オッズ・実条件） =====")
-    print(f"※★=好ポケット合致（gap≥{GAP_TH:.2f} & 本命2-5倍 & ダート）。◎gap=1番人気の抜け具合\n")
+    print(f"※★=好ポケット合致（gap≥{GAP_TH:.2f} & 本命2-5倍 & ダート）。◎gap=1番人気の抜け具合")
+    if args.bankroll:
+        kn = {1.0: "フルケリー", 0.5: "半ケリー", 0.25: "1/4ケリー"}.get(args.kelly, f"{args.kelly}ケリー")
+        print(f"※資金{args.bankroll:,}円・{kn}で賭け金を算出。1レースあたりの額なので、"
+              f"同日に複数★が出たらその数だけ資金を使う点に注意")
+    print()
     pockets = []
     for ri, rc in enumerate(races):
         m = rc["meta"]; lab = f"{m['track']}{m['r']}R"
@@ -151,9 +181,9 @@ def main():
         # 軸＋紐の優先順位だけ表示（組み合わせ全列挙は見づらいので出さない）。
         himo = " ".join(f"{chr(9312+i)}{h}" for i, h in enumerate(hlist))
         print(f"      軸 {favN}  ／  紐(優先順) {himo}")
-        print(f"      ★本線     三連単 一軸マルチ 軸{favN}×紐①②③④ ({len(tan)}点/{len(tan)*100}円・成長4.21)")
-        print(f"      ○資金少なめ 三連複 軸{favN}×紐①②③④ ({len(trio)}点/600円・成長2.20)")
-        print(f"      ・参考     馬連 軸{favN}×紐①②③④ ({len(axis)}点/400円・成長1.69)")
+        print(f"      ★本線     三連単 一軸マルチ 軸{favN}×紐①②③④ {stake_line('sanrentan', args.bankroll, args.kelly, len(tan))}")
+        print(f"      ○対抗     三連複 軸{favN}×紐①②③④ {stake_line('sanrenpuku', args.bankroll, args.kelly, len(trio))}")
+        print(f"      ・参考     馬連 軸{favN}×紐①②③④ {stake_line('umaren', args.bankroll, args.kelly, len(axis))}")
     if not pockets:
         print("  なし")
 

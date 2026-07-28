@@ -31,8 +31,17 @@ def load_wide(paths):
                     continue
                 if u1 > 0 and u2 > 0 and pay > 0:
                     wins["-".join(map(str, sorted((u1, u2))))] = pay
-            if wins:
-                out[key] = wins
+            um = {}
+            for s in range(3):  # 馬連は col40 から 3列×3スロット
+                b = 40 + s * 3
+                try:
+                    u1, u2, pay = int(r[b]), int(r[b + 1]), int(r[b + 2])
+                except ValueError:
+                    continue
+                if u1 > 0 and u2 > 0 and pay > 0:
+                    um["-".join(map(str, sorted((u1, u2))))] = pay
+            if wins or um:
+                out[key] = {"wide": wins, "umaren": um}
     return out
 
 def norm(combo):
@@ -43,6 +52,7 @@ def main():
     ap.add_argument("--reco", required=True, help="推奨JSON（glob可）")
     ap.add_argument("--payout", required=True, help="配当B CSV（glob可）")
     ap.add_argument("--only-star", action="store_true", help="★合致レースのみ集計")
+    ap.add_argument("--type", choices=["wide", "umaren"], default="wide", help="集計する券種（既定=ワイド）")
     args = ap.parse_args()
 
     wide = load_wide(sorted(glob.glob(args.payout)))
@@ -57,16 +67,18 @@ def main():
         for rc in reco["races"]:
             if args.only_star and not rc["status"].startswith("★"):
                 continue
-            wins = wide.get((ymd, rc["track"], rc["r"]))
-            if wins is None:
+            pay = wide.get((ymd, rc["track"], rc["r"]))
+            if pay is None:
                 rows.append((rc["label"], rc["status"], None, None, None)); continue
+            wins = pay[args.type]
             bet = len(rc["wide"]) * 100
             hit = [(c, wins[norm(c)]) for c in rc["wide"] if norm(c) in wins]
             ret = sum(p for _, p in hit)
             tot_bet += bet; tot_ret += ret
             rows.append((rc["label"], rc["status"], bet, ret, hit))
 
-    print(f"\n===== 推奨の答え合わせ（ワイド{'★合致のみ' if args.only_star else '全推奨'}） =====")
+    tname = "ワイド" if args.type == "wide" else "馬連"
+    print(f"\n===== 推奨の答え合わせ（{tname}/{'★合致のみ' if args.only_star else '全推奨'}） =====")
     for lab, st, bet, ret, hit in rows:
         if bet is None:
             print(f"  {lab:8s} {st:24s} 払戻データ未取得"); continue
@@ -74,7 +86,8 @@ def main():
         print(f"  {lab:8s} {st:24s} 購入{bet:5d}円 払戻{ret:6d}円 ({ret/bet*100:5.1f}%)  {h}")
     if tot_bet:
         print(f"\n  通算: 購入{tot_bet}円 / 払戻{tot_ret}円 / 収支{tot_ret-tot_bet:+}円 / 回収率 {tot_ret/tot_bet*100:.1f}%")
-        print("  ※長期の実測期待値は約89%（＝続けるとゆるやかに減る）。単発の上下に一喜一憂しないための記録です。")
+        exp = "約89%(安定)" if args.type == "wide" else "約101%だが年別59-155%と不安定"
+        print(f"  ※好ポケットの長期実測は{exp}。単発の上下に一喜一憂しないための記録です。")
 
 if __name__ == "__main__":
     main()

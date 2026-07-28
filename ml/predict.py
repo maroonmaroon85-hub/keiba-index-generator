@@ -134,7 +134,10 @@ def main():
     print(f"\n===== ◆好ポケット入口(gap≥{GAP_TH:.2f}&ダート)のレース: {len(pockets)} =====")
     for lab, favN, nm, od, gap, pairs, status, _tr, _r in pockets:
         print(f"  {lab} {status}  ◎{favN}{nm}({od}) gap{gap*100:.0f}%")
-        print(f"      ワイド上位{args.topbox}頭ボックス: {'  '.join(pairs)}")
+        # 同じ上位N頭で2券種。ワイド=安定(実測89%,的中18%)、馬連=高分散(実測100.9%だが
+        # 前半144%/後半75%と不安定・的中6%)。どちらを買うかは分散の好みで選ぶ。
+        print(f"      ワイド{args.topbox}頭BOX({len(pairs)}点/安定): {'  '.join(pairs)}")
+        print(f"      馬連 {args.topbox}頭BOX({len(pairs)}点/高分散): {'  '.join(pairs)}")
     if not pockets:
         print("  なし")
 

@@ -53,7 +53,7 @@ def main():
     ap.add_argument("--payout", required=True, help="配当B CSV（glob可）")
     ap.add_argument("--only-star", action="store_true", help="★合致レースのみ集計")
     ap.add_argument("--type", choices=["umaren", "wide"], default="umaren",
-                    help="集計する買い目（既定=umaren:本線の馬連 軸1×相手3 / wide:参考のワイドBOX4）")
+                    help="集計する買い目（既定=umaren:馬連 軸1×紐4 / wide:ワイドBOX4）")
     args = ap.parse_args()
 
     wide = load_wide(sorted(glob.glob(args.payout)))
@@ -79,7 +79,7 @@ def main():
             tot_bet += bet; tot_ret += ret
             rows.append((rc["label"], rc["status"], bet, ret, hit))
 
-    tname = "馬連 軸1×相手3(本線)" if args.type == "umaren" else "ワイドBOX4(参考)"
+    tname = "馬連 軸1×紐4" if args.type == "umaren" else "ワイドBOX4"
     print(f"\n===== 推奨の答え合わせ（{tname}/{'★合致のみ' if args.only_star else '全推奨'}） =====")
     for lab, st, bet, ret, hit in rows:
         if bet is None:
@@ -88,7 +88,7 @@ def main():
         print(f"  {lab:8s} {st:24s} 購入{bet:5d}円 払戻{ret:6d}円 ({ret/bet*100:5.1f}%)  {h}")
     if tot_bet:
         print(f"\n  通算: 購入{tot_bet}円 / 払戻{tot_ret}円 / 収支{tot_ret-tot_bet:+}円 / 回収率 {tot_ret/tot_bet*100:.1f}%")
-        exp = ("実測119.5%/168R・プラスの見込み69%(95%CI 62-195%)＝分散大"
+        exp = ("馬連軸1×紐4は実測118.3%/168R・ケリー成長1.69"
                if args.type == "umaren" else "実測89.2%だが負けの確率87%＝安定して負ける")
         print(f"  ※好ポケットの長期実測は{exp}。単発の上下に一喜一憂しないための記録です。")
 

@@ -118,13 +118,15 @@ def main():
         dirt = m["surface"] == "ダート"
         top = [int(x) for x in sub.head(args.topbox)["umaban"]]
         pairs = [f"{a}-{b}" for i, a in enumerate(top) for b in top[i+1:]]
-        # 本線=馬連 軸1(モデル1位)×相手3(モデル2-4位)の3点。
-        axis = [f"{top[0]}-{p}" for p in top[1:4]]
+        # 馬連 軸1×紐4(4点)。紐は全券種で①②③④に統一（実行しやすさ）。
+        # 紐3(119.5%/成長1.22)より紐4(118.3%/成長1.69)の方が的中頻度が上がり分散が減るため成長率は上。
+        axis = None  # 下で紐(t4)確定後に組む
         # 本線=三連単 一軸マルチ×相手4(36点)。好ポケット実測141.9%、ケリー対数成長4.21で最大。
         # 対抗=三連複 軸1×相手4(6点)。実測121.3%・対数成長2.20。資金が少ない場合はこちら。
         t4 = [int(x) for x in sub.head(5)["umaban"]][1:5]
         trio = [f"{top[0]}-{t4[i]}-{t4[j]}" for i in range(len(t4)) for j in range(i+1, len(t4))]
         hlist = t4  # 紐＝モデル2-5位（優先順）
+        axis = [f"{top[0]}-{h}" for h in t4]  # 馬連 軸×紐①②③④
         tan = [f"{a}-{b}-{c}" for i, a in enumerate([top[0]] + t4) for j, b in enumerate([top[0]] + t4)
                for k, c in enumerate([top[0]] + t4)
                if len({a, b, c}) == 3 and top[0] in (a, b, c) and not (a != top[0] and b != top[0] and c != top[0])]
@@ -151,7 +153,7 @@ def main():
         print(f"      軸 {favN}  ／  紐(優先順) {himo}")
         print(f"      ★本線     三連単 一軸マルチ 軸{favN}×紐①②③④ ({len(tan)}点/{len(tan)*100}円・成長4.21)")
         print(f"      ○資金少なめ 三連複 軸{favN}×紐①②③④ ({len(trio)}点/600円・成長2.20)")
-        print(f"      ・参考     馬連 軸{favN}×紐①②③ ({len(axis)}点/300円・成長1.22)")
+        print(f"      ・参考     馬連 軸{favN}×紐①②③④ ({len(axis)}点/400円・成長1.69)")
     if not pockets:
         print("  なし")
 

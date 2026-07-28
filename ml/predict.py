@@ -120,9 +120,13 @@ def main():
         pairs = [f"{a}-{b}" for i, a in enumerate(top) for b in top[i+1:]]
         # 本線=馬連 軸1(モデル1位)×相手3(モデル2-4位)の3点。
         axis = [f"{top[0]}-{p}" for p in top[1:4]]
-        # 対抗=三連複 軸1×相手4(6点)。好ポケット実測121.3%(プラス見込み77%)。
+        # 本線=三連単 一軸マルチ×相手4(36点)。好ポケット実測141.9%、ケリー対数成長4.21で最大。
+        # 対抗=三連複 軸1×相手4(6点)。実測121.3%・対数成長2.20。資金が少ない場合はこちら。
         t4 = [int(x) for x in sub.head(5)["umaban"]][1:5]
         trio = [f"{top[0]}-{t4[i]}-{t4[j]}" for i in range(len(t4)) for j in range(i+1, len(t4))]
+        tan = [f"{a}-{b}-{c}" for i, a in enumerate([top[0]] + t4) for j, b in enumerate([top[0]] + t4)
+               for k, c in enumerate([top[0]] + t4)
+               if len({a, b, c}) == 3 and top[0] in (a, b, c) and not (a != top[0] and b != top[0] and c != top[0])]
         favnm = info.get(favN, ("",""))[0][:7]
         has_odds = favOdds == favOdds
         od = f"{favOdds:.1f}倍" if has_odds else "オッズ未取得"
@@ -133,17 +137,18 @@ def main():
                 status = "★合致" if 2 <= favOdds < 5 else ("除外(堅すぎ)" if favOdds < 2 else "除外(人気薄)")
             else:
                 status = "△要オッズ確認(2-5倍なら合致)"
-            pockets.append((lab, favN, favnm, od, gap, pairs, status, m["track"], m["r"], axis, trio))
+            pockets.append((lab, favN, favnm, od, gap, pairs, status, m["track"], m["r"], axis, trio, tan))
         star = "◆" if entry else ("・" if gap >= GAP_TH else "  ")
         print(f"{star}{lab:8s} {m['surface']}{m['distance']} {m['cls'][:6]:6s} 頭{len(sub):2d} gap{gap*100:2.0f}% ◎{favN}{favnm}({od})")
     print(f"\n===== ◆好ポケット入口(gap≥{GAP_TH:.2f}&ダート)のレース: {len(pockets)} =====")
-    for lab, favN, nm, od, gap, pairs, status, _tr, _r, axis, trio in pockets:
+    for lab, favN, nm, od, gap, pairs, status, _tr, _r, axis, trio, tan in pockets:
         print(f"  {lab} {status}  ◎{favN}{nm}({od}) gap{gap*100:.0f}%")
         # 本線=馬連 軸1×相手3。実測119.5%(168R)・ブートストラップでプラスの見込み69%。
         # 参考=ワイドBOX4。実測89.2%だが「負け」の確率87%＝安定して負ける。分散は小さい。
-        print(f"      ★本線 馬連 軸{favN}×相手3({len(axis)}点/300円): {'  '.join(axis)}")
-        print(f"      ○対抗 三連複 軸{favN}×相手4({len(trio)}点/600円): {'  '.join(trio)}")
-        print(f"      （参考 ワイド{args.topbox}頭BOX {len(pairs)}点: {'  '.join(pairs)}）")
+        print(f"      ★本線 三連単 軸{favN}一軸マルチ×相手4({len(tan)}点/{len(tan)*100}円・成長4.21): {'  '.join(tan[:12])}")
+        if len(tan) > 12: print(f"           {'  '.join(tan[12:])}")
+        print(f"      ○資金少なめ 三連複 軸{favN}×相手4({len(trio)}点/600円・成長2.20): {'  '.join(trio)}")
+        print(f"      （馬連 軸{favN}×相手3 {len(axis)}点/300円・成長1.22: {'  '.join(axis)}）")
     if not pockets:
         print("  なし")
 
@@ -173,8 +178,8 @@ def main():
         reco = {"date": args.date, "topbox": args.topbox,
                 "races": [{"track": tr, "r": r, "label": lab, "status": st,
                            "fav": favN, "fav_name": nm, "fav_odds": od,
-                           "gap": round(gap, 4), "umaren_axis": axis, "sanrenpuku_axis": trio, "wide": pairs}
-                          for lab, favN, nm, od, gap, pairs, st, tr, r, axis, trio in pockets]}
+                           "gap": round(gap, 4), "sanrentan_multi": tan, "umaren_axis": axis, "sanrenpuku_axis": trio, "wide": pairs}
+                          for lab, favN, nm, od, gap, pairs, st, tr, r, axis, trio, tan in pockets]}
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(reco, fh, ensure_ascii=False, indent=1)
         print(f"\n推奨を保存: {args.out}（レース後に ml/check_result.py で答え合わせ）")

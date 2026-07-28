@@ -8,7 +8,7 @@ import glob
 import numpy as np
 import pandas as pd
 
-CAT_COLS = ["sex", "cond", "course", "sire", "damsire"]
+CAT_COLS = ["sex", "cond", "course", "sire", "damsire", "jockey", "trainer"]
 
 def _classcode(s):
     """レース名/クラス文字列(col7)→格の序数。新馬0/未勝利1/1勝2/2勝3/3勝4/OP5/L6/G3 7/G2 8/G1 9。"""
@@ -52,6 +52,9 @@ def to_model(raw):
     d["prize"] = pd.to_numeric(raw[36], errors="coerce")
     d["raceid"] = raw[40].str[:-2]
     d["umaban"] = pd.to_numeric(raw[40].str[-2:], errors="coerce")
+    d["jockey"] = raw[16].str.strip()      # 騎手
+    d["trainer"] = raw[34].str.strip()     # 調教師
+    d["bodywt"] = pd.to_numeric(raw[33], errors="coerce")  # 馬体重
     d["sire"] = raw[43].str.strip()
     d["damsire"] = raw[45].str.strip()
     d["raceclass"] = raw[7].map(_classcode)  # クラス(格)の序数: 新馬0..G1 9
@@ -115,6 +118,11 @@ def build_features(d):
     f["wt_change"] = d["wtcarry"] - g["wtcarry"].shift(1)
     f["weeks_since"] = (d["date"] - g["date"].shift(1)).dt.days / 7.0
     f["weeks_before"] = (g["date"].shift(1) - g["date"].shift(2)).dt.days / 7.0
+    f["bodywt"] = d["bodywt"]
+    f["bodywt_change"] = d["bodywt"] - g["bodywt"].shift(1)
+    # 騎手・厩舎の「その時点までの成績」（リーク防止の拡張平均）。カテゴリだけだと過去実績を表せないため。
+    f["jockey_form"] = _prior_mean(d, ["jockey"])[0]
+    f["trainer_form"] = _prior_mean(d, ["trainer"])[0]
     f["month"] = d["date"].dt.month
     f["season"] = _season(d["date"])
     # クラス(格)と昇降級。class_change>0=昇級, <0=降級。近走の格からの上げ下げは予想に効く。

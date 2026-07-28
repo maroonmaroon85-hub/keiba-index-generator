@@ -118,6 +118,8 @@ def main():
         dirt = m["surface"] == "ダート"
         top = [int(x) for x in sub.head(args.topbox)["umaban"]]
         pairs = [f"{a}-{b}" for i, a in enumerate(top) for b in top[i+1:]]
+        # 本線=馬連 軸1(モデル1位)×相手3(モデル2-4位)の3点。
+        axis = [f"{top[0]}-{p}" for p in top[1:4]]
         favnm = info.get(favN, ("",""))[0][:7]
         has_odds = favOdds == favOdds
         od = f"{favOdds:.1f}倍" if has_odds else "オッズ未取得"
@@ -128,16 +130,16 @@ def main():
                 status = "★合致" if 2 <= favOdds < 5 else ("除外(堅すぎ)" if favOdds < 2 else "除外(人気薄)")
             else:
                 status = "△要オッズ確認(2-5倍なら合致)"
-            pockets.append((lab, favN, favnm, od, gap, pairs, status, m["track"], m["r"]))
+            pockets.append((lab, favN, favnm, od, gap, pairs, status, m["track"], m["r"], axis))
         star = "◆" if entry else ("・" if gap >= GAP_TH else "  ")
         print(f"{star}{lab:8s} {m['surface']}{m['distance']} {m['cls'][:6]:6s} 頭{len(sub):2d} gap{gap*100:2.0f}% ◎{favN}{favnm}({od})")
     print(f"\n===== ◆好ポケット入口(gap≥{GAP_TH:.2f}&ダート)のレース: {len(pockets)} =====")
-    for lab, favN, nm, od, gap, pairs, status, _tr, _r in pockets:
+    for lab, favN, nm, od, gap, pairs, status, _tr, _r, axis in pockets:
         print(f"  {lab} {status}  ◎{favN}{nm}({od}) gap{gap*100:.0f}%")
-        # 同じ上位N頭で2券種。ワイド=安定(実測89%,的中18%)、馬連=高分散(実測100.9%だが
-        # 前半144%/後半75%と不安定・的中6%)。どちらを買うかは分散の好みで選ぶ。
-        print(f"      ワイド{args.topbox}頭BOX({len(pairs)}点/安定): {'  '.join(pairs)}")
-        print(f"      馬連 {args.topbox}頭BOX({len(pairs)}点/高分散): {'  '.join(pairs)}")
+        # 本線=馬連 軸1×相手3。実測119.5%(168R)・ブートストラップでプラスの見込み69%。
+        # 参考=ワイドBOX4。実測89.2%だが「負け」の確率87%＝安定して負ける。分散は小さい。
+        print(f"      ★本線 馬連 軸{favN}×相手3(3点): {'  '.join(axis)}")
+        print(f"      （参考 ワイド{args.topbox}頭BOX {len(pairs)}点: {'  '.join(pairs)}）")
     if not pockets:
         print("  なし")
 
@@ -167,8 +169,8 @@ def main():
         reco = {"date": args.date, "topbox": args.topbox,
                 "races": [{"track": tr, "r": r, "label": lab, "status": st,
                            "fav": favN, "fav_name": nm, "fav_odds": od,
-                           "gap": round(gap, 4), "wide": pairs}
-                          for lab, favN, nm, od, gap, pairs, st, tr, r in pockets]}
+                           "gap": round(gap, 4), "umaren_axis": axis, "wide": pairs}
+                          for lab, favN, nm, od, gap, pairs, st, tr, r, axis in pockets]}
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(reco, fh, ensure_ascii=False, indent=1)
         print(f"\n推奨を保存: {args.out}（レース後に ml/check_result.py で答え合わせ）")

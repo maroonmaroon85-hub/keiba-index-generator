@@ -136,5 +136,26 @@ def main():
     if not pockets:
         print("  なし")
 
+    # 穴馬候補: モデル上位4以内 かつ 単勝10-20倍。
+    # 実測(OOS17万頭)の裏付け: 20倍超は単勝58-64%/複勝63-78%で最悪＝買わない。
+    # 10-20倍×モデル上位は単勝~79-88%/複勝~79-84%と穴の中では最も減りにくい帯。
+    # 単体で儲かる訳ではないので、ワイドの「相手」に混ぜて配当を伸ばす用途を想定。
+    print("\n===== 穴馬候補（モデル上位4以内 × 単勝10-20倍 / ワイド相手向き） =====")
+    found = 0
+    for ri, rc in enumerate(races):
+        m = rc["meta"]; lab = f"{m['track']}{m['r']}R"
+        sub = today[today["raceid"] == f"S{ri:02d}"].copy()
+        if len(sub) < 4: continue
+        sub["wp"] = sub["pred"] / sub["pred"].sum()
+        sub = sub.sort_values("wp", ascending=False).head(4)
+        info = {t[1]: (t[2], t[3]) for t in tags if t[0] == ri}
+        for rank, row in enumerate(sub.itertuples(), 1):
+            u = int(row.umaban); nm, od = info.get(u, ("", np.nan))
+            if od == od and 10 <= od < 20:
+                print(f"  {lab:8s} {m['surface']}{m['distance']}  {u}番 {nm}({od:.1f}倍) モデル{rank}位 wp{row.wp*100:.0f}%")
+                found += 1
+    if not found:
+        print("  なし（オッズ未取得のレースは判定不可。オッズ確定後に再実行）")
+
 if __name__ == "__main__":
     main()

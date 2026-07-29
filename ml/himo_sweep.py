@@ -57,6 +57,7 @@ def main():
     ap.add_argument("--no-pocket", action="store_true")
     ap.add_argument("--max-himo", type=int, default=8)
     ap.add_argument("--min-horses", type=int, default=8)
+    ap.add_argument("--per-year", action="store_true", help="紐×年 の回収率マトリクスも出す")
     args = ap.parse_args()
 
     ns = list(range(2, args.max_himo + 1))
@@ -118,6 +119,25 @@ def main():
             r2 = ret[b].sum() / cost[b].sum() * 100 if b.any() else float("nan")
             print(f"{n:>3}{pts:>6}{hit:>7.2f}%{roi:>8.1f}%{f'{lo:.0f}-{hi:.0f}%':>16}"
                   f"{pplus * 100:>6.0f}%{f * 100:>7.1f}%{growth * 100:>6.2f}{r1:>9.0f}%/{r2:.0f}%")
+
+    if not args.per_year:
+        return
+
+    years = sorted(df["year"].unique())
+    for tname in POINTS:
+        print(f"\n■ {tname} 紐×年 回収率")
+        print(f"{'紐':>3}" + "".join(f"{y:>7}" for y in years) + f"{'全体':>8}")
+        print(f"{'R':>3}" + "".join(f"{int((df['year'] == y).sum()):>7}" for y in years)
+              + f"{len(df):>8}")
+        for n in ns:
+            pts = POINTS[tname](n)
+            cells = []
+            for y in years:
+                m = (df["year"] == y).to_numpy()
+                r = df[(tname, n)].to_numpy(float)[m].sum()
+                cells.append(f"{r / (m.sum() * pts * 100) * 100:>6.0f}%")
+            tot = df[(tname, n)].sum() / (len(df) * pts * 100) * 100
+            print(f"{n:>3}" + "".join(cells) + f"{tot:>7.0f}%")
 
 
 if __name__ == "__main__":

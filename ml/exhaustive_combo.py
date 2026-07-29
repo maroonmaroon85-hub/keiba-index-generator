@@ -129,22 +129,41 @@ def main():
     if best:
         print(f"  最良セル: {best[0]}  ROI {best[1]:.1f}%  R={best[2]}  前半{best[3]:.1f}% 後半{best[4]:.1f}%")
 
-    print(f"\n■ 帰無分布（払戻をシャッフル×{n_perm}回。条件と払戻の関係が消えた偽データ）")
+    # 払戻額は頭数で構造的に決まる（組合せ数が違うため）。全体シャッフルだと
+    # 16頭立ての大穴配当を9頭立てに付け替えてしまい、現実に起こり得ない配置になる。
+    # そこで「層内シャッフル」= 頭数×クラスが同じレース同士でのみ入れ替える版も併せて出す。
+    print("\n■ 前提確認: 頭数と払戻額の構造的な関係（層内シャッフルが必要な理由）")
+    tmp = pd.DataFrame({"頭数": axes["頭数"].to_numpy(), "pay": pay})
+    for k, g in tmp.groupby("頭数"):
+        nz = g.loc[g["pay"] > 0, "pay"]
+        print(f"    {k:<7} R={len(g):>6}  的中時の中央値 {np.median(nz):>9,.0f}円  最大 {nz.max():>11,.0f}円")
+
+    strata = pd.Series(axes["頭数"] + "|" + axes["クラス"]).to_numpy()
     rng = np.random.default_rng(0)
-    na, nb, bs = [], [], []
-    for i in range(n_perm):
-        sh = rng.permutation(pay)
-        _, a_, b_, be = scan(axes, sh, second, pts)
-        na.append(a_)
-        nb.append(b_)
-        bs.append(be[1] if be else np.nan)
-    print(f"  全体100%超:  平均{np.mean(na):.1f}  範囲{min(na)}〜{max(na)}   （実データ {n_all}）")
-    print(f"  両期間100%超: 平均{np.mean(nb):.1f}  範囲{min(nb)}〜{max(nb)}   （実データ {n_both}）")
-    print(f"  偽データの最良セルROI: 平均{np.nanmean(bs):.1f}%  最大{np.nanmax(bs):.1f}%   （実データ {best[1]:.1f}%）")
-    p_all = (np.array(na) >= n_all).mean()
-    p_both = (np.array(nb) >= n_both).mean()
-    print(f"\n  → p値(全体100%超の個数): {p_all:.2f}   p値(両期間100%超の個数): {p_both:.2f}")
-    print("  ※p値が小さくない＝実データの結果は偶然のシャッフルと区別がつかない。")
+    modes = ["層内シャッフル(頭数×クラス)"] if len(sys.argv) > 2 and sys.argv[2] == "strata" \
+        else ["全体シャッフル", "層内シャッフル(頭数×クラス)"]
+    for mode in modes:
+        na, nb, bs = [], [], []
+        for _ in range(n_perm):
+            if mode == "全体シャッフル":
+                sh = rng.permutation(pay)
+            else:
+                sh = pay.copy()
+                for s in np.unique(strata):
+                    idx = np.where(strata == s)[0]
+                    sh[idx] = rng.permutation(pay[idx])
+            _, a_, b_, be = scan(axes, sh, second, pts)
+            na.append(a_)
+            nb.append(b_)
+            bs.append(be[1] if be else np.nan)
+        print(f"\n■ 帰無分布: {mode} ×{n_perm}回")
+        print(f"  全体100%超:  平均{np.mean(na):>6.1f}  範囲{min(na)}〜{max(na)}   （実データ {n_all}）")
+        print(f"  両期間100%超: 平均{np.mean(nb):>6.1f}  範囲{min(nb)}〜{max(nb)}   （実データ {n_both}）")
+        print(f"  最良セルROI:  平均{np.nanmean(bs):>6.1f}%  最大{np.nanmax(bs):.1f}%   （実データ {best[1]:.1f}%）")
+        print(f"  → p値(全体100%超): {(np.array(na) >= n_all).mean():.2f}   "
+              f"p値(両期間100%超): {(np.array(nb) >= n_both).mean():.2f}   "
+              f"p値(最良ROI): {(np.array(bs) >= best[1]).mean():.2f}")
+    print("\n※層内シャッフルは頭数・クラスの構造を保つため、その2軸自体は検定対象から実質外れる。")
 
 
 if __name__ == "__main__":

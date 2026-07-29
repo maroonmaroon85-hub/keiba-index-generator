@@ -22,7 +22,12 @@
 - セットアップスクリプト: `pip install lightgbm scikit-learn pandas numpy joblib` ＋ `npm install`。
 - ⚠**`ml/model/` は .gitignore なので新環境では空**。最初に `python3 ml/train.py`（1〜2分）を1回走らせること。
   これを忘れると `ml/predict.py` がモデルを読めない。
+- ⚠**`node_modules/` も .gitignore なので新環境では空**。TS側コマンド（`npm run exotic` / `exotic-filter` / `generate` / `backtest`）を
+  使うなら別途 `npm install` が必要。ただし**毎週の運用フロー(⑧/(22))は Python のみで完結**するため通常は不要。
 - TARGETからのCSV出力だけは Windows 側の作業（それ以外はクラウドで完結）。
+- **動作確認済み（2026-07-29）**: Python 3.11 / lightgbm 4.7.0 / scikit-learn 1.9.0 / pandas 3.0.5 / numpy 2.4.6 / joblib 1.5.3。
+  `python3 ml/train.py` は DS*.CSV 205ファイルを自動収集して **1分16秒**で完走し、
+  AUC 0.7758 / top-pick複勝率 59.6% / 勝率 30.0%（＝(24)の新モデルの値と一致）。`out/ml_test_pred.csv` と `ml/model/` を生成。
 
 ## リポジトリ / ブランチ
 - リポ: `maroonmaroon85-hub/keiba-index-generator`（game-zatsugaku-pipeline とは無関係の別プロジェクト）

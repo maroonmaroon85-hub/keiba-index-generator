@@ -44,6 +44,37 @@ def waku_of(umaban, n):
     return edge + (int(umaban) - small - 1) // (q + 1) + 1
 
 
+def wakuren_buy(nums, n, n_partners=2):
+    """軸枠×紐枠 の買い目。nums はモデル降順の馬番（先頭が軸）、n は頭数。
+    軸と紐が同じ枠に入ると点数が減る（重複除去）ので、点数はレースごとに1〜n_partners点で変わる。"""
+    wa = waku_of(nums[0], n)
+    return sorted({tuple(sorted((wa, waku_of(h, n)))) for h in nums[1:1 + n_partners]})
+
+
+def bracket_probs(nums, probs, n):
+    """馬番ごとのモデル確率を枠番に集約する。レース内で合計1に正規化してから枠ごとに足す。"""
+    q = np.asarray(probs, dtype=float)
+    s = q.sum()
+    q = q / s if s > 0 else np.full(len(q), 1.0 / max(len(q), 1))
+    out = {}
+    for u, p in zip(nums, q):
+        w = waku_of(u, n)
+        out[w] = out.get(w, 0.0) + float(p)
+    return out
+
+
+def waku_score(pairs, bp):
+    """買う枠組が当たる確率の目安。枠連は**それぞれの枠から1頭ずつ**来る必要があるので、
+    枠の確率の**合計ではなく積**で評価する（(62)で修正した点）。
+    異なる枠の組は 2*Pa*Pb（どちらが1着でもよい）、ゾロ目は Pa^2。
+    絞り込みには使えないが、下位20%（＝買ってはいけないレース）の識別には使える。"""
+    t = 0.0
+    for a, b in pairs:
+        pa, pb = bp.get(a, 0.0), bp.get(b, 0.0)
+        t += pa * pb if a == b else 2.0 * pa * pb
+    return t
+
+
 def load_wu(path):
     """配当A から 枠連 と 馬単 を読む。"""
     out = {}

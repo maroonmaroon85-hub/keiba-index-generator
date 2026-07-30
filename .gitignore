@@ -6,3 +6,4 @@ out/
 __pycache__/
 *.pyc
 ml/model/
+ml/model_prod/

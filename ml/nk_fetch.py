@@ -63,11 +63,26 @@ def get(url, key, referer=None, wait=WAIT, retries=3):
 
 
 def race_ids_of_day(ymd):
-    """その日のrace_id一覧。開催日一覧ページから拾う。"""
+    """その日のJRAのrace_id一覧。
+
+    ★2つの落とし穴に対応している:
+      ・`db.netkeiba.com/race/list/` は**結果データベース**なので、まだ走っていない日は空になる。
+        当日の予想には使えないため、**先に `race_list_sub.html` を見る**（未来日でも返る・実確認済み）。
+      ・一覧には**地方競馬が混ざる**（実データ: 7/26は78レース中42が地方）。
+        場コードは JRA が 01〜10 なので、それ以外を落とす。落とさないと地方の行が学習データに入る。
+    """
     import re
-    b = get(f"https://db.netkeiba.com/race/list/{ymd}/", f"list_{ymd}.html")
-    ids = sorted(set(re.findall(r"/race/(\d{12})", b.decode("euc_jp", "replace"))))
-    return [i for i in ids if i.startswith(ymd[:4])]
+    b = get(f"https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={ymd}",
+            f"rlist_{ymd}.html")
+    ids = set(re.findall(r"race_id=(\d{12})", b.decode("utf-8", "replace")))
+    if not ids:   # 過去日でこちらが空なら結果DB側を見る
+        b = get(f"https://db.netkeiba.com/race/list/{ymd}/", f"list_{ymd}.html")
+        ids = set(re.findall(r"/race/(\d{12})", b.decode("euc_jp", "replace")))
+    jra = sorted(i for i in ids if i.startswith(ymd[:4]) and i[4:6].isdigit()
+                 and 1 <= int(i[4:6]) <= 10)
+    if len(ids) > len(jra):
+        print(f"  （地方競馬 {len(ids)-len(jra)}レースを除外）")
+    return jra
 
 
 def names_cache(update=None):

@@ -193,6 +193,35 @@ def to_ds_rows(race, horses):
     return out
 
 
+def parse_pedigree(raw_bytes):
+    """血統ページ `db.netkeiba.com/horse/ped/<id>/` → {"sire": 父, "damsire": 母父}。
+
+    5代血統表は rowspan で入れ子になっている。**rowspan=16 のセルが父と母**（この順）で、
+    母の行の次のセル（rowspan=8）が母父。名前は最初の <a> のテキストを取る
+    （セルの生テキストは「ニューイヤーズデイ2011鹿毛…」のように生年・毛色が続くため）。
+    """
+    s = raw_bytes.decode("euc_jp", "replace")
+    tb = _table(s, "blood_table")
+    if not tb:
+        return {"sire": "", "damsire": ""}
+    big, out = [], {"sire": "", "damsire": ""}
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", tb, re.S):
+        tds = re.findall(r"<td[^>]*>.*?</td>", tr, re.S)
+        rs = [int(re.search(r'rowspan="?(\d+)', t).group(1)) if "rowspan" in t else 1 for t in tds]
+        for i, (t, n) in enumerate(zip(tds, rs)):
+            if n != 16:
+                continue
+            a = re.search(r"<a[^>]*>(.*?)</a>", t, re.S)
+            nm = _txt(a.group(1)) if a else _txt(t).split("\n")[0]
+            big.append(nm)
+            if len(big) == 1:
+                out["sire"] = nm
+            elif len(big) == 2 and i + 1 < len(tds):   # 母の行の隣が母父
+                a2 = re.search(r"<a[^>]*>(.*?)</a>", tds[i + 1], re.S)
+                out["damsire"] = _txt(a2.group(1)) if a2 else ""
+    return out
+
+
 def parse_odds_json(txt):
     """オッズAPIのJSON → ({馬番int: 単勝オッズ}, 取得時点)。"""
     j = json.loads(txt)

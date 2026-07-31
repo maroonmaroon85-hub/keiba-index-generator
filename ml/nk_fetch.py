@@ -31,7 +31,8 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from nk_parse import parse_result, parse_shutuba, parse_odds_json, to_ds_rows, nk_raceid
+from nk_parse import (parse_result, parse_shutuba, parse_odds_json, parse_pedigree,
+                      to_ds_rows, nk_raceid)
 
 UA = "Mozilla/5.0 (compatible; personal-research/1.0)"
 CACHE = "data/nk_cache"
@@ -166,7 +167,6 @@ def cmd_pedigree():
     """DS互換CSVで父/母父が空の馬を、馬ページから埋める。1頭1回だけ。"""
     import csv
     import glob
-    import re
     need = {}
     for p in sorted(glob.glob(f"{OUT}/DSnk*.CSV")):
         for r in csv.reader(open(p, encoding="shift_jis", errors="replace")):
@@ -183,11 +183,7 @@ def cmd_pedigree():
         b = get(f"https://db.netkeiba.com/horse/ped/{hid}/", f"ped_{hid}.html")
         if not b:
             continue
-        s = b.decode("euc_jp", "replace")
-        names = re.findall(r'/horse/(?:ped/)?\w+/"[^>]*>([^<]+)</a>', s)
-        # 血統表は「父, 父父, …」の順に並ぶ。父=先頭、母父は母ブロックの先頭。
-        ped[hid] = {"sire": names[0].strip() if names else "",
-                    "damsire": names[15].strip() if len(names) > 15 else ""}
+        ped[hid] = parse_pedigree(b)
         if i % 20 == 0:
             json.dump(ped, open(pp, "w", encoding="utf-8"), ensure_ascii=False)
             print(f"  {i}/{len(todo)}")

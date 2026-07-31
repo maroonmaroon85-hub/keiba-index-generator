@@ -66,13 +66,21 @@ def parse_result(raw_bytes, rid12):
     date = (m.group(1), m.group(2).zfill(2), m.group(3).zfill(2)) if m else ("", "", "")
     place = re.search(r"日\s*(\S+?)\d+R", ttl)
     # 条件行: 「ダ右1000m / 天候 : 晴 / ダート : 良 / 発走 : 10:00」
-    cond = re.search(r"<(?:diary_snap_cut|p class=\"smalltxt\")>(.*?)</", s, re.S)
     dl = re.search(r"([芝ダ障])[^\d]*(\d{3,4})m", s)
+    # ★クラス: netkeibaのレース名は「羊ヶ丘特別」でクラスを含まない（TARGETは「厚岸特別･1勝」）。
+    #   そのままだと `_classcode` が特別戦を全部オープン(5)にしてしまう（実データで447行中106行）。
+    #   smalltxt に「2026年07月26日 1回札幌2日目 **3歳以上2勝クラス** (混)[指](ハンデ)」と入っているので
+    #   そこから条件を取り、レース名に連結して col7 に入れる。重賞は名前側の (G2) が拾われる。
+    st = re.search(r'<p class="smalltxt">(.*?)</p>', s, re.S)
+    st = H.unescape(re.sub(r"<[^>]+>", " ", st.group(1))) if st else ""
+    klass = re.search(r"\d+回\S+?\d+日目\s+(\S+)", st)
+    klass = klass.group(1).strip() if klass else ""
     baba = re.search(r"(?:ダート|芝|障害)\s*:\s*(良|稍重|重|不良)", s)
     race = {
         "rid12": rid12, "raceid": nk_raceid(rid12), "y": date[0], "m": date[1], "d": date[2],
         "place": PLACES.get(rid12[4:6], ""),
-        "name": ttl.split("｜")[0].split("|")[0].strip(),
+        "name": (ttl.split("｜")[0].split("|")[0].strip() + " " + klass).strip(),
+        "klass": klass,
         "surface": dl.group(1) if dl else "", "distance": dl.group(2) if dl else "",
         "cond": {"稍重": "稍", "不良": "不"}.get(baba.group(1), baba.group(1)) if baba else "",
     }

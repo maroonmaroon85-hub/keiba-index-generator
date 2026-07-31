@@ -71,6 +71,14 @@ def parse_result(raw_bytes, rid12):
     #   そのままだと `_classcode` が特別戦を全部オープン(5)にしてしまう（実データで447行中106行）。
     #   smalltxt に「2026年07月26日 1回札幌2日目 **3歳以上2勝クラス** (混)[指](ハンデ)」と入っているので
     #   そこから条件を取り、レース名に連結して col7 に入れる。重賞は名前側の (G2) が拾われる。
+    # ★重賞のグレードは racedata に**ローマ数字**で入る（「第61回関屋記念(GIII)」）。
+    #   `_classcode` は "G3" を探すのでアラビア数字に直して名前に足す。J.GIII は障害重賞。
+    rd = re.search(r'<dl[^>]*class="racedata[^"]*"[^>]*>(.*?)</dl>', s, re.S)
+    grade = ""
+    if rd:
+        g = re.search(r"\(J?\.?G(III|II|I)\)", H.unescape(re.sub(r"<[^>]+>", " ", rd.group(1))))
+        if g:
+            grade = "G" + {"I": "1", "II": "2", "III": "3"}[g.group(1)]
     st = re.search(r'<p class="smalltxt">(.*?)</p>', s, re.S)
     st = H.unescape(re.sub(r"<[^>]+>", " ", st.group(1))) if st else ""
     klass = re.search(r"\d+回\S+?\d+日目\s+(\S+)", st)
@@ -79,8 +87,8 @@ def parse_result(raw_bytes, rid12):
     race = {
         "rid12": rid12, "raceid": nk_raceid(rid12), "y": date[0], "m": date[1], "d": date[2],
         "place": PLACES.get(rid12[4:6], ""),
-        "name": (ttl.split("｜")[0].split("|")[0].strip() + " " + klass).strip(),
-        "klass": klass,
+        "name": " ".join(x for x in [ttl.split("｜")[0].split("|")[0].strip(), grade, klass] if x),
+        "klass": klass, "grade": grade,
         "surface": dl.group(1) if dl else "", "distance": dl.group(2) if dl else "",
         "cond": {"稍重": "稍", "不良": "不"}.get(baba.group(1), baba.group(1)) if baba else "",
     }

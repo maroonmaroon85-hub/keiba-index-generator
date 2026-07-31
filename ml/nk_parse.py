@@ -80,8 +80,8 @@ def parse_result(raw_bytes, rid12):
     trs = re.findall(r"<tr[^>]*>(.*?)</tr>", _table(s, "race_table_01"), re.S)
     hdr = _cells(trs[0]) if trs else []
     ix = {k: hdr.index(k) for k in
-          ["着順", "枠番", "馬番", "馬名", "性齢", "斤量", "騎手", "着差", "通過", "上り",
-           "単勝", "馬体重", "調教師"] if k in hdr}
+          ["着順", "枠番", "馬番", "馬名", "性齢", "斤量", "騎手", "タイム", "着差", "通過",
+           "上り", "単勝", "馬体重", "調教師"] if k in hdr}
     prize_i = next((i for i, h in enumerate(hdr) if h.startswith("賞金")), None)
     for tr in trs[1:]:
         c = _cells(tr)
@@ -96,7 +96,7 @@ def parse_result(raw_bytes, rid12):
         horses.append({
             "finish": g("着順"), "waku": g("枠番"), "umaban": g("馬番"), "name": g("馬名"),
             "sex": sa.group(1) if sa else "", "age": sa.group(2) if sa else "",
-            "wtcarry": g("斤量"), "jockey": g("騎手"), "margin": g("着差"),
+            "wtcarry": g("斤量"), "jockey": g("騎手"), "time": g("タイム"),
             "pass": g("通過"), "agari": g("上り"), "odds": g("単勝"),
             "bodywt": bw.group(1) if bw else "",
             "trainer": re.sub(r"^\[.\]\s*", "", g("調教師")).replace("\n", ""),
@@ -119,10 +119,35 @@ def parse_result(raw_bytes, rid12):
     return race, horses, pay
 
 
+def _sec(t):
+    """`0:59.6` → 59.6 秒。空や異常値は None。"""
+    m = re.match(r"(\d+):(\d+\.\d+)", t or "")
+    return int(m.group(1)) * 60 + float(m.group(2)) if m else None
+
+
+def margins_from_times(horses):
+    """netkeibaの着差は**馬身**（`3.1/2`『クビ』）だが、DSのcol23は**秒差**で意味が違う。
+    実データで確認した DS の定義は「1着=−(2着との差) / 2着以降=勝ち馬との差」。
+    馬身からは復元できないので**タイムから作り直す**。
+    """
+    ts = [(_sec(h.get("time")), i) for i, h in enumerate(horses)]
+    ok = sorted([(t, i) for t, i in ts if t is not None])
+    out = [""] * len(horses)
+    if len(ok) < 2:
+        return out
+    t1, t2 = ok[0][0], ok[1][0]
+    for t, i in ts:
+        if t is None:
+            continue
+        out[i] = f"{-(t2 - t1):.1f}" if t == t1 else f"{t - t1:.1f}"
+    return out
+
+
 def to_ds_rows(race, horses):
     """DS 52列レイアウトの行を作る（to_model が読む列だけ埋め、他は空）。"""
     out = []
-    for h in horses:
+    mg = margins_from_times(horses)
+    for hi, h in enumerate(horses):
         r = [""] * DS_COLS
         r[0], r[1], r[2] = race["y"][2:], race["m"], race["d"]
         r[4] = race.get("place", "")
@@ -136,14 +161,14 @@ def to_ds_rows(race, horses):
         r[17] = h["wtcarry"]
         r[18] = race["field"]
         r[20] = h["finish"]
-        r[23] = h["margin"]
+        r[23] = mg[hi]
         ps = [x for x in re.split(r"[-−]", h["pass"]) if x.strip().isdigit()]
         for i in range(4):
             r[28 + i] = ps[i] if i < len(ps) else "0"
         r[32] = h["agari"]
         r[33] = h["bodywt"]
         r[34] = h["trainer"]
-        r[36] = h["prize"]
+        r[36] = h["prize"] or "0"   # DSは入着外を0で埋める。空にするとavg3_prizeがNaNになり不一致
         r[37] = h["horse_id"]          # 血統登録番号の代わり（netkeibaの一意な馬ID）
         r[40] = race["raceid"] + str(h["umaban"]).zfill(2)
         r[43], r[44], r[45] = "", "", ""   # 父/母/母父 は馬ページから後で埋める

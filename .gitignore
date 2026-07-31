@@ -7,3 +7,4 @@ __pycache__/
 *.pyc
 ml/model/
 ml/model_prod/
+data/nk_cache/

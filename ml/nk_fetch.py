@@ -31,8 +31,8 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from nk_parse import (PLACES, parse_result, parse_shutuba, parse_odds_json, parse_pedigree,
-                      to_ds_rows, nk_raceid)
+from nk_parse import (PLACES, parse_result, parse_result_live, parse_shutuba, parse_odds_json,
+                      parse_pedigree, to_ds_rows, nk_raceid)
 
 UA = "Mozilla/5.0 (compatible; personal-research/1.0)"
 CACHE = "data/nk_cache"
@@ -105,22 +105,33 @@ def cmd_results(ymd):
         print("  レース一覧が取れなかった。URLの形式が変わっている可能性がある。")
         return
     os.makedirs(OUT, exist_ok=True)
-    rows, pays, nm, empty = [], [], {"jockey": {}, "trainer": {}}, 0
+    rows, pays, nm, empty, live = [], [], {"jockey": {}, "trainer": {}}, 0, 0
+    names = names_cache()
     for rid in ids:
         key = f"race_{rid}.html"
         b = get(f"https://db.netkeiba.com/race/{rid}/", key)
-        if not b:
-            continue
-        race, horses, pay = parse_result(b, rid)
+        race = horses = pay = None
+        if b:
+            race, horses, pay = parse_result(b, rid)
         if not horses:
-            # ★まだ結果が出ていないレース。**キャッシュを消す**——残すと空のまま固定され、
-            #   後で取り直しても0行のままになる（実際に8/01で踏んだ）。
-            empty += 1
+            # ★db.netkeiba は**当日は空**（器だけのHTMLが返る。実データで確認）。
+            #   キャッシュを消してから、当日用の結果ページに切り替える。
+            #   残すと空のまま固定され、後で取り直しても0行のままになる。
             try:
                 os.remove(os.path.join(CACHE, key))
             except OSError:
                 pass
-            continue
+            k2 = f"result_{rid}.html"
+            b2 = get(f"https://race.netkeiba.com/race/result.html?race_id={rid}", k2)
+            race, horses, pay = parse_result_live(b2, rid, names) if b2 else (None, None, None)
+            if not horses:
+                empty += 1
+                try:
+                    os.remove(os.path.join(CACHE, k2))
+                except OSError:
+                    pass
+                continue
+            live += 1
         rows += to_ds_rows(race, horses)
         for h in horses:
             if h.get("jockey_id"):
@@ -139,6 +150,9 @@ def cmd_results(ymd):
     with open(f2, "w", encoding="utf-8", newline="") as fh:
         csv.writer(fh).writerows([["raceid", "kind", "combo", "payout"]] + pays)
     print(f"保存: {f1}（{len(rows)}行） / {f2}（{len(pays)}件）")
+    if live:
+        print(f"※{live}レースは当日用ページから取得（db側は当日まだ空）。"
+              "騎手/調教師が短縮表記になる場合があるので、翌日以降に同じコマンドで取り直すと正式名で上書きされる")
     if empty:
         print(f"⚠ {empty}レースはまだ結果が出ていない（キャッシュしていないので後で取り直せる）")
     if rows:

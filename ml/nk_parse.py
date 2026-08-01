@@ -135,6 +135,127 @@ def parse_result(raw_bytes, rid12):
     return race, horses, pay
 
 
+def _corner_positions(html_s):
+    """コーナー通過順を {コーナー番号: {馬番: 位置}} にする。
+
+    ★このページでは通過順が**レース単位の文字列**で入る（`7,8(4,6,10)11(1,9)5(3,12)2`）。
+    　括弧は横並びを表すが、DSは馬ごとの整数なので**記載順に連番**を振って近似する。
+    　先頭集団の順序は正確に取れるので、`passavg`（4コーナーの平均）としては実用上十分。
+    """
+    m = re.search(r'<table[^>]*class="[^"]*Corner_Num[^"]*"[^>]*>(.*?)</table>', html_s, re.S)
+    out = {}
+    if not m:
+        return out
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", m.group(1), re.S):
+        c = _cells(tr)
+        if len(c) < 2 or not c[1].strip():
+            continue
+        cno = re.match(r"(\d)", c[0])
+        if not cno:
+            continue
+        pos, i = {}, 0
+        for tok in re.findall(r"\d+", c[1]):
+            i += 1
+            pos[int(tok)] = i
+        out[int(cno.group(1))] = pos
+    return out
+
+
+def parse_result_live(raw_bytes, rid12, names=None):
+    """**当日用**の結果ページ `race.netkeiba.com/race/result.html?race_id=…`（UTF-8）。
+
+    ★なぜ必要か: `db.netkeiba.com/race/<id>/` は**当日は空**（器だけのHTMLが返る。実データで確認）。
+    　データベース側への反映が遅いため、当日中に答え合わせするにはこちらを使う。
+    　過去日は db 側を使う（(71)で全列照合済みなので実績がある）。
+
+    db版との違い（ここを吸収している）:
+      ・騎手/厩舎が**短縮表記**（`▲小林美` / `美浦 鈴木伸`）→ 5桁IDで names から復元
+      ・**通過順が馬ごとに無い**→ 別テーブル `Corner_Num` から復元
+      ・**賞金が馬ごとに無い**→ `本賞金:580,230,150,87,58万円` を着順で割り当て
+      ・レース条件が RaceData01/02 に分かれている
+    """
+    s = raw_bytes.decode("utf-8", "replace")
+    ttl = re.search(r"<title>(.*?)</title>", s, re.S)
+    ttl = _txt(ttl.group(1)) if ttl else ""
+    dm = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", ttl)
+    date = (dm.group(1), dm.group(2).zfill(2), dm.group(3).zfill(2)) if dm else ("", "", "")
+    rd1 = re.search(r'<div class="RaceData01">(.*?)</div>', s, re.S)
+    rd1 = _txt(rd1.group(1)) if rd1 else ""
+    rd2 = re.search(r'<div class="RaceData02">(.*?)</div>', s, re.S)
+    rd2 = _txt(rd2.group(1)) if rd2 else ""
+    dl = re.search(r"([芝ダ障])[^\d]*(\d{3,4})m", rd1)
+    baba = re.search(r"馬場\s*:?\s*(良|稍重|稍|重|不良|不)", rd1)
+    name = ttl.split("結果")[0].strip()
+    g = re.search(r"\(J?\.?G(III|II|I)\)", name)
+    grade = " G" + {"I": "1", "II": "2", "III": "3"}[g.group(1)] if g else ""
+    # RaceData02: 「1回 札幌 3日目 サラ系３歳 未勝利 [指] 馬齢 12頭 本賞金:…」
+    # 「1回 札幌 3日目 サラ系３歳 未勝利 [指] 馬齢 12頭 本賞金:…」→ 本賞金以降は落とす
+    klass = " ".join(x for x in rd2.split("\n") if x.strip()).split("本賞金")[0].strip()
+    race = {"rid12": rid12, "raceid": nk_raceid(rid12), "y": date[0], "m": date[1], "d": date[2],
+            "place": PLACES.get(rid12[4:6], ""), "name": (name + grade + " " + klass).strip(),
+            "surface": dl.group(1) if dl else "", "distance": dl.group(2) if dl else "",
+            "cond": {"稍重": "稍", "不良": "不"}.get(baba.group(1), baba.group(1)) if baba else ""}
+    pz = re.search(r"本賞金:([\d,]+)万円", rd2.replace("\n", ""))
+    prizes = [x for x in pz.group(1).split(",") if x] if pz else []
+    corners = _corner_positions(s)
+
+    tb = _table(s, "RaceTable01")
+    trs = re.findall(r"<tr[^>]*>(.*?)</tr>", tb, re.S)
+    hdr = _cells(trs[0]) if trs else []
+    ix = {k: hdr.index(k) for k in
+          ["着順", "枠", "馬番", "馬名", "性齢", "斤量", "騎手", "タイム", "単勝オッズ", "後3F"]
+          if k in hdr}
+    bw_i = next((i for i, h in enumerate(hdr) if h.startswith("馬体重")), None)
+    nm = names or {}
+    horses = []
+    for tr in trs[1:]:
+        c = _cells(tr)
+        if len(c) < 8:
+            continue
+        gg = lambda k: c[ix[k]] if k in ix and ix[k] < len(c) else ""
+        if not gg("着順").isdigit():          # 中止・除外・失格
+            continue
+        hid = re.search(r"/horse/(\d+)", tr)
+        jid = re.search(r"/jockey/[a-z/]*?(\d{5})", tr)
+        tid = re.search(r"/trainer/[a-z/]*?(\d{5})", tr)
+        jid, tid = (jid.group(1) if jid else ""), (tid.group(1) if tid else "")
+        sa = re.match(r"([牡牝セ])(\d+)", gg("性齢"))
+        bw = re.match(r"(\d+)", c[bw_i]) if bw_i is not None and bw_i < len(c) else None
+        fin = int(gg("着順"))
+        u = int(gg("馬番"))
+        horses.append({
+            "finish": str(fin), "waku": gg("枠"), "umaban": str(u), "name": gg("馬名"),
+            "sex": sa.group(1) if sa else "", "age": sa.group(2) if sa else "",
+            "wtcarry": gg("斤量"),
+            "jockey": nm.get("jockey", {}).get(jid) or re.sub(r"^[▲△☆◇★]", "", gg("騎手")),
+            "trainer": nm.get("trainer", {}).get(tid) or _txt(c[hdr.index("厩舎")]).split("\n")[-1]
+                       if "厩舎" in hdr else "",
+            "time": gg("タイム"), "agari": gg("後3F"), "odds": gg("単勝オッズ"),
+            "bodywt": bw.group(1) if bw else "",
+            "pass": "-".join(str(corners[k][u]) for k in sorted(corners) if u in corners[k]),
+            "prize": prizes[fin - 1] if fin <= len(prizes) else "0",
+            "horse_id": hid.group(1) if hid else "", "jockey_id": jid, "trainer_id": tid,
+        })
+    race["field"] = str(len(horses))
+    pay = {}
+    for tb2 in re.findall(r'<table[^>]*class="[^"]*Payout_Detail_Table[^"]*"[^>]*>(.*?)</table>',
+                          s, re.S):
+        for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", tb2, re.S):
+            cs = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", tr, re.S)
+            if len(cs) < 3:
+                continue
+            kind = {"3連複": "三連複", "3連単": "三連単"}.get(_txt(cs[0]), _txt(cs[0]))
+            nums = [x for x in re.split(r"<br\s*/?>|\n", _txt(cs[1]).replace("\r", "")) if x.strip()]
+            amts = re.findall(r"([\d,]+)円", cs[2])
+            k = {"単勝": 1, "複勝": 1, "枠連": 2, "馬連": 2, "ワイド": 2, "馬単": 2,
+                 "三連複": 3, "三連単": 3}.get(kind, 0)
+            if not k or not amts:
+                continue
+            pay[kind] = [("-".join(nums[i * k:(i + 1) * k]), int(a.replace(",", "")))
+                         for i, a in enumerate(amts) if len(nums) >= (i + 1) * k]
+    return race, horses, pay
+
+
 def _sec(t):
     """`0:59.6` → 59.6 秒。空や異常値は None。"""
     m = re.match(r"(\d+):(\d+\.\d+)", t or "")

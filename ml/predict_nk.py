@@ -162,6 +162,21 @@ def main():
             print(f"       三連複BOX {' '.join(trio)}（4点 400円）")
             print("       順位 " + " ".join(f"{i+1}:{u}番({info[u]['odds']:.1f})"
                                             for i, u in enumerate(nums[:5])))
+            # ★買った枠の中身。枠連はその枠から**どれか1頭**が来れば当たるので、
+            #   同じ枠に複数いるならそれだけ当たりやすい。馬連等に読み替えるときの材料にもなる。
+            rank = {u: i + 1 for i, u in enumerate(nums)}
+            axw = wk[nums[0]]
+            order = [axw] + [w for pr in pairs for w in pr if w != axw]
+            seen, lines = set(), []
+            for w in order:
+                if w in seen:
+                    continue
+                seen.add(w)
+                mem = sorted([u for u in nums if wk[u] == w], key=lambda u: rank[u])
+                lines.append(f"{'軸' if w == axw else '  '}{w}枠 "
+                             + " ".join(f"{u}番{info[u]['name'][:7]}({info[u]['odds']:.1f}倍"
+                                        f"/{rank[u]}位)" for u in mem))
+            print("       枠の中身  " + "\n                 ".join(lines))
         out_races.append({"track": rc["place"], "r": rc["r"], "label": f"{rc['place']}{rc['r']}R",
                           "fieldsize": n, "axis": nums[0], "axis_name": ax["name"],
                           "axis_odds": ax["odds"], "axis_waku": wk[nums[0]], "top5": nums[:5],

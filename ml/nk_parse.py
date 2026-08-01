@@ -243,6 +243,21 @@ def parse_shutuba(raw_bytes, names=None):
     """
     s = raw_bytes.decode("utf-8", "replace")
     ttl = _txt(re.search(r"<title>(.*?)</title>", s, re.S).group(1))
+    # ★レース条件（芝ダ・距離・馬場）は RaceData01 にある。
+    #   「10:00発走 / ダ1000m (右) / 天候:晴 / 馬場:良」。予想には距離と芝ダが必須。
+    rd = re.search(r'<div class="RaceData01">(.*?)</div>', s, re.S)
+    rd = _txt(rd.group(1)) if rd else ""
+    dl = re.search(r"([芝ダ障])[^\d]*(\d{3,4})m", rd)
+    baba = re.search(r"馬場\s*:?\s*(良|稍重|重|不良)", rd)
+    # クラスはタイトル側（「釧路湿原特別(2勝クラス) 出馬表 | …」）。重賞はローマ数字を直す。
+    name = ttl.split("出馬表")[0].strip()
+    g = re.search(r"\(J?\.?G(III|II|I)\)", name)
+    if g:
+        name += " G" + {"I": "1", "II": "2", "III": "3"}[g.group(1)]
+    meta = {"name": name,
+            "surface": dl.group(1) if dl else "", "distance": dl.group(2) if dl else "",
+            "cond": {"稍重": "稍", "不良": "不"}.get(baba.group(1), baba.group(1)) if baba else "良",
+            "post": (re.search(r"(\d+:\d+)発走", rd).group(1) if re.search(r"(\d+:\d+)発走", rd) else "")}
     tb = _table(s, "ShutubaTable")
     out = []
     for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", tb, re.S):
@@ -261,7 +276,7 @@ def parse_shutuba(raw_bytes, names=None):
                     "jockey": nm.get("jockey", {}).get(jid) or re.sub(r"^[▲△☆◇★]", "", c[6]),
                     "trainer": nm.get("trainer", {}).get(tid) or c[7],
                     "jockey_id": jid, "trainer_id": tid, "horse_id": hid.group(1)})
-    return ttl, out
+    return ttl, out, meta
 
 
 def main():

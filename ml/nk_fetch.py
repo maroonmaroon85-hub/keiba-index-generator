@@ -31,7 +31,7 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from nk_parse import (parse_result, parse_shutuba, parse_odds_json, parse_pedigree,
+from nk_parse import (PLACES, parse_result, parse_shutuba, parse_odds_json, parse_pedigree,
                       to_ds_rows, nk_raceid)
 
 UA = "Mozilla/5.0 (compatible; personal-research/1.0)"
@@ -146,7 +146,7 @@ def cmd_entries(ymd):
                 f"shutuba_{rid}.html")
         if not b:
             continue
-        ttl, hs = parse_shutuba(b, nm)
+        ttl, hs, meta = parse_shutuba(b, nm)
         # オッズは毎回取り直す（キャッシュしない＝時点が変わるため）
         u = (f"https://race.netkeiba.com/api/api_get_jra_odds.html"
              f"?type=1&locale=ja&race_id={rid}&action=init")
@@ -156,8 +156,10 @@ def cmd_entries(ymd):
         for h in hs:
             h["odds"] = odds.get(int(h["umaban"]), None)
         out.append({"race_id": rid, "raceid": nk_raceid(rid), "title": ttl,
-                    "odds_at": at, "horses": hs})
-        print(f"  {rid} {ttl[:30]} {len(hs)}頭 オッズ{len(odds)}件 @{at}")
+                    "place": PLACES.get(rid[4:6], ""), "r": int(rid[10:12]),
+                    "odds_at": at, "horses": hs, **meta})
+        print(f"  {rid} {meta['name'][:16]} {meta['surface']}{meta['distance']} "
+              f"{len(hs)}頭 オッズ{len(odds)}件 @{at}")
     f = f"{OUT}/entries{ymd}.json"
     json.dump(out, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"保存: {f}")

@@ -80,6 +80,12 @@ def main():
         pd.read_csv(p, header=None, encoding="shift_jis", encoding_errors="replace",
                     dtype=str, keep_default_na=False) for p in sorted(glob.glob("data/nk/DSnk*.CSV"))]
     d = F.to_model(pd.concat(frames, ignore_index=True))
+    # ★予測対象のレースが過去走データに既に入っていると、下の synth と二重になり
+    #   同じ馬が2回並ぶ（実際に8/01の成績取込後に踏んだ）。先に落とす。
+    dup = d["raceid"].isin({rc["raceid"] for rc in races})
+    if dup.any():
+        print(f"  ※対象レースが過去走に{int(dup.sum())}行含まれていたので除外（二重計上を防ぐ）")
+        d = d[~dup].reset_index(drop=True)
     print(f"  過去走 {len(d):,}行（〜{d['date'].max().date()}）")
     mp = build_map()
     last = d.sort_values("date").groupby("horse").tail(1).set_index("horse")
@@ -142,8 +148,9 @@ def main():
         wk = {h["umaban"]: h["waku"] for h in rc["horses"]}
         info = {h["umaban"]: h for h in rc["horses"]}
         pairs = sorted({tuple(sorted((wk[nums[0]], wk[h]))) for h in nums[1:3]})
-        q = gg["p"].to_numpy(float)
-        q = q / q.sum()
+        praw = gg["p"].to_numpy(float)
+        pmap = {u: float(v) for u, v in zip(nums, praw)}
+        q = praw / praw.sum()
         bp = {}
         for u, pv in zip(nums, q):
             bp[wk[u]] = bp.get(wk[u], 0.0) + float(pv)
@@ -160,8 +167,18 @@ def main():
                   f"（{len(pairs)}点 {len(pairs)*100}円）"
                   + ("  ※軸と紐が同枠で1点" if len(pairs) == 1 else ""))
             print(f"       三連複BOX {' '.join(trio)}（4点 400円）")
-            print("       順位 " + " ".join(f"{i+1}:{u}番({info[u]['odds']:.1f})"
-                                            for i, u in enumerate(nums[:5])))
+            # ★各馬の指数。「どのくらい推奨されているか」が順位だけでは分からないため。
+            #   確率 = モデルの複勝圏内確率の生値 / シェア = レース内で合計1に正規化したもの
+            #   市場 = 単勝オッズ由来の含意確率 / 差 = シェア−市場（＋なら市場より高く評価）
+            mk = {u: (1 / info[u]["odds"]) for u in nums}
+            msum = sum(mk.values())
+            print(f"       {'順':>2} {'馬番':>3} {'馬名':<12}{'枠':>3}{'確率':>7}{'シェア':>7}"
+                  f"{'市場':>7}{'差':>7}{'単勝':>7}")
+            for i, u in enumerate(nums):
+                sh, mkt = float(q[i]), mk[u] / msum
+                print(f"       {i+1:>2} {u:>3} {info[u]['name'][:11]:<12}{wk[u]:>3}"
+                      f"{pmap[u]*100:>6.1f}%{sh*100:>6.1f}%{mkt*100:>6.1f}%"
+                      f"{(sh-mkt)*100:>+6.1f}{info[u]['odds']:>7.1f}")
             # ★買った枠の中身。枠連はその枠から**どれか1頭**が来れば当たるので、
             #   同じ枠に複数いるならそれだけ当たりやすい。馬連等に読み替えるときの材料にもなる。
             rank = {u: i + 1 for i, u in enumerate(nums)}
@@ -182,6 +199,9 @@ def main():
                           "fieldsize": n, "axis": nums[0], "axis_name": ax["name"],
                           "axis_odds": ax["odds"], "axis_waku": wk[nums[0]], "top5": nums[:5],
                           "waku_score": round(float(sc), 5), "excluded": bool(skip),
+                          "scores": [{"umaban": u, "name": info[u]["name"], "waku": wk[u],
+                                      "p": round(pmap[u], 5), "share": round(float(q[i]), 5),
+                                      "odds": info[u]["odds"]} for i, u in enumerate(nums)],
                           "odds_at": rc["odds_at"],
                           "wakuren": [f"{a}-{b}" for a, b in pairs], "sanrenpuku_box": trio})
 

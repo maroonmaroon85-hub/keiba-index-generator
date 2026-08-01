@@ -177,7 +177,8 @@ def main():
                              + " ".join(f"{u}番{info[u]['name'][:7]}({info[u]['odds']:.1f}倍"
                                         f"/{rank[u]}位)" for u in mem))
             print("       枠の中身  " + "\n                 ".join(lines))
-        out_races.append({"track": rc["place"], "r": rc["r"], "label": f"{rc['place']}{rc['r']}R",
+        out_races.append({"raceid": rc["raceid"],   # ★答え合わせの結合キー。無いと払戻と繋げない
+                          "track": rc["place"], "r": rc["r"], "label": f"{rc['place']}{rc['r']}R",
                           "fieldsize": n, "axis": nums[0], "axis_name": ax["name"],
                           "axis_odds": ax["odds"], "axis_waku": wk[nums[0]], "top5": nums[:5],
                           "waku_score": round(float(sc), 5), "excluded": bool(skip),

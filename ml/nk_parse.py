@@ -212,13 +212,15 @@ def parse_pedigree(raw_bytes):
             if n != 16:
                 continue
             a = re.search(r"<a[^>]*>(.*?)</a>", t, re.S)
-            nm = _txt(a.group(1)) if a else _txt(t).split("\n")[0]
+            # <a>の中身は「ノヴェリスト\n\t\tNovellist(愛)」のように英名が続くことがある。
+            # アーカイブは和名のみなので**最初の行だけ**取る。
+            nm = (_txt(a.group(1)) if a else _txt(t)).split("\n")[0].strip()
             big.append(nm)
             if len(big) == 1:
                 out["sire"] = nm
             elif len(big) == 2 and i + 1 < len(tds):   # 母の行の隣が母父
                 a2 = re.search(r"<a[^>]*>(.*?)</a>", tds[i + 1], re.S)
-                out["damsire"] = _txt(a2.group(1)) if a2 else ""
+                out["damsire"] = (_txt(a2.group(1)).split("\n")[0].strip() if a2 else "")
     return out
 
 

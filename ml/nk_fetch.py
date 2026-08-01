@@ -105,13 +105,21 @@ def cmd_results(ymd):
         print("  レース一覧が取れなかった。URLの形式が変わっている可能性がある。")
         return
     os.makedirs(OUT, exist_ok=True)
-    rows, pays, nm = [], [], {"jockey": {}, "trainer": {}}
+    rows, pays, nm, empty = [], [], {"jockey": {}, "trainer": {}}, 0
     for rid in ids:
-        b = get(f"https://db.netkeiba.com/race/{rid}/", f"race_{rid}.html")
+        key = f"race_{rid}.html"
+        b = get(f"https://db.netkeiba.com/race/{rid}/", key)
         if not b:
             continue
         race, horses, pay = parse_result(b, rid)
         if not horses:
+            # ★まだ結果が出ていないレース。**キャッシュを消す**——残すと空のまま固定され、
+            #   後で取り直しても0行のままになる（実際に8/01で踏んだ）。
+            empty += 1
+            try:
+                os.remove(os.path.join(CACHE, key))
+            except OSError:
+                pass
             continue
         rows += to_ds_rows(race, horses)
         for h in horses:
@@ -131,7 +139,10 @@ def cmd_results(ymd):
     with open(f2, "w", encoding="utf-8", newline="") as fh:
         csv.writer(fh).writerows([["raceid", "kind", "combo", "payout"]] + pays)
     print(f"保存: {f1}（{len(rows)}行） / {f2}（{len(pays)}件）")
-    print("※父・母父は空。`python3 ml/nk_fetch.py pedigree` で埋めること。")
+    if empty:
+        print(f"⚠ {empty}レースはまだ結果が出ていない（キャッシュしていないので後で取り直せる）")
+    if rows:
+        print("※父・母父は空。`python3 ml/nk_fetch.py pedigree` → `python3 ml/nk_link.py` の順で実行。")
 
 
 def cmd_entries(ymd):

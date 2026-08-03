@@ -53,6 +53,7 @@ import lightgbm as lgb
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import features as F
+import score_table as ST
 from waku_umatan import bracket_probs, waku_of, waku_score, wakuren_buy
 
 MODEL_DIR = "ml/model_prod"
@@ -242,6 +243,10 @@ def main():
             for u, pv in zip(nums, q):
                 bp[wk[u]] = bp.get(wk[u], 0.0) + float(pv)
         sc = waku_score(pairs, bp)
+        praw = gg["p"].to_numpy(float)
+        share = praw / praw.sum()
+        mkt = {u: 1.0 / info[(ri, u)]["odds"] for u in nums}
+        msum = sum(mkt.values())
         skip = (not args.no_exclude) and sc < th
         mark = "×除外" if skip else "○"
         top4 = nums[:4]
@@ -259,14 +264,23 @@ def main():
                   f"（{len(pairs)}点 {len(pairs)*100}円）"
                   + ("  ※軸と紐が同枠のため1点" if len(pairs) == 1 else ""))
             print(f"      三連複BOX {' '.join(trio)}（4点 400円）")
-            print(f"      順位 " + " ".join(
-                f"{i+1}:{u}番({info[(ri, u)]['odds']:.1f})" for i, u in enumerate(nums[:5])))
+            # ★各馬のスコア。列は `ml/score_table.py` の9列固定（predict_nk.py と同じ）。
+            #   順位だけでは「どのくらい推奨されているか」「市場とどこがズレているか」が分からない。
+            print(ST.header("     "))
+            for i, u in enumerate(nums):
+                print(ST.row(i + 1, u, info[(ri, u)]["name"], wk[u], float(praw[i]),
+                             float(share[i]), mkt[u] / msum, info[(ri, u)]["odds"],
+                             indent="     "))
         out_races.append({
             "track": m["track"], "r": m["r"], "label": lab, "fieldsize": n,
             "surface": m["surface"], "distance": m["distance"], "cls": m["cls"],
             "axis": nums[0], "axis_name": ax["name"], "axis_odds": ax["odds"],
             "axis_waku": wk[nums[0]], "top5": nums[:5],
             "waku_score": round(float(sc), 5), "excluded": bool(skip),
+            # ml/reco_table.py が同じ表を描き直せるように、生の値を残す
+            "scores": [{"umaban": u, "name": info[(ri, u)]["name"], "waku": wk[u],
+                        "p": round(float(praw[i]), 5), "share": round(float(share[i]), 5),
+                        "odds": info[(ri, u)]["odds"]} for i, u in enumerate(nums)],
             "wakuren": [f"{a}-{b}" for a, b in pairs], "sanrenpuku_box": trio,
         })
 

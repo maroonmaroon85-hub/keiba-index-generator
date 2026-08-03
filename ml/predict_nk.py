@@ -32,6 +32,7 @@ import lightgbm as lgb
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import features as F
+import score_table as ST
 from nk_link import build_map
 from predict import MODEL_DIR, MIN_FIELD, load_model
 from waku_umatan import bracket_probs, waku_of, waku_score, wakuren_buy
@@ -168,17 +169,15 @@ def main():
                   + ("  ※軸と紐が同枠で1点" if len(pairs) == 1 else ""))
             print(f"       三連複BOX {' '.join(trio)}（4点 400円）")
             # ★各馬の指数。「どのくらい推奨されているか」が順位だけでは分からないため。
-            #   確率 = モデルの複勝圏内確率の生値 / シェア = レース内で合計1に正規化したもの
-            #   市場 = 単勝オッズ由来の含意確率 / 差 = シェア−市場（＋なら市場より高く評価）
+            #   複勝圏内確率 = モデルの生値 / レース内シェア = レース内で合計1に正規化したもの
+            #   市場 = 単勝オッズ由来の含意確率（同じ集合で正規化）
+            #   差 = レース内シェア − 市場（＋なら市場より高く評価している）
             mk = {u: (1 / info[u]["odds"]) for u in nums}
             msum = sum(mk.values())
-            print(f"       {'順':>2} {'馬番':>3} {'馬名':<12}{'枠':>3}{'確率':>7}{'シェア':>7}"
-                  f"{'市場':>7}{'差':>7}{'単勝':>7}")
+            print(ST.header("      "))
             for i, u in enumerate(nums):
-                sh, mkt = float(q[i]), mk[u] / msum
-                print(f"       {i+1:>2} {u:>3} {info[u]['name'][:11]:<12}{wk[u]:>3}"
-                      f"{pmap[u]*100:>6.1f}%{sh*100:>6.1f}%{mkt*100:>6.1f}%"
-                      f"{(sh-mkt)*100:>+6.1f}{info[u]['odds']:>7.1f}")
+                print(ST.row(i + 1, u, info[u]["name"], wk[u], pmap[u],
+                             float(q[i]), mk[u] / msum, info[u]["odds"], indent="      "))
             # ★買った枠の中身。枠連はその枠から**どれか1頭**が来れば当たるので、
             #   同じ枠に複数いるならそれだけ当たりやすい。馬連等に読み替えるときの材料にもなる。
             rank = {u: i + 1 for i, u in enumerate(nums)}

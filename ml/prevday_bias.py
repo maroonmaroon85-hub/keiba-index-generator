@@ -169,6 +169,36 @@ def main():
               f"{f'[{np.percentile(dd,2.5):+.3f},{np.percentile(dd,97.5):+.3f}]':>18}")
     print("  ※差が0を跨ぐなら「前日の傾向はオッズ＋モデルに既に入っている」＝(63)と同じ結論。")
 
+    # ★プラセボ: 前日の傾向の符号を**日をまたいでシャッフル**して同じ統計を作る。
+    #   「内枠有利の日」が多数派だと、沿う群が内枠馬ばかりになり、
+    #   モデルが持つ枠の系統誤差がそのまま差として出てしまう。それを切り分ける。
+    print("\n  プラセボ（前日の傾向を無関係な日のものと入れ替えて同じ計算）")
+    day_key = s2["course"].astype(str) + "|" + s2["surface"].astype(str) + "|" \
+        + s2["date"].astype(str)
+    for key, zfun, name in [
+        ("pb_inner", lambda x: np.where(x["waku"] <= INNER, 1, -1), "内枠"),
+        ("pb_pace", lambda x: np.where(x["style"] <= PACE, 1, -1), "先行"),
+    ]:
+        sgn = np.sign(s2[key].to_numpy(float))
+        z0 = zfun(s2)
+        pos = float((sgn > 0).mean())
+        days = pd.factorize(day_key)[0]
+        vals = pd.Series(sgn).groupby(days).first().to_numpy()
+        obs = None
+        placebo = []
+        for i in range(200):
+            v = rng.permutation(vals)[days]
+            z = z0 * v
+            a = s2.loc[z > 0, "resid"].to_numpy(float)
+            b = s2.loc[z < 0, "resid"].to_numpy(float)
+            placebo.append((a.mean() - b.mean()) * 100)
+        z = z0 * sgn
+        obs = (s2.loc[z > 0, "resid"].mean() - s2.loc[z < 0, "resid"].mean()) * 100
+        p = float((np.abs(placebo) >= abs(obs)).mean())
+        print(f"    {name}: 観測 {obs:+.3f}pt / プラセボ {np.mean(placebo):+.3f}±"
+              f"{np.std(placebo):.3f}pt（95%点 {np.percentile(np.abs(placebo),95):.3f}）"
+              f" → p={p:.3f}   ※「有利」判定の日の割合 {pos*100:.1f}%")
+
     # ===== 段3. 枠連の紐選びを傾向で差し替える =====
     print("\n" + "=" * 84)
     print("【段3】枠連の紐2頭を「前日の傾向に沿う枠」優先に差し替える（評価は的中率）")

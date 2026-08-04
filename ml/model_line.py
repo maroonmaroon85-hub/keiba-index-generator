@@ -29,7 +29,8 @@ HANDOFFの「次に試すべき軸」に、**未実施のまま残っていた�
 判定: 枠連ROI / 三連複ROI / 的中率 / AUC を、**人気順の対照とシード幅つき**で並べる。
 ★(63)以下5例の「精度を上げるとROIが下がる」があるので、**AUCが上がってROIが下がったら採らない**。
 
-実行: python3 ml/model_line.py [シード数(既定2)]
+実行: python3 ml/model_line.py [シード数(既定2)] [構成をカンマ区切りで絞る(既定 A,B,C,D,E)]
+  例: python3 ml/model_line.py 5 A,E   … AとEだけ5シードで確かめ直す
 """
 import itertools
 import sys
@@ -145,11 +146,14 @@ def main():
     print(f"\n{'構成':<40}{'AUC':>8}{'枠連ROI':>10}{'95%CI':>16}"
           f"{'三連複ROI':>11}{'的中率':>8}{'シード幅(枠連)':>16}")
     results = {}
+    only = set((sys.argv[2] if len(sys.argv) > 2 else "A,B,C,D,E").split(","))
     for tag, name in [("A", "A 現行（top3分類・オッズ入り）"),
                       ("B", "B 残差学習・順位=市場含意+予測残差"),
                       ("C", "C 残差学習・順位=予測残差のみ"),
                       ("D", "D 学習データ足切り（単勝100倍超を除外）"),
                       ("E", "E 重み付け学習（w=市場含意確率）")]:
+        if tag not in only:
+            continue
         per_seed_w, per_seed_t, per_seed_auc = [], [], []
         for s in range(n_seed):
             if tag in ("A", "D", "E"):
@@ -188,6 +192,8 @@ def main():
     print("  ・(63)以下5例の通り、**AUCが上がってROIが下がる構成は採らない**。")
     print("  ・Cが極端に悪いなら「市場が間違えている順」だけでは買えない＝市場の土台が要る、ということ。")
     for tag in ("B", "C", "D", "E"):
+        if tag not in results or "A" not in results:
+            continue
         dw = results[tag][0] - results["A"][0]
         dt = results[tag][1] - results["A"][1]
         print(f"  {tag} − A: 枠連 {dw:+.2f}pt / 三連複 {dt:+.2f}pt")

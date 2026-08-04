@@ -249,6 +249,55 @@ def main():
         print(f"  買い目が変わったレースだけ（{len(ch):,}R）: 的中率 {dh2.mean()*100:+.2f}pt "
               f"[{lo3:+.2f},{hi3:+.2f}]")
 
+    # ===== 段4. モデル順を壊さない形（拮抗しているときだけ入れ替える） =====
+    # 段3が悪化したのは「モデルの順位を1つ落とすコスト」が段2の+0.64ptを上回るから。
+    # ならば**モデルが甲乙つけがたいと言っているときだけ**入れ替えれば、そのコストは小さいはず。
+    # 閾値は事前に決め打ちする（後から動かすと(38)の総当たりと同じことになる）。
+    GAPS = (0.02, 0.05, 0.10)     # 紐候補のレース内シェアの差がこれ以下なら「拮抗」
+    print("\n" + "=" * 84)
+    print("【段4】拮抗しているときだけ入れ替える（モデル順を壊さない形）")
+    print("=" * 84)
+    rows = []
+    for rid, g in sub.groupby("raceid", sort=False):
+        w = wu.get(rid)
+        if not w or not w["wakuren"] or len(g) < 4:
+            continue
+        b = g["pb_inner"].iloc[0]
+        if not np.isfinite(b) or b == 0:
+            continue
+        gg = g.sort_values("p", ascending=False, kind="mergesort")
+        nums = gg["umaban"].astype(int).tolist()
+        wk = dict(zip(gg["umaban"].astype(int), gg["waku"].astype(int)))
+        pv = gg["p"].to_numpy(float)
+        share = pv / pv.sum()
+        n = int(g["fieldsize"].iloc[0])
+        base = nums[1:3]
+        r = {"gap": float(share[2] - share[3])}       # 3番手と4番手の差＝入れ替え候補の拮抗度
+        for tag, himo in [("base", base)] + [
+                (f"g{int(gp*100)}", (sorted(nums[1:4], key=lambda u: (wk[u] if b > 0 else -wk[u]))[:2]
+                                     if (share[2] - share[3]) <= gp else base))
+                for gp in GAPS]:
+            cs = sorted({tuple(sorted((wk[nums[0]], wk[h]))) for h in himo})
+            pay = sum(w["wakuren"].get(c, 0) for c in cs)
+            r[f"{tag}_roi"] = pay / (len(cs) * 100.0)
+            r[f"{tag}_hit"] = float(pay > 0)
+        rows.append(r)
+    t4 = pd.DataFrame(rows)
+    print(f"対象 {len(t4):,}R")
+    print(f"{'規則':<28}{'発動率':>8}{'的中率':>9}{'的中率の差':>13}{'95%CI':>18}{'ROI':>8}")
+    bh = t4["base_hit"].to_numpy(float)
+    print(f"{'モデル順どおり（現行）':<28}{'—':>8}{bh.mean()*100:>8.2f}%{'—':>13}{'—':>18}"
+          f"{t4['base_roi'].mean()*100:>7.1f}%")
+    for gp in GAPS:
+        tag = f"g{int(gp*100)}"
+        d_ = (t4[f"{tag}_hit"] - t4["base_hit"]).to_numpy(float)
+        lo, hi = boot(d_, rng, 2000)
+        fire = (t4["gap"] <= gp).mean() * 100
+        print(f"{f'シェア差{gp*100:.0f}pt以下なら入替':<28}{fire:>7.1f}%"
+              f"{t4[f'{tag}_hit'].mean()*100:>8.2f}%{d_.mean()*100:>+12.2f}pt"
+              f"{f'[{lo:+.2f},{hi:+.2f}]':>18}{t4[f'{tag}_roi'].mean()*100:>7.1f}%")
+    print("  ※閾値は事前に3つだけ決め打ちしてある。ここを動かして良い値を探すと(38)の総当たりと同じ罠。")
+
 
 if __name__ == "__main__":
     main()

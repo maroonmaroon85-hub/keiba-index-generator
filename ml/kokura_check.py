@@ -99,6 +99,34 @@ def compo(d, mcol):
               f"{(g['raceclass']<=1).mean()*100:>13.1f}%")
 
 
+def market_quality(d, te, odds, y, p_model, course):
+    """★なぜその場でモデルが勝つのか: **市場のオッズの情報量が場によって違うのでは**という仮説。
+
+    市場含意の3着以内確率（Harville）を場ごとにAUCで評価する。
+    薄い市場（＝オッズが情報を持たない場）ほどモデルが勝ちやすい、という筋が通るなら、
+    小倉の市場AUCは最低のはず。モデルのAUCと並べて差も出す。
+    """
+    from model_line import auc, market_top3
+    sub = d.loc[te, ["raceid"]].copy()
+    mt3 = market_top3(d.loc[te].reset_index(drop=True), odds[te])
+    print(f"\n=== なぜその場なのか: 場ごとの「単勝オッズだけの情報量」 ===")
+    print(f"{'場':<6}{'頭数':>8}{'市場AUC':>10}{'モデルAUC':>11}{'モデル−市場':>13}"
+          f"{'市場含意の平均':>15}{'実際のtop3率':>14}")
+    rows = []
+    for t in sorted(set(course)):
+        m = (course == t)
+        if m.sum() < 2000:
+            continue
+        a_m, a_p = auc(y[te][m], mt3[m]), auc(y[te][m], p_model[m])
+        rows.append((t, int(m.sum()), a_m, a_p, a_p - a_m,
+                     float(mt3[m].mean()), float(y[te][m].mean())))
+    for t, n, a_m, a_p, gap, mp, ap in sorted(rows, key=lambda r: r[2]):
+        print(f"{t:<6}{n:>8,}{a_m:>10.4f}{a_p:>11.4f}{gap:>+12.4f}"
+              f"{mp:>14.4f}{ap:>13.4f}")
+    print("  ※市場AUCの低い順。**低い場＝オッズが当てにならない場**。"
+          "そこでモデルが人気順に勝ちやすいなら、(73)の場の差の正体はこれで説明できる。")
+
+
 def main():
     n_seed = int(sys.argv[1]) if len(sys.argv) > 1 else 3
     n_shuf = int(sys.argv[2]) if len(sys.argv) > 2 else 2000
@@ -124,6 +152,8 @@ def main():
     df = build(sub, wu, pa)
 
     compo(df, "waku_model")
+    market_quality(d, te, odds, y, sub["p"].to_numpy(float),
+                   d.loc[te, "course"].to_numpy())
 
     rng = np.random.default_rng(0)
     for title, mcol, pcol in [("枠連 軸枠×紐枠2", "waku_model", "waku_pop"),

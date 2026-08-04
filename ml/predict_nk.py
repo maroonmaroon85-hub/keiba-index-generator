@@ -32,6 +32,7 @@ import lightgbm as lgb
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import features as F
+import score_table as ST
 from nk_link import build_map
 from predict import MODEL_DIR, MIN_FIELD, load_model
 from waku_umatan import bracket_probs, waku_of, waku_score, wakuren_buy
@@ -64,6 +65,8 @@ def main():
     ap.add_argument("--date", default=None, help="開催日 YYYY-MM-DD（既定はファイル名から）")
     ap.add_argument("--out", default=None)
     ap.add_argument("--no-exclude", action="store_true")
+    ap.add_argument("--sanrentan", action="store_true",
+                    help="三連単(2着固定×紐3・6点600円)も出す。★ROI79.3%%で三連複BOX4(84.5%%)より悪い")
     args = ap.parse_args()
     ymd = args.date or os.path.basename(args.entries).replace("entries", "")[:8]
     today = pd.Timestamp(f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:8]}") if len(ymd) == 8 else pd.Timestamp(args.date)
@@ -162,23 +165,28 @@ def main():
         if lost:
             print(f"       ※過去走なし{len(lost)}頭: {'/'.join(lost[:3])}（来たら外れる）")
         trio = [f"{a}-{b}-{c}" for a, b, c in itertools.combinations(nums[:4], 3)]
+        # 三連単は**2着固定**が最良((54): 6点600円・的中5.98%・配当7,958円・ROI79.3%[75,84])。
+        # 軸の8割は1番人気で、1番人気の勝ちは最も買われている結果＝過剰人気。
+        # 「1番人気が取りこぼす」側に賭ける2着固定の方が配当が5割増える。
+        # ただし三連複BOX4(84.5%)に届かないので既定では出さない（--sanrentan で明示的に出す）。
+        tan = [f"{a}-{nums[0]}-{b}" for a, b in itertools.permutations(nums[1:4], 2)]
         if not skip:
             print(f"       枠連 {' '.join(f'{a}-{b}' for a, b in pairs)}"
                   f"（{len(pairs)}点 {len(pairs)*100}円）"
                   + ("  ※軸と紐が同枠で1点" if len(pairs) == 1 else ""))
             print(f"       三連複BOX {' '.join(trio)}（4点 400円）")
+            if args.sanrentan:
+                print(f"       三連単 2着固定 {' '.join(tan)}（6点 600円 / ROI79.3%・非推奨）")
             # ★各馬の指数。「どのくらい推奨されているか」が順位だけでは分からないため。
-            #   確率 = モデルの複勝圏内確率の生値 / シェア = レース内で合計1に正規化したもの
-            #   市場 = 単勝オッズ由来の含意確率 / 差 = シェア−市場（＋なら市場より高く評価）
+            #   複勝圏内確率 = モデルの生値 / レース内シェア = レース内で合計1に正規化したもの
+            #   市場 = 単勝オッズ由来の含意確率（同じ集合で正規化）
+            #   差 = レース内シェア − 市場（＋なら市場より高く評価している）
             mk = {u: (1 / info[u]["odds"]) for u in nums}
             msum = sum(mk.values())
-            print(f"       {'順':>2} {'馬番':>3} {'馬名':<12}{'枠':>3}{'確率':>7}{'シェア':>7}"
-                  f"{'市場':>7}{'差':>7}{'単勝':>7}")
+            print(ST.header("      "))
             for i, u in enumerate(nums):
-                sh, mkt = float(q[i]), mk[u] / msum
-                print(f"       {i+1:>2} {u:>3} {info[u]['name'][:11]:<12}{wk[u]:>3}"
-                      f"{pmap[u]*100:>6.1f}%{sh*100:>6.1f}%{mkt*100:>6.1f}%"
-                      f"{(sh-mkt)*100:>+6.1f}{info[u]['odds']:>7.1f}")
+                print(ST.row(i + 1, u, info[u]["name"], wk[u], pmap[u],
+                             float(q[i]), mk[u] / msum, info[u]["odds"], indent="      "))
             # ★買った枠の中身。枠連はその枠から**どれか1頭**が来れば当たるので、
             #   同じ枠に複数いるならそれだけ当たりやすい。馬連等に読み替えるときの材料にもなる。
             rank = {u: i + 1 for i, u in enumerate(nums)}
@@ -203,7 +211,8 @@ def main():
                                       "p": round(pmap[u], 5), "share": round(float(q[i]), 5),
                                       "odds": info[u]["odds"]} for i, u in enumerate(nums)],
                           "odds_at": rc["odds_at"],
-                          "wakuren": [f"{a}-{b}" for a, b in pairs], "sanrenpuku_box": trio})
+                          "wakuren": [f"{a}-{b}" for a, b in pairs], "sanrenpuku_box": trio,
+                          "sanrentan_2nd": tan})
 
     buy = [r for r in out_races if not r["excluded"]]
     cost = sum(len(r["wakuren"]) * 100 for r in buy)

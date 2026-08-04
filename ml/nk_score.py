@@ -39,8 +39,10 @@ def main():
     pays = load_pays()
     print(f"払戻: {len(pays)}レース読込\n")
 
-    BETS = [("枠連", "wakuren", 100), ("三連複", "sanrenpuku_box", 100)]
-    tot = {k: [0, 0, 0] for k, _, _ in BETS}     # 購入, 払戻, 的中本数
+    # (表示名, 推奨JSONのキー, 1点の金額, 着順どおりか)
+    BETS = [("枠連", "wakuren", 100, False), ("三連複", "sanrenpuku_box", 100, False),
+            ("三連単", "sanrentan_2nd", 100, True)]
+    tot = {k: [0, 0, 0] for k, _, _, _ in BETS}     # 購入, 払戻, 的中本数
     for fp in files:
         reco = json.load(open(fp, encoding="utf-8"))
         print(f"=== {reco['date']}（{fp}）")
@@ -52,15 +54,18 @@ def main():
                 p = next((v for k, v in pays.items()
                           if k.endswith(f"{rc['r']:02d}")and rc["label"][:2] in k), None)
             line = f"  {rc['label']:8s} 軸{rc['axis']:>2}番"
-            for name, key, unit in BETS:
+            for name, key, unit, ordered in BETS:
                 combos = rc.get(key) or []
                 if not combos or not p or name not in p:
-                    line += f"  {name}: 払戻データなし"
+                    if key != "sanrentan_2nd":   # 三連単は既定で買わないので「なし」を出さない
+                        line += f"  {name}: 払戻データなし"
                     continue
+                # ★三連単は**着順どおり**の券種なので組を昇順に直してはいけない
+                def key_of(c, _o=ordered):
+                    t = tuple(int(x) for x in c.split("-"))
+                    return t if _o else tuple(sorted(t))
                 bet = len(combos) * unit
-                hits = [(c, p[name][tuple(sorted(int(x) for x in c.split("-")))])
-                        for c in combos
-                        if tuple(sorted(int(x) for x in c.split("-"))) in p[name]]
+                hits = [(c, p[name][key_of(c)]) for c in combos if key_of(c) in p[name]]
                 ret = sum(v for _, v in hits)
                 tot[name][0] += bet
                 tot[name][1] += ret
@@ -69,7 +74,7 @@ def main():
             print(line)
 
     print()
-    for name, _, _ in BETS:
+    for name, _, _, _ in BETS:
         bet, ret, hit = tot[name]
         if not bet:
             continue

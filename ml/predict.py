@@ -187,6 +187,8 @@ def main():
     ap.add_argument("--out", default=None, help="推奨をJSON保存（後日 check_result.py で答え合わせ）")
     ap.add_argument("--hist", default="*.CSV", help="騎手/血統集計に使う過去データのglob（既定=カレントの*.CSV）")
     ap.add_argument("--no-exclude", action="store_true", help="枠連スコア下位20%の除外をしない")
+    ap.add_argument("--sanrentan", action="store_true",
+                    help="三連単(2着固定×紐3・6点600円)も出す。★ROI79.3%%で三連複BOX4(84.5%%)より悪い")
     args = ap.parse_args()
 
     boosters, cat_maps, cols, meta = load_model()
@@ -251,6 +253,9 @@ def main():
         mark = "×除外" if skip else "○"
         top4 = nums[:4]
         trio = [f"{a}-{b}-{c}" for a, b, c in itertools.combinations(top4, 3)]
+        # 三連単は**2着固定**が最良((54): 6点600円・的中5.98%・配当7,958円・ROI79.3%[75,84])。
+        # 三連複BOX4(84.5%)に届かないので既定では出さない（--sanrentan で明示的に出す）。
+        tan = [f"{a}-{nums[0]}-{b}" for a, b in itertools.permutations(nums[1:4], 2)]
         ax = info[(ri, nums[0])]
         print(f"{mark:4s}{head}  軸 {nums[0]}番{ax['name'][:8]}({ax['odds']:.1f}倍/{wk[nums[0]]}枠)  "
               f"スコア{sc:.3f}")
@@ -264,6 +269,8 @@ def main():
                   f"（{len(pairs)}点 {len(pairs)*100}円）"
                   + ("  ※軸と紐が同枠のため1点" if len(pairs) == 1 else ""))
             print(f"      三連複BOX {' '.join(trio)}（4点 400円）")
+            if args.sanrentan:
+                print(f"      三連単 2着固定 {' '.join(tan)}（6点 600円 / ROI79.3%・非推奨）")
             # ★各馬のスコア。列は `ml/score_table.py` の9列固定（predict_nk.py と同じ）。
             #   順位だけでは「どのくらい推奨されているか」「市場とどこがズレているか」が分からない。
             print(ST.header("     "))
@@ -282,6 +289,7 @@ def main():
                         "p": round(float(praw[i]), 5), "share": round(float(share[i]), 5),
                         "odds": info[(ri, u)]["odds"]} for i, u in enumerate(nums)],
             "wakuren": [f"{a}-{b}" for a, b in pairs], "sanrenpuku_box": trio,
+            "sanrentan_2nd": tan,
         })
 
     buy = [r for r in out_races if not r["excluded"]]

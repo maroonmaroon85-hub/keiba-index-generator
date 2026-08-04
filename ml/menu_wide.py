@@ -113,7 +113,7 @@ def main():
           f" / 買い方{len(MENU)}通り（事前宣言）")
 
     pays = load_all(PAYOUT)
-    sub = d.loc[te, ["raceid", "umaban", "fieldsize", "finish"]].copy()
+    sub = d.loc[te, ["raceid", "umaban", "fieldsize", "finish", "course"]].copy()
     sub["odds"] = odds[te]
     sub["year"] = d.loc[te, "date"].dt.year.to_numpy()
 
@@ -145,7 +145,8 @@ def main():
                 table = tansho if kind == "tansho" else pay.get(kind)
                 if not table or n < minf or len(g) < minf:
                     continue
-                row = {"year": g["year"].iloc[0]}
+                row = {"rid": rid, "year": g["year"].iloc[0],
+                       "track": g["course"].iloc[0]}   # ★rid は対応ありの比較の結合キー
                 for k, t in tops.items():
                     cs = fn(t, n)
                     row[k] = sum(table.get(c, 0) for c in cs) / (len(cs) * 100.0)
@@ -205,6 +206,104 @@ def main():
           "はっきり多いときだけ、上位を(38)の層内シャッフルで再検証すること。")
     print("★どれもROIは100%未満（＝控除率を埋めない）。"
           "「相対的にマシな買い方」の順位づけであって、勝てる買い方の探索ではない。")
+
+    # ===== 現行の買い方 vs 代替を**対応あり**で直接比較 =====
+    # 上の表は各買い方を独立に測っただけなので、「AよりBが良い」は言えない。
+    # 同じレースで両方買った差を取る（対応あり）と、レース間のばらつきが消えて検出力が上がる。
+    PAIRS = [("枠連 軸枠×紐枠2（現行）", "枠連 軸枠×紐枠3"),
+             ("枠連 軸枠×紐枠2（現行）", "枠連 上位3頭の枠BOX"),
+             ("三連複 BOX上位4（現行）", "三連複 軸1×紐3"),
+             ("三連複 BOX上位4（現行）", "三連複 BOX上位5"),
+             ("三連複 BOX上位4（現行）", "三連複 軸2頭×紐3"),
+             ("枠連 軸枠×紐枠2（現行）", "複勝 top1"),
+             ("枠連 軸枠×紐枠2（現行）", "ワイド BOX4")]
+    print("\n" + "=" * 118)
+    print("現行 vs 代替（**対応あり**＝同じレースで両方買った差。上の表は独立測定なので比較に使えない）")
+    print("=" * 118)
+    print(f"{'比較':<48}{'R数':>8}{'現行ROI':>10}{'代替ROI':>10}{'差':>10}{'95%CI':>17}"
+          f"{'的中率の差':>12}{'シード幅の差':>13}")
+    for a, b in PAIRS:
+        da, db = main_tab[a], main_tab[b]
+        if len(da) < 500 or len(db) < 500:
+            continue
+        # 同じレース集合に揃える（対象頭数が違うと母集団がずれる）
+        j = da.merge(db, on="rid", suffixes=("_a", "_b"))
+        if len(j) < 500:
+            continue
+        x, z = j["model_a"].to_numpy(float), j["model_b"].to_numpy(float)
+        diff = z - x
+        lo, hi = boot(diff, rng, 2000)
+        dh = (j["model_hit_b"] - j["model_hit_a"]).mean() * 100
+        sa = [t[a]["model"].mean() * 100 for t in seed_tabs if len(t[a]) >= 500]
+        sb = [t[b]["model"].mean() * 100 for t in seed_tabs if len(t[b]) >= 500]
+        sp = ((max(sb) - min(sb)) - (max(sa) - min(sa))) if len(sa) > 1 and len(sb) > 1 else float("nan")
+        mark = "" if lo <= 0 <= hi else ("  ★代替が上" if diff.mean() > 0 else "  ★現行が上")
+        print(f"{a[:16]+' → '+b[:24]:<48}{len(j):>8,}{x.mean()*100:>9.1f}%{z.mean()*100:>9.1f}%"
+              f"{diff.mean()*100:>+9.2f}pt{f'[{lo:+.2f},{hi:+.2f}]':>17}"
+              f"{dh:>+11.2f}pt{sp:>+12.2f}pt{mark}")
+    print("  ※差のCIが0を跨ぐなら**現行を変える理由は無い**。的中率とシード幅の差は参考情報"
+          "（ROIが同じなら安定して当たる方が良い、という判断材料）。")
+
+    # ===== 場ごと =====
+    # ⚠29通り×10場=290セルを全部並べると(38)の総当たり(6,206セルで偶然34.4セルが通過)と同じ罠。
+    #   なので2段に分ける:
+    #     (a) **事前宣言した6つの買い方だけ**を場ごとに（60セル）＋層内シャッフルの帰無分布
+    #     (b) **小倉だけ**を29通り全部で（仮説が1つなので多重性が小さい）。
+    #         (76)で理由が説明できなかった小倉が「枠連と三連複だけの現象」か
+    #         「券種を問わず出る現象」かを見る。本物の場の性質なら後者のはず。
+    BYTRACK = ["枠連 軸枠×紐枠2（現行）", "三連複 BOX上位4（現行）", "複勝 top1",
+               "ワイド BOX4", "馬連 軸1×紐2", "三連単 2着固定×紐3"]
+    print("\n" + "=" * 118)
+    print("場ごとの 差(モデル−人気順) — **事前宣言した6つの買い方だけ**（29通り全部並べると290セルで(38)の罠）")
+    print("=" * 118)
+    tracks = sorted(main_tab[BYTRACK[0]]["track"].unique())
+    print(f"{'買い方':<24}" + "".join(f"{t:>9}" for t in tracks) + f"{'シャッフルp':>12}")
+    for name in BYTRACK:
+        df = main_tab[name]
+        if len(df) < 500:
+            continue
+        df = df.copy()
+        df["_d"] = df["model"] - df["pop"]
+        mns = df.groupby("track")["_d"].mean() * 100
+        # 層内シャッフル（層=頭数ビン）で「10場の最大−最小」の帰無分布を作る
+        codes, uniq = pd.factorize(df["track"])
+        v = df["_d"].to_numpy(float)
+        obs = mns.max() - mns.min()
+        null = np.empty(500)
+        for i in range(500):
+            perm = rng.permutation(codes)
+            s_ = np.bincount(perm, weights=v, minlength=len(uniq))
+            c_ = np.bincount(perm, minlength=len(uniq))
+            m_ = s_ / np.maximum(c_, 1)
+            null[i] = (m_.max() - m_.min()) * 100
+        pv = float((null >= obs).mean())
+        print(f"{name:<24}" + "".join(f"{mns.get(t, float('nan')):>+8.1f}" for t in tracks)
+              + f"{pv:>11.3f}" + ("" if pv >= 0.05 else "  ★"))
+    print("  ※各セルは その場での 差(モデルROI−人気順ROI)。pは「場のラベルをシャッフルしても"
+          "同じだけばらつくか」。p≥0.05なら**場の差は偶然と区別できない**。")
+
+    print("\n" + "=" * 118)
+    print("小倉だけ29通り全部（(76)で理由不明のまま残った小倉が、券種を問わず出るのかを見る）")
+    print("=" * 118)
+    print(f"{'買い方':<26}{'小倉R数':>9}{'小倉ROI':>10}{'小倉の人気順':>13}{'小倉の差':>11}"
+          f"{'全場の差':>11}{'小倉−全場':>12}")
+    n_pos = n_tot = 0
+    for kind, name, _, _ in MENU:
+        df = main_tab[name]
+        if len(df) < 500:
+            continue
+        g = df[df["track"] == "小倉"]
+        if len(g) < 300:
+            continue
+        dk = (g["model"] - g["pop"]).mean() * 100
+        da = (df["model"] - df["pop"]).mean() * 100
+        n_tot += 1
+        n_pos += int(dk > da)
+        print(f"{name:<26}{len(g):>9,}{g['model'].mean()*100:>9.1f}%"
+              f"{g['pop'].mean()*100:>12.1f}%{dk:>+10.2f}pt{da:>+10.2f}pt{dk-da:>+11.2f}pt")
+    print(f"  → 小倉の差が全場平均を上回った買い方: {n_pos}/{n_tot}")
+    print("  ※これは**1つの仮説を29の角度から見ている**だけで、29個の独立な検定ではない。"
+          "揃っていても「小倉が特別」の証明にはならないが、**揃わなければ枠連固有の現象**と分かる。")
 
 
 if __name__ == "__main__":

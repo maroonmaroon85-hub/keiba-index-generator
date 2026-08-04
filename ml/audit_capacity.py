@@ -72,11 +72,12 @@ def boot(x, rng, n=2000):
 def main():
     n_seed = int(sys.argv[1]) if len(sys.argv) > 1 else 2
     y0 = int(sys.argv[2]) if len(sys.argv) > 2 else 2018
+    y1 = int(sys.argv[3]) if len(sys.argv) > 3 else 9999
     d, fx = load_cached()
     y = (d["finish"] <= 3).astype(int).to_numpy()
     year = d["date"].dt.year.to_numpy()
     wu, pa = load_wu(PAYOUT), load_payout_a(PAYOUT)
-    years = [yy for yy in range(y0, int(year.max()) + 1) if (year == yy).sum() > 5000]
+    years = [yy for yy in range(y0, min(int(year.max()), y1) + 1) if (year == yy).sum() > 5000]
     print(f"容量の梯子 × ウォークフォワード（{years[0]}〜{years[-1]}・シード{n_seed}本）")
 
     races = []          # プラセボ用にレース情報を貯める
@@ -148,19 +149,47 @@ def main():
     for tag, key, pop, ai, ri in [("枠連 軸枠×紐枠2", "w", pw, 1, 2),
                                   ("三連複 BOX上位4", "s", ps_, 3, 4)]:
         print(f"\n{'='*104}\n=== {tag}  人気順 {pop.mean()*100:.2f}% ===")
-        print(f"{'設定（容量の順）':<30}{'ROI':>9}{'対人気順':>10}{'人気順との一致率':>17}"
-              f"{'同じ一致率のプラセボ':>21}{'モデル−プラセボ':>17}{'95%CI':>17}")
+        print(f"{'設定（容量の順）':<30}{'ROI':>9}{'対人気順':>10}{'一致率':>9}{'σ':>7}"
+              f"{'プラセボ':>10}{'±':>6}{'モデル−プラセボ':>17}{'その95%CI':>18}")
         ax = np.array([c[ai] for c in curve])
-        rx = np.array([c[ri] for c in curve])
         for nm, _ in LADDER:
             m = np.array(out[nm][key])
             ag = float(np.mean(agree[nm][key]))
             sg = float(np.interp(ag, ax[::-1], np.array(SIGMAS)[::-1]))
-            pl = np.mean([placebo(sg, 900 + k)[ri - 1] for k in range(N_DRAW)])
-            lo, hi = boot(m - pop, rng)
-            print(f"{nm:<30}{m.mean()*100:>8.2f}%{(m-pop).mean()*100:>+9.2f}pt{ag*100:>16.1f}%"
-                  f"{pl*100:>20.2f}%{(m.mean()-pl)*100:>+16.2f}pt{f'[{lo:+.2f},{hi:+.2f}]':>17}")
+            # プラセボは引くたびに数値が動くので、多めに引いて平均と散らばりを両方出す。
+            # 表の値が上のプラセボ曲線と整合しているかは σ 列で読者が検算できる。
+            draws = np.array([placebo(sg, 900 + k)[ri - 1] for k in range(12)])
+            pl = draws.mean()
+            # モデル − プラセボ の CI は、レース単位のブートストラップ（プラセボは平均を引く）
+            plr = None
+            for k in range(12):
+                g = np.random.default_rng(900 + k)
+                row = []
+                for r in races:
+                    o = r["uma"][np.argsort(r["lo"] + g.normal(0, sg, len(r["uma"])), kind="mergesort")]
+                    if key == "w" and r["wk"] is not None:
+                        cs = wakuren_cs(o, r["n"])
+                        row.append(sum(r["wk"].get(c, 0) for c in cs) / (len(cs) * 100))
+                    elif key == "s" and r["s3"] is not None:
+                        cs = [tuple(sorted(c)) for c in itertools.combinations(o[:4], 3)]
+                        row.append(sum(r["s3"].get(c, 0) for c in cs) / 400)
+                plr = np.array(row) if plr is None else plr + np.array(row)
+            plr = plr / 12.0
+            lo, hi = boot(m - plr, rng)
+            print(f"{nm:<30}{m.mean()*100:>8.2f}%{(m-pop).mean()*100:>+9.2f}pt{ag*100:>8.1f}%"
+                  f"{sg:>7.3f}{pl*100:>9.2f}%{draws.std()*100:>5.2f}"
+                  f"{(m.mean()-pl)*100:>+16.2f}pt{f'[{lo:+.2f},{hi:+.2f}]':>18}")
         print(f"  プラセボ曲線: " + " ".join(f"σ{c[0]:.2f}→{c[ai]*100:.0f}%/{c[ri]*100:.1f}%" for c in curve))
+        # ★対応ありで現行と直接比較（(77)②の作法）。同じレースで両方買った差。
+        base = np.array(out["3 leaves31 /  400本 ★現行"][key])
+        print(f"  ★現行との対応あり比較")
+        for nm, _ in LADDER:
+            if "現行" in nm:
+                continue
+            m = np.array(out[nm][key])
+            lo, hi = boot(m - base, rng)
+            v = "★現行より上" if lo > 0 else ("現行より下" if hi < 0 else "差は誤差の内")
+            print(f"    {nm:<30}{(m-base).mean()*100:>+7.2f}pt  CI[{lo:+.2f},{hi:+.2f}]   {v}")
 
 
 if __name__ == "__main__":

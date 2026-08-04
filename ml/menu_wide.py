@@ -145,7 +145,7 @@ def main():
                 table = tansho if kind == "tansho" else pay.get(kind)
                 if not table or n < minf or len(g) < minf:
                     continue
-                row = {"year": g["year"].iloc[0]}
+                row = {"rid": rid, "year": g["year"].iloc[0]}   # ★対応ありの比較で結合キーになる
                 for k, t in tops.items():
                     cs = fn(t, n)
                     row[k] = sum(table.get(c, 0) for c in cs) / (len(cs) * 100.0)
@@ -205,6 +205,43 @@ def main():
           "はっきり多いときだけ、上位を(38)の層内シャッフルで再検証すること。")
     print("★どれもROIは100%未満（＝控除率を埋めない）。"
           "「相対的にマシな買い方」の順位づけであって、勝てる買い方の探索ではない。")
+
+    # ===== 現行の買い方 vs 代替を**対応あり**で直接比較 =====
+    # 上の表は各買い方を独立に測っただけなので、「AよりBが良い」は言えない。
+    # 同じレースで両方買った差を取る（対応あり）と、レース間のばらつきが消えて検出力が上がる。
+    PAIRS = [("枠連 軸枠×紐枠2（現行）", "枠連 軸枠×紐枠3"),
+             ("枠連 軸枠×紐枠2（現行）", "枠連 上位3頭の枠BOX"),
+             ("三連複 BOX上位4（現行）", "三連複 軸1×紐3"),
+             ("三連複 BOX上位4（現行）", "三連複 BOX上位5"),
+             ("三連複 BOX上位4（現行）", "三連複 軸2頭×紐3"),
+             ("枠連 軸枠×紐枠2（現行）", "複勝 top1"),
+             ("枠連 軸枠×紐枠2（現行）", "ワイド BOX4")]
+    print("\n" + "=" * 118)
+    print("現行 vs 代替（**対応あり**＝同じレースで両方買った差。上の表は独立測定なので比較に使えない）")
+    print("=" * 118)
+    print(f"{'比較':<48}{'R数':>8}{'現行ROI':>10}{'代替ROI':>10}{'差':>10}{'95%CI':>17}"
+          f"{'的中率の差':>12}{'シード幅の差':>13}")
+    for a, b in PAIRS:
+        da, db = main_tab[a], main_tab[b]
+        if len(da) < 500 or len(db) < 500:
+            continue
+        # 同じレース集合に揃える（対象頭数が違うと母集団がずれる）
+        j = da.merge(db, on="rid", suffixes=("_a", "_b"))
+        if len(j) < 500:
+            continue
+        x, z = j["model_a"].to_numpy(float), j["model_b"].to_numpy(float)
+        diff = z - x
+        lo, hi = boot(diff, rng, 2000)
+        dh = (j["model_hit_b"] - j["model_hit_a"]).mean() * 100
+        sa = [t[a]["model"].mean() * 100 for t in seed_tabs if len(t[a]) >= 500]
+        sb = [t[b]["model"].mean() * 100 for t in seed_tabs if len(t[b]) >= 500]
+        sp = ((max(sb) - min(sb)) - (max(sa) - min(sa))) if len(sa) > 1 and len(sb) > 1 else float("nan")
+        mark = "" if lo <= 0 <= hi else ("  ★代替が上" if diff.mean() > 0 else "  ★現行が上")
+        print(f"{a[:16]+' → '+b[:24]:<48}{len(j):>8,}{x.mean()*100:>9.1f}%{z.mean()*100:>9.1f}%"
+              f"{diff.mean()*100:>+9.2f}pt{f'[{lo:+.2f},{hi:+.2f}]':>17}"
+              f"{dh:>+11.2f}pt{sp:>+12.2f}pt{mark}")
+    print("  ※差のCIが0を跨ぐなら**現行を変える理由は無い**。的中率とシード幅の差は参考情報"
+          "（ROIが同じなら安定して当たる方が良い、という判断材料）。")
 
 
 if __name__ == "__main__":

@@ -165,7 +165,7 @@ def cmd_entries(ymd):
         print("レース一覧が取れなかった")
         return
     os.makedirs(OUT, exist_ok=True)
-    nm, out = names_cache(), []
+    nm, out, noodds = names_cache(), [], 0
     for rid in ids:
         b = get(f"https://race.netkeiba.com/race/shutuba.html?race_id={rid}",
                 f"shutuba_{rid}.html")
@@ -178,6 +178,13 @@ def cmd_entries(ymd):
         key = f"odds_{rid}_{int(time.time())}.json"
         ob = get(u, key, referer=f"https://race.netkeiba.com/race/shutuba.html?race_id={rid}")
         odds, at = parse_odds_json(ob.decode("utf-8", "replace")) if ob else ({}, "")
+        if not odds:
+            # ★発売前は空で返る（異常ではない）。時点つきの名前で保存されるとゴミが溜まるので消す。
+            try:
+                os.remove(os.path.join(CACHE, key))
+            except OSError:
+                pass
+            noodds += 1
         for h in hs:
             h["odds"] = odds.get(int(h["umaban"]), None)
         out.append({"race_id": rid, "raceid": nk_raceid(rid), "title": ttl,
@@ -188,6 +195,11 @@ def cmd_entries(ymd):
     f = f"{OUT}/entries{ymd}.json"
     json.dump(out, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"保存: {f}")
+    if noodds:
+        print(f"⚠ {noodds}/{len(out)}レースは**単勝オッズがまだ出ていない**。"
+              "オッズはモデルの主要特徴なので、この状態では予想できない。")
+        print("　 発売前は空で返るのが通常。**当日朝以降にもう一度このコマンドを実行**すること"
+              "（(66): 当日朝以降なら確定オッズと有意差なし。前日22時は的中率−6.7pt）。")
 
 
 def cmd_pedigree():

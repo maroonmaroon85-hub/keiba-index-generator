@@ -346,12 +346,32 @@ def parse_pedigree(raw_bytes):
 
 
 def parse_odds_json(txt):
-    """オッズAPIのJSON → ({馬番int: 単勝オッズ}, 取得時点)。"""
-    j = json.loads(txt)
-    d = j.get("data", {})
-    tan = d.get("odds", {}).get("1", {})
-    return ({int(k): float(v[0]) for k, v in tan.items() if v and v[0] not in ("", "--")},
-            d.get("official_datetime", ""))
+    """オッズAPIのJSON → ({馬番int: 単勝オッズ}, 取得時点)。
+
+    ★**発売前は中身が入らない**。実データで確認: 開催前の日を叩くと `data.odds.1` が
+      dict ではなく空文字で返り、素直に `.get()` すると AttributeError で落ちる。
+      「まだオッズが無い」は異常ではなく通常の状態なので、**空で返して呼び出し側に判断させる**。
+    """
+    try:
+        j = json.loads(txt)
+    except (ValueError, TypeError):
+        return {}, ""
+    d = j.get("data") or {}
+    if not isinstance(d, dict):
+        return {}, ""
+    od = d.get("odds") or {}
+    tan = od.get("1") if isinstance(od, dict) else None
+    if not isinstance(tan, dict):          # 発売前・単勝が無い・形式変更
+        return {}, str(d.get("official_datetime", "") or "")
+    out = {}
+    for k, v in tan.items():
+        val = v[0] if isinstance(v, (list, tuple)) and v else v
+        try:
+            if str(val).strip() not in ("", "--", "---"):
+                out[int(k)] = float(val)
+        except (ValueError, TypeError):
+            continue
+    return out, str(d.get("official_datetime", "") or "")
 
 
 def parse_shutuba(raw_bytes, names=None):

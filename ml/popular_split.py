@@ -192,21 +192,38 @@ def main():
     print(f"{'seed':<8}{'枠連 不一致率':>15}{'枠連 差':>12}"
           f"{'三連複 不一致率':>17}{'三連複 差':>12}")
     spread = {"枠連": [], "三連複": []}
+    # ★「不一致群の方が絶対ROIが高いのでは」への直接の答え。
+    #   モデルで買ったときの 不一致群ROI − 一致群ROI が、学習の乱数だけでどれだけ動くか。
+    absdiff = {"枠連": [], "三連複": []}
+    seed_tables = []
     for s in range(n_seed):
         fr = sub.copy()
         fr["p"] = per_seed_p[s]
         t = race_rows(fr, wu, pa, pw)
+        seed_tables.append(t)
         line = f"{s:<8}"
         for kind, w in (("枠連", 15), ("三連複", 17)):
             df = t[kind]
             mis = df[~df["same"]]
             dm = (stats(mis, "model")[0] - stats(mis, "pop")[0]).mean() * 100
             spread[kind].append(dm)
+            absdiff[kind].append((stats(mis, "model")[0].mean()
+                                  - stats(df[df["same"]], "model")[0].mean()) * 100)
             line += f"{(~df['same']).mean()*100:>{w-1}.1f}%{dm:>+11.2f}pt"
         print(line)
     for kind, v in spread.items():
         if len(v) > 1:
             print(f"  {kind}: シード幅 {max(v)-min(v):.2f}pt（平均 {np.mean(v):+.2f}pt）")
+
+    print("\n★『不一致群の方が絶対ROIが高いのでは』の検証: 不一致群ROI − 一致群ROI をシード別に")
+    for kind, v in absdiff.items():
+        s_ = " / ".join(f"seed{i}:{x:+.2f}pt" for i, x in enumerate(v))
+        note = ""
+        if len(v) > 1:
+            note = (f"  → シード幅 {max(v)-min(v):.2f}pt・平均 {np.mean(v):+.2f}pt"
+                    + ("（**符号がシードで変わる＝乱数の産物**）"
+                       if min(v) * max(v) < 0 else "（符号は安定）"))
+        print(f"  {kind}: {s_}{note}")
 
 
 if __name__ == "__main__":

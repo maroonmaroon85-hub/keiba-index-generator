@@ -53,12 +53,16 @@ def build(sub, wu, pa):
                 pay = sum(w["wakuren"].get(c, 0) for c in cs)
                 r[f"waku_{k}"] = pay / (len(cs) * 100.0)
                 r[f"waku_{k}_hit"] = float(pay > 0)
+                r[f"waku_{k}_pay"] = float(pay)     # キャップ検査用に生の払戻も持つ
+                r[f"waku_{k}_cost"] = len(cs) * 100.0
         if s3 and s3["sanrenpuku"] and len(g) >= 9:
             for k, nm in nums.items():
                 cs = [tuple(sorted(c)) for c in itertools.combinations(nm[:4], 3)]
                 pay = sum(s3["sanrenpuku"].get(c, 0) for c in cs)
                 r[f"trio_{k}"] = pay / 400.0
                 r[f"trio_{k}_hit"] = float(pay > 0)
+                r[f"trio_{k}_pay"] = float(pay)
+                r[f"trio_{k}_cost"] = 400.0
         rows.append(r)
     return pd.DataFrame(rows)
 
@@ -108,19 +112,30 @@ def section(title, df, mcol, pcol, rng, n_shuf, per_seed_tables):
     print(f"{'全体':<6}{len(d):>8,}{d[mcol].mean()*100:>10.1f}%{'':>18}"
           f"{d[pcol].mean()*100:>10.1f}%{(d[mcol]-d[pcol]).mean()*100:>+8.2f}pt")
 
-    # ★裾チェック: 平均ROIは払戻の裾が長いほど不安定になる。少数の高配当で持ち上がっているだけなら、
-    #   「その場は良い」という主張は次の10年で再現しない。上位の払戻を落として何が残るかを見る。
-    print(f"\n★裾チェック: 高配当を落としたときのROI（平均は少数の大当たりで持ち上がる）")
-    print(f"{'場':<6}{'ROI':>8}{'上位1%除く':>13}{'上位5%除く':>13}"
-          f"{'最大の1本の寄与':>17}{'的中時の倍率':>14}")
+    # ★配当キャップ検査。
+    #   ⚠「上位1%を除く」という順位での足切りは**筋が悪い**ので使わない。理由:
+    #     ・払戻はどの場でも右に長い裾を持つので、上位を切れば全場が同じくらい落ちるだけ
+    #       （実測: 枠連で上位1%を落とすと10場すべてが6.6〜9.5pt低下。差はσ1個分）
+    #     ・的中率が30%なので「上位5%除外」は**的中の1/6を捨てる**ことになり、何も読めない
+    #   代わりに**金額でキャップ**する。「あまりに高い配当は当てにしない」という判断は
+    #   順位ではなく金額でするものだから。キャップ後も順位が保たれるなら、
+    #   その場の優位は「たまの大当たり」ではなく「ふつうの配当の積み上げ」で説明できる。
+    caps = [1000, 2000, 5000, 20000]
+    print(f"\n★配当キャップ検査: 払戻を上限で頭打ちにしたときのROI（順位ではなく金額で切る）")
+    head = "".join(f"{f'≤{c:,}円':>11}" for c in caps)
+    print(f"{'場':<6}{'ROI':>8}{head}{'上限超の寄与':>15}{'的中率':>8}")
+    pay = d[f"{mcol}_pay"].to_numpy(float)
+    cost = d[f"{mcol}_cost"].to_numpy(float)
     for t in order:
-        g = d[d["track"] == t]
-        x = np.sort(g[mcol].to_numpy(float))[::-1]
-        k1, k5 = max(1, int(len(x) * 0.01)), max(1, int(len(x) * 0.05))
-        hit = x[x > 0]
-        print(f"{t:<6}{x.mean()*100:>7.1f}%{x[k1:].mean()*100:>12.1f}%"
-              f"{x[k5:].mean()*100:>12.1f}%{x[0]/x.sum()*100:>16.1f}%"
-              f"{hit.mean():>13.2f}倍")
+        m = (d["track"] == t).to_numpy()
+        p, c = pay[m], cost[m]
+        line = f"{t:<6}{(p/c).mean()*100:>7.1f}%"
+        for cap in caps:
+            line += f"{(np.minimum(p, cap)/c).mean()*100:>10.1f}%"
+        over = (p - np.minimum(p, caps[0])).sum() / max(p.sum(), 1) * 100
+        line += f"{over:>14.1f}%{(p>0).mean()*100:>7.1f}%"
+        print(line)
+    print(f"  ※「上限超の寄与」は総払戻のうち {caps[0]:,}円を超える部分が占める割合。")
 
     # ★(33)(36)を(39)が撤回したときの教訓: 層別の「勝ち組」は期間を割ると入れ替わる。
     #   帰無分布を通っても、前半/後半で符号が揃わなければ運用の根拠にはならない。

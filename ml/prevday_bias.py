@@ -284,19 +284,25 @@ def main():
         rows.append(r)
     t4 = pd.DataFrame(rows)
     print(f"対象 {len(t4):,}R")
-    print(f"{'規則':<28}{'発動率':>8}{'的中率':>9}{'的中率の差':>13}{'95%CI':>18}{'ROI':>8}")
+    print(f"{'規則':<28}{'発動率':>8}{'的中率':>9}{'的中率の差':>13}{'95%CI':>18}"
+          f"{'ROI':>8}{'ROIの差':>11}{'95%CI':>18}")
     bh = t4["base_hit"].to_numpy(float)
     print(f"{'モデル順どおり（現行）':<28}{'—':>8}{bh.mean()*100:>8.2f}%{'—':>13}{'—':>18}"
-          f"{t4['base_roi'].mean()*100:>7.1f}%")
+          f"{t4['base_roi'].mean()*100:>7.1f}%{'—':>11}{'—':>18}")
     for gp in GAPS:
         tag = f"g{int(gp*100)}"
         d_ = (t4[f"{tag}_hit"] - t4["base_hit"]).to_numpy(float)
+        dr = (t4[f"{tag}_roi"] - t4["base_roi"]).to_numpy(float)
         lo, hi = boot(d_, rng, 2000)
+        lo2, hi2 = boot(dr, rng, 2000)
         fire = (t4["gap"] <= gp).mean() * 100
         print(f"{f'シェア差{gp*100:.0f}pt以下なら入替':<28}{fire:>7.1f}%"
               f"{t4[f'{tag}_hit'].mean()*100:>8.2f}%{d_.mean()*100:>+12.2f}pt"
-              f"{f'[{lo:+.2f},{hi:+.2f}]':>18}{t4[f'{tag}_roi'].mean()*100:>7.1f}%")
+              f"{f'[{lo:+.2f},{hi:+.2f}]':>18}{t4[f'{tag}_roi'].mean()*100:>7.1f}%"
+              f"{dr.mean()*100:>+10.2f}pt{f'[{lo2:+.2f},{hi2:+.2f}]':>18}")
     print("  ※閾値は事前に3つだけ決め打ちしてある。ここを動かして良い値を探すと(38)の総当たりと同じ罠。")
+    print("  ※★的中率は明確に下がる。ROIが上がって見えてもCIが0を跨ぐなら採らないこと"
+          "（(66)④: この規模のROI差は読めない）。")
 
 
 if __name__ == "__main__":

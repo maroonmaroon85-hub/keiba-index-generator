@@ -115,6 +115,8 @@ def main():
                 if p is None:
                     continue
                 c, v = fn(order_of(r), r["n"], k, p)
+                if c == 0:          # 出走頭数が k に満たず買い目が作れないレース
+                    continue
                 cost.append(c)
                 pay.append(v)
                 rid.append(r["rid"])

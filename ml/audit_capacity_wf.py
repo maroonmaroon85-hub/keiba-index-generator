@@ -89,8 +89,8 @@ def main():
     print("※各年Yは「Yより前の全データ」で学習＝実運用の手続き。"
           "評価年を絞ってあるのは上位の設定が重いため\n")
 
-    acc = {nm: {"w": [], "s": []} for nm, _ in LADDER}
-    aucs = {nm: [] for nm, _ in LADDER}
+    acc = {nm: {"w": [], "s": []} for nm, _ in ladder}
+    aucs = {nm: [] for nm, _ in ladder}
     popw, pops = [], []
     for yy in years:
         tr, te = year < yy, year == yy
@@ -125,7 +125,7 @@ def main():
                     cs = [tuple(sorted(c)) for c in itertools.combinations(mo[:4], 3)]
                     acc[nm]["s"].append(sum(s3["sanrenpuku"].get(c, 0) for c in cs) / 400)
         print(f"  {yy} 完了  この年までの累積 枠連ROI " + " ".join(
-            f"{np.mean(acc[nm]['w'])*100:.1f}" for nm, _ in LADDER), flush=True)
+            f"{np.mean(acc[nm]['w'])*100:.1f}" for nm, _ in ladder), flush=True)
 
     rng = np.random.default_rng(0)
     pw, ps_ = np.array(popw), np.array(pops)
@@ -143,7 +143,7 @@ def main():
             mark = "" if nm == cur else ("  ★上" if lo > 0 else ("  ★下" if hi < 0 else ""))
             print(f"{nm:<32}{np.mean(aucs[nm]):>8.4f}{m.mean()*100:>8.2f}%"
                   f"{(m.mean()-pop.mean())*100:>+9.2f}pt{dif.mean()*100:>+11.2f}pt{cell:>18}{mark}")
-        rois = [np.array(acc[nm][key]).mean() for nm, _ in LADDER]
+        rois = [np.array(acc[nm][key]).mean() for nm, _ in ladder]
         top = int(np.argmax(rois))
         mono = all(rois[i] <= rois[i + 1] for i in range(len(rois) - 1))
         print(f"  ★最良は {ladder[top][0]}（{rois[top]*100:.2f}%）／"

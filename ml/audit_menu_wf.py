@@ -33,8 +33,12 @@ from place_wide import PARAMS
 
 PAYOUT = "data/payout/a.csv"
 
+# ★L4とL5の両方を載せる。3シードで**最良の段は券種によって入れ替わった**（枠連L5・三連複L4）ので、
+#   どちらか一方を選ぶと(80)と同じ後知恵の汚染になる。両方出して読者に判断させる。
 CONFIGS = [
     ("L2 現行 leaves31/mc100/400本", dict(PARAMS)),
+    ("L4 leaves127/mc20/1500本", dict(PARAMS, num_leaves=127, min_child_samples=20,
+                                     n_estimators=1500)),
     ("L5 leaves255/mc10/2000本", dict(PARAMS, num_leaves=255, min_child_samples=10,
                                      n_estimators=2000)),
 ]
@@ -98,35 +102,37 @@ def main():
         if len(df) < 500:
             continue
         a, b = df["c0"].to_numpy(float), df["c1"].to_numpy(float)
+        c = df["c2"].to_numpy(float)
         pop = df["pop"].to_numpy(float)
         lo, hi = boot(b - a, rng)
         res.append({"name": name, "n": len(df), "pts": df["pts"].mean(),
-                    "L2": a.mean() * 100, "L5": b.mean() * 100, "pop": pop.mean() * 100,
-                    "d": (b - a).mean() * 100, "lo": lo, "hi": hi,
+                    "L2": a.mean() * 100, "L4": b.mean() * 100, "pop": pop.mean() * 100,
+                    "d": (b - a).mean() * 100, "lo": lo, "hi": hi, "L5": c.mean() * 100,
+                    "d5": (c - a).mean() * 100,
                     "vs_pop": (b - pop).mean() * 100,
                     "hit": df["c1_hit"].mean() * 100})
-    r = pd.DataFrame(res).sort_values("L5", ascending=False)
+    r = pd.DataFrame(res).sort_values("L4", ascending=False)
 
     print("\n" + "=" * 116)
-    print("L5（容量を上げたモデル）でのROI順。L2は現行。差はレース単位の対応あり")
+    print("L4でのROI順。L2は現行・L5はさらに容量を上げた段。差(L4−L2)はレース単位の対応あり")
     print("=" * 116)
-    print(f"{'買い方':<26}{'R数':>8}{'点数':>6}{'的中率':>8}{'L2':>8}{'L5':>8}"
-          f"{'L5−L2':>10}{'95%CI':>17}{'人気順':>8}{'L5対人気順':>12}")
+    print(f"{'買い方':<26}{'R数':>8}{'点数':>6}{'的中率':>8}{'L2':>8}{'L4':>8}{'L5':>8}"
+          f"{'L4−L2':>10}{'95%CI':>17}{'人気順':>8}{'L4対人気順':>12}")
     for _, x in r.iterrows():
         mark = "★" if x["lo"] > 0 else ""
         print(f"{x['name']:<26}{int(x['n']):>8,}{x['pts']:>6.1f}{x['hit']:>7.1f}%"
-              f"{x['L2']:>7.1f}%{x['L5']:>7.1f}%{x['d']:>+9.2f}pt"
+              f"{x['L2']:>7.1f}%{x['L4']:>7.1f}%{x['L5']:>7.1f}%{x['d']:>+9.2f}pt"
               f"{f'[{x.lo:+.2f},{x.hi:+.2f}]':>17}"
               f"{x['pop']:>7.1f}%{x['vs_pop']:>+11.2f}pt{mark}")
 
-    print(f"\n■ L5で上位5")
+    print(f"\n■ L4で上位5（L5も併記）")
     for _, x in r.head(5).iterrows():
-        print(f"  {x['name']:<26} {x['L5']:.2f}%（L2は{x['L2']:.2f}%・{x['d']:+.2f}pt）"
+        print(f"  {x['name']:<26} L4 {x['L4']:.2f}% / L5 {x['L5']:.2f}%（L2は{x['L2']:.2f}%）"
               f"  的中{x['hit']:.1f}%  対人気順{x['vs_pop']:+.2f}pt")
     print("■ 容量を上げた効き方が大きい順（上位5）")
     for _, x in r.sort_values("d", ascending=False).head(5).iterrows():
         print(f"  {x['name']:<26} {x['d']:+.2f}pt [{x['lo']:+.2f},{x['hi']:+.2f}]"
-              f"  L2 {x['L2']:.1f}% → L5 {x['L5']:.1f}%")
+              f"  L2 {x['L2']:.1f}% → L4 {x['L4']:.1f}% / L5 {x['L5']:.1f}%")
     nsig = int((r["lo"] > 0).sum())
     print(f"\n★多重性: {len(r)}通り中 {nsig}通りで L5>L2 のCIが0を外れた"
           f"（偶然の期待値は約{len(r)*0.025:.1f}通り・片側）。")

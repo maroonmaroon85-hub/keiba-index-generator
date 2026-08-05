@@ -20,7 +20,8 @@
 
 ⚠容量を上げると学習時間が急に伸びる。leaves255/2000本は1年あたり数分かかる。
 
-実行: python3 ml/audit_capacity_wf.py [シード数(既定1)] [開始年(既定2019)]
+実行: python3 ml/audit_capacity_wf.py [シード数(既定1)] [開始年(既定2019)] [段をカンマ区切りで絞る]
+  例: python3 ml/audit_capacity_wf.py 3 2019 L2,L5   … 現行とL5だけ3シードで確かめ直す
 """
 import itertools
 import sys
@@ -77,6 +78,8 @@ def auc(yy, s):
 def main():
     n_seed = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     y0 = int(sys.argv[2]) if len(sys.argv) > 2 else 2019
+    only = set((sys.argv[3] if len(sys.argv) > 3 else "").split(",")) - {""}
+    ladder = [(nm, par) for nm, par in LADDER if not only or nm.split()[0] in only]
     d, fx = load_cached()
     y = (d["finish"] <= 3).astype(int).to_numpy()
     year = d["date"].dt.year.to_numpy()
@@ -92,7 +95,7 @@ def main():
     for yy in years:
         tr, te = year < yy, year == yy
         sub0 = d.loc[te, ["raceid", "umaban", "fieldsize", "odds"]].copy()
-        for nm, par in LADDER:
+        for nm, par in ladder:
             ps = [lgb.LGBMClassifier(random_state=s, **par)
                   .fit(fx[tr], y[tr], categorical_feature=F.CAT_COLS)
                   .predict_proba(fx[te])[:, 1] for s in range(n_seed)]
@@ -113,7 +116,7 @@ def main():
             if oks:
                 cs = [tuple(sorted(c)) for c in itertools.combinations(po[:4], 3)]
                 pops.append(sum(s3["sanrenpuku"].get(c, 0) for c in cs) / 400)
-            for nm, _ in LADDER:
+            for nm, _ in ladder:
                 mo = uma[np.argsort(-g0[nm].to_numpy(float), kind="mergesort")]
                 if okw:
                     cs = wakuren_cs(mo, n)
@@ -127,23 +130,24 @@ def main():
     rng = np.random.default_rng(0)
     pw, ps_ = np.array(popw), np.array(pops)
     for tag, key, pop in [("枠連 軸枠×紐枠2", "w", pw), ("三連複 BOX上位4", "s", ps_)]:
-        base = np.array(acc[LADDER[1][0]][key])       # 現行=L2
+        cur = next(nm for nm, _ in ladder if nm.startswith("L2"))
+        base = np.array(acc[cur][key])
         print(f"\n{'='*100}\n=== {tag}  {len(pop):,}R  人気順 {pop.mean()*100:.2f}% ===")
         print(f"{'設定（容量の小さい順）':<32}{'AUC':>8}{'ROI':>9}{'対人気順':>10}"
               f"{'現行との差':>12}{'95%CI':>18}")
-        for nm, _ in LADDER:
+        for nm, _ in ladder:
             m = np.array(acc[nm][key])
             dif = m - base
-            lo, hi = boot(dif, rng) if nm != LADDER[1][0] else (0.0, 0.0)
-            cell = "—" if nm == LADDER[1][0] else f"[{lo:+.2f},{hi:+.2f}]"
-            mark = "" if nm == LADDER[1][0] else ("  ★上" if lo > 0 else ("  ★下" if hi < 0 else ""))
+            lo, hi = boot(dif, rng) if nm != cur else (0.0, 0.0)
+            cell = "—" if nm == cur else f"[{lo:+.2f},{hi:+.2f}]"
+            mark = "" if nm == cur else ("  ★上" if lo > 0 else ("  ★下" if hi < 0 else ""))
             print(f"{nm:<32}{np.mean(aucs[nm]):>8.4f}{m.mean()*100:>8.2f}%"
                   f"{(m.mean()-pop.mean())*100:>+9.2f}pt{dif.mean()*100:>+11.2f}pt{cell:>18}{mark}")
         rois = [np.array(acc[nm][key]).mean() for nm, _ in LADDER]
         top = int(np.argmax(rois))
         mono = all(rois[i] <= rois[i + 1] for i in range(len(rois) - 1))
-        print(f"  ★最良は {LADDER[top][0]}（{rois[top]*100:.2f}%）／"
-              + ("**単調増加が続いている**" if mono else f"**{LADDER[top][0]} で頭打ち＝山型**"))
+        print(f"  ★最良は {ladder[top][0]}（{rois[top]*100:.2f}%）／"
+              + ("**単調増加が続いている**" if mono else f"**{ladder[top][0]} で頭打ち＝山型**"))
         print("  ※AUCも併記した。AUCが下がりながらROIが上がるなら"
               "『精度を上げるとROIが下がる』の裏返しが起きている。")
 

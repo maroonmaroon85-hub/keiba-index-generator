@@ -105,12 +105,20 @@ def main():
         c = df["c2"].to_numpy(float)
         pop = df["pop"].to_numpy(float)
         lo, hi = boot(b - a, rng)
-        res.append({"name": name, "n": len(df), "pts": df["pts"].mean(),
-                    "L2": a.mean() * 100, "L4": b.mean() * 100, "pop": pop.mean() * 100,
-                    "d": (b - a).mean() * 100, "lo": lo, "hi": hi, "L5": c.mean() * 100,
-                    "d5": (c - a).mean() * 100,
-                    "vs_pop": (b - pop).mean() * 100,
-                    "hit": df["c1_hit"].mean() * 100})
+        # ★ROIが上がった理由が「当てる力」か「配当を取る力」かを分ける。
+        #   ROI = 的中率 × 的中時配当 ÷ コスト なので、この2つに分ければ寄与が一意に決まる。
+        row = {"name": name, "n": len(df), "pts": df["pts"].mean(),
+               "L2": a.mean() * 100, "L4": b.mean() * 100, "pop": pop.mean() * 100,
+               "d": (b - a).mean() * 100, "lo": lo, "hi": hi, "L5": c.mean() * 100,
+               "d5": (c - a).mean() * 100, "vs_pop": (b - pop).mean() * 100,
+               "hit": df["c1_hit"].mean() * 100}
+        pts = df["pts"].to_numpy(float)
+        for tag, col in (("L2", "c0"), ("L4", "c1"), ("L5", "c2")):
+            v = df[col].to_numpy(float)
+            h = df[f"{col}_hit"].to_numpy(float) > 0
+            row[f"hit_{tag}"] = h.mean() * 100
+            row[f"pay_{tag}"] = float((v[h] * pts[h] * 100).mean()) if h.any() else 0.0
+        res.append(row)
     r = pd.DataFrame(res).sort_values("L4", ascending=False)
 
     print("\n" + "=" * 116)
@@ -133,6 +141,26 @@ def main():
     for _, x in r.sort_values("d", ascending=False).head(5).iterrows():
         print(f"  {x['name']:<26} {x['d']:+.2f}pt [{x['lo']:+.2f},{x['hi']:+.2f}]"
               f"  L2 {x['L2']:.1f}% → L4 {x['L4']:.1f}% / L5 {x['L5']:.1f}%")
+    print("\n" + "=" * 118)
+    print("ROIの上がり方を「的中率」と「的中時配当」に分解（L2→L5）")
+    print("=" * 118)
+    print(f"{'買い方':<26}{'L2的中':>8}{'L5的中':>8}{'的中率差':>10}"
+          f"{'L2配当':>10}{'L5配当':>10}{'配当差':>10}{'ROI差':>10}{'寄与の内訳':>22}")
+    for _, x in r.sort_values("d5", ascending=False).iterrows():
+        dh = x["hit_L5"] - x["hit_L2"]
+        dp = x["pay_L5"] - x["pay_L2"]
+        rh = np.log(max(x["hit_L5"], 1e-9) / max(x["hit_L2"], 1e-9))
+        rp = np.log(max(x["pay_L5"], 1e-9) / max(x["pay_L2"], 1e-9))
+        tot = abs(rh) + abs(rp)
+        share = f"的中{abs(rh)/tot*100:.0f}% / 配当{abs(rp)/tot*100:.0f}%" if tot > 0 else "—"
+        print(f"{x['name']:<26}{x['hit_L2']:>7.1f}%{x['hit_L5']:>7.1f}%{dh:>+9.2f}pt"
+              f"{x['pay_L2']:>9,.0f}円{x['pay_L5']:>9,.0f}円{dp:>+9,.0f}円"
+              f"{x['d5']:>+9.2f}pt{share:>22}")
+    up = r[r["d5"] > 0]
+    nh = int((up["hit_L5"] > up["hit_L2"]).sum())
+    print(f"  → ROIが上がった{len(up)}通りのうち、**的中率も上がった**のは {nh}通り。"
+          f"残り{len(up)-nh}通りは**的中率を下げて配当で取り返している**。")
+
     nsig = int((r["lo"] > 0).sum())
     print(f"\n★多重性: {len(r)}通り中 {nsig}通りで L5>L2 のCIが0を外れた"
           f"（偶然の期待値は約{len(r)*0.025:.1f}通り・片側）。")

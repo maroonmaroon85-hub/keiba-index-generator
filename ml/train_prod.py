@@ -20,7 +20,9 @@
   2. 同じ検証期間で枠連スコア（積ベース）の20パーセンタイルを求め、除外閾値として保存
   3. **全期間で再学習**して保存（実運用では手元の全データを使う）
 
-実行: python3 ml/train_prod.py [シード数(既定3)]
+実行: python3 ml/train_prod.py [シード数(既定3)] [容量 l2|l5(既定 l2)]
+  l5 は (81)(83) の高容量。**並行運用のために作るもので、既定は l2 のまま**。
+  保存先が ml/model_prod / ml/model_prod_l5 に分かれるので共存できる。
 """
 import itertools
 import json
@@ -43,6 +45,16 @@ from waku_umatan import bracket_probs, load_wu, waku_score, wakuren_buy
 MODEL_DIR = "ml/model_prod"
 PAYOUT = "data/payout/a.csv"
 
+# ★容量の選択肢。(81)(83)で「容量を上げるとAUCは下がるがROIは上がる」が5段の梯子で確認された。
+#   ただし差は5シードで縮んでおりCIは0を跨ぐため、**既定は現行(L2)のまま**。
+#   L5は並行運用（予測を両方記録して実運用で見比べる）用に作れるようにしてある。
+#   ⚠L5は学習が10〜15倍重い（2分 → 20〜30分）。
+CAPACITY = {
+    "l2": ("ml/model_prod", dict(PARAMS)),
+    "l5": ("ml/model_prod_l5", dict(PARAMS, num_leaves=255, min_child_samples=10,
+                                    n_estimators=2000)),
+}
+
 
 def add_odds_features(fx, odds, raceid):
     """(45)のオッズ特徴。log_odds＝生オッズの対数、mkt_prob＝1/oddsをレース内で正規化した市場確率。"""
@@ -54,13 +66,21 @@ def add_odds_features(fx, odds, raceid):
     return fx
 
 
-def fit_seeds(fx, y, n_seed):
-    return [lgb.LGBMClassifier(random_state=s, **PARAMS).fit(fx, y, categorical_feature=F.CAT_COLS)
+def fit_seeds(fx, y, n_seed, par=None):
+    par = PARAMS if par is None else par
+    return [lgb.LGBMClassifier(random_state=s, **par).fit(fx, y, categorical_feature=F.CAT_COLS)
             for s in range(n_seed)]
 
 
 def main():
     n_seed = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    cap = (sys.argv[2] if len(sys.argv) > 2 else "l2").lower()
+    if cap not in CAPACITY:
+        sys.exit(f"容量は {'/'.join(CAPACITY)} のいずれか（既定 l2）")
+    MODEL_DIR, PAR = CAPACITY[cap]
+    if cap != "l2":
+        print(f"★容量 {cap.upper()} で学習する（{PAR['num_leaves']}葉 × "
+              f"{PAR['n_estimators']}本）。現行(L2)より10〜15倍重い")
     d = F.to_model(F.load_files())
     f = F.build_features(d)
     keep = (f["n_prior"] >= 1) & d["odds"].notna() & (d["odds"] > 0)
@@ -76,7 +96,7 @@ def main():
     cut = d["date"].quantile(0.3)
     tr, te = (d["date"] < cut).to_numpy(), (d["date"] >= cut).to_numpy()
     print(f"\n[1/3] OOS検証: train {tr.sum():,} / test {te.sum():,}（分割日 {cut.date()}）")
-    ms = fit_seeds(fx[tr], y[tr], n_seed)
+    ms = fit_seeds(fx[tr], y[tr], n_seed, PAR)
     p = np.mean([m.predict_proba(fx[te])[:, 1] for m in ms], axis=0)
     print(f"  AUC {roc_auc_score(y[te], p):.4f}（シード{n_seed}本平均）")
 
@@ -120,7 +140,7 @@ def main():
 
     # ===== 3. 全期間で再学習して保存 =====
     print(f"\n[3/3] 全期間 {len(d):,}行で再学習して保存（シード{n_seed}本）")
-    ms_all = fit_seeds(fx, y, n_seed)
+    ms_all = fit_seeds(fx, y, n_seed, PAR)
     os.makedirs(MODEL_DIR, exist_ok=True)
     for i, m in enumerate(ms_all):
         m.booster_.save_model(f"{MODEL_DIR}/model_{i}.txt")
@@ -129,7 +149,8 @@ def main():
     meta = {
         "target": "top3 (finish<=3)",
         "odds_features": ["log_odds", "mkt_prob"],
-        "params": PARAMS,
+        "params": PAR,
+        "capacity": cap,
         "n_seed": n_seed,
         "models": [f"model_{i}.txt" for i in range(n_seed)],
         "rows": int(len(d)),

@@ -118,6 +118,10 @@ def main():
             o = np.argsort(-p, kind="mergesort")
             nums, share, mk = uma[o], p[o] / p.sum(), mkt[o]
             po = uma[np.argsort(od, kind="mergesort")]
+            # ★指数は上位4頭を使うので、過去走のある馬が4頭未満のレースは対象外。
+            #   (84)は okw/oks の len(g)>=3 で偶然守られていたが、こちらは指数を先に作るため明示する。
+            if len(nums) < 4:
+                continue
             pairs = wakuren_cs(nums, n)
             r = {"n": n, "fs": min(n // 3, 5)}
             r["A"] = float(share[0])

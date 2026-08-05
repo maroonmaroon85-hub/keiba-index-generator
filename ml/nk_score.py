@@ -42,7 +42,13 @@ def main():
     # (表示名, 推奨JSONのキー, 1点の金額, 着順どおりか)
     BETS = [("枠連", "wakuren", 100, False), ("三連複", "sanrenpuku_box", 100, False),
             ("三連単", "sanrentan_2nd", 100, True)]
-    tot = {k: [0, 0, 0] for k, _, _, _ in BETS}     # 購入, 払戻, 的中本数
+    # ★並行運用((83))。--dual で予測したJSONには "l5" が入っているので、同じ集計を別枠で回す。
+    #   ⚠これは**決着には使えない**。1.6ptの差を実測で捉えるには約68,000レース＝43年かかる。
+    #   目的は「L5が実際に動くか」「的中率が実際に下がるか」の確認と、重大な異常の検出。
+    ALT = [("枠連(L5)", "wakuren", 100, False), ("三連複(L5)", "sanrenpuku_box", 100, False)]
+    tot = {k: [0, 0, 0] for k, _, _, _ in BETS}
+    tot.update({k: [0, 0, 0] for k, _, _, _ in ALT})
+    n_diff = n_dual = 0     # 購入, 払戻, 的中本数
     for fp in files:
         reco = json.load(open(fp, encoding="utf-8"))
         print(f"=== {reco['date']}（{fp}）")
@@ -71,15 +77,35 @@ def main():
                 tot[name][1] += ret
                 tot[name][2] += len(hits)
                 line += f"  {name}: {bet}円→{ret:,}円" + (f" 的中{hits[0][0]}" if hits else "")
+            l5 = rc.get("l5")
+            if l5:
+                n_dual += 1
+                n_diff += 0 if l5.get("same_as_current") else 1
+                for name, key, unit, ordered in ALT:
+                    combos = l5.get(key) or []
+                    base = name.replace("(L5)", "")
+                    if not combos or not p or base not in p:
+                        continue
+                    hits = [(c, p[base][tuple(sorted(int(x) for x in c.split("-")))])
+                            for c in combos
+                            if tuple(sorted(int(x) for x in c.split("-"))) in p[base]]
+                    tot[name][0] += len(combos) * unit
+                    tot[name][1] += sum(v for _, v in hits)
+                    tot[name][2] += len(hits)
+                line += ("  L5:同" if l5.get("same_as_current") else "  L5:違")
             print(line)
 
     print()
-    for name, _, _, _ in BETS:
+    for name, _, _, _ in BETS + (ALT if n_dual else []):
         bet, ret, hit = tot[name]
         if not bet:
             continue
         print(f"{name:<6} 購入{bet:,}円 / 払戻{ret:,}円 / 収支{ret-bet:+,}円 / "
               f"回収率{ret/bet*100:.1f}% / 的中{hit}本")
+    if n_dual:
+        print(f"\n※L5併記 {n_dual}レース中 {n_diff}レース（{n_diff/n_dual*100:.0f}%）で買い目が現行と違う。"
+              "★この比較で優劣は決着しない（1.6ptの差には約68,000レース＝43年必要）。"
+              "見ているのは『L5が動くか』『的中率が実際に下がるか』だけ")
     print("\n※1日の結果に意味は無い（枠連の的中率は30%、三連複BOX4は20%）。"
           "長期の目安は両方とも84.5%。数十レース積んでから読むこと。")
 

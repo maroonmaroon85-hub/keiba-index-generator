@@ -37,6 +37,8 @@ from nk_link import build_map
 from predict import MODEL_DIR, MIN_FIELD, load_model
 from waku_umatan import bracket_probs, waku_of, waku_score, wakuren_buy
 
+ALT_DIR = "ml/model_prod_l5"     # --dual で併記する高容量モデル（(83)）
+
 
 def load_entries(path):
     j = json.load(open(path, encoding="utf-8"))
@@ -65,6 +67,10 @@ def main():
     ap.add_argument("--date", default=None, help="開催日 YYYY-MM-DD（既定はファイル名から）")
     ap.add_argument("--out", default=None)
     ap.add_argument("--no-exclude", action="store_true")
+    ap.add_argument("--dual", action="store_true",
+                    help="高容量モデル(ml/model_prod_l5)の買い目も併記し、JSONにも記録する。"
+                         "★(83)より差は未確定なので**比較用**。作るには "
+                         "`python3 ml/train_prod.py 3 l5`（20〜30分）")
     ap.add_argument("--sanrentan", action="store_true",
                     help="三連単(2着固定×紐3・6点600円)も出す。★ROI79.3%%で三連複BOX4(84.5%%)より悪い")
     args = ap.parse_args()
@@ -130,6 +136,17 @@ def main():
     fx["log_odds"] = np.log(o)
     fx["mkt_prob"] = inv / pd.Series(inv).groupby(sub["raceid"].to_numpy()).transform("sum").to_numpy()
     sub["p"] = np.mean([b.predict(fx[cols].values) for b in boosters], axis=0)
+    # ★並行運用: 高容量モデルの予測も同じ特徴量から作る（(83)。差が未確定なので比較用）
+    sub2 = None
+    if args.dual:
+        b2, cm2, cols2, meta2 = load_model(ALT_DIR)
+        fx2 = F.encode_categoricals(f[is_today], cm2)
+        fx2["log_odds"] = np.log(o)
+        fx2["mkt_prob"] = fx["mkt_prob"]
+        sub2 = sub.copy()
+        sub2["p"] = np.mean([b.predict(fx2[cols2].values) for b in b2], axis=0)
+        print(f"  併記: {ALT_DIR}（容量{meta2.get('capacity','?').upper()} / "
+              f"シード{meta2['n_seed']}本平均）")
 
     print(f"\n===== {today.date()} 買い目（枠連 軸枠×紐枠2 ／ 三連複 BOX上位4） =====")
     print(f"※枠連スコア下位20%（<{th:.4f}）は除外。ROI84.5%＝**長期で投下額の15.5%が減る**。1日の結果に意味は無い")
@@ -151,6 +168,17 @@ def main():
         wk = {h["umaban"]: h["waku"] for h in rc["horses"]}
         info = {h["umaban"]: h for h in rc["horses"]}
         pairs = sorted({tuple(sorted((wk[nums[0]], wk[h]))) for h in nums[1:3]})
+        # ★併記は除外レースでも記録する（後で「除外の判定自体が正しかったか」を見るため）
+        alt = None
+        if sub2 is not None:
+            g2 = sub2[sub2["raceid"] == rc["raceid"]]
+            nums2 = g2.sort_values("p", ascending=False, kind="mergesort")["umaban"].astype(int).tolist()
+            pr2 = sorted({tuple(sorted((wk[nums2[0]], wk[h]))) for h in nums2[1:3]})
+            alt = {"axis": nums2[0],
+                   "wakuren": [f"{a}-{b}" for a, b in pr2],
+                   "sanrenpuku_box": [f"{a}-{b}-{c}"
+                                      for a, b, c in itertools.combinations(nums2[:4], 3)],
+                   "same_as_current": bool(set(pr2) == set(pairs))}
         praw = gg["p"].to_numpy(float)
         pmap = {u: float(v) for u, v in zip(nums, praw)}
         q = praw / praw.sum()
@@ -183,6 +211,12 @@ def main():
             #   差 = レース内シェア − 市場（＋なら市場より高く評価している）
             mk = {u: (1 / info[u]["odds"]) for u in nums}
             msum = sum(mk.values())
+            if alt is not None:
+                print(f"       ── 高容量(L5)の買い目 "
+                      f"{'（現行と同じ）' if alt['same_as_current'] else '★現行と違う'}")
+                print(f"          枠連 {' '.join(alt['wakuren'])}"
+                      f" ／ 三連複BOX {' '.join(alt['sanrenpuku_box'])}"
+                      f"  軸 {alt['axis']}番{info[alt['axis']]['name'][:9]}")
             print(ST.header("      "))
             for i, u in enumerate(nums):
                 print(ST.row(i + 1, u, info[u]["name"], wk[u], pmap[u],
@@ -212,7 +246,8 @@ def main():
                                       "odds": info[u]["odds"]} for i, u in enumerate(nums)],
                           "odds_at": rc["odds_at"],
                           "wakuren": [f"{a}-{b}" for a, b in pairs], "sanrenpuku_box": trio,
-                          "sanrentan_2nd": tan})
+                          "sanrentan_2nd": tan,
+                          **({"l5": alt} if alt else {})})
 
     buy = [r for r in out_races if not r["excluded"]]
     cost = sum(len(r["wakuren"]) * 100 for r in buy)

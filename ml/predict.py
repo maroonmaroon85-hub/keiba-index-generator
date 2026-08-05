@@ -122,14 +122,19 @@ def parse_shutuba(path):
     return races
 
 
-def load_model():
-    """ml/model_prod/ を読む。シードごとのモデルを全部返し、予測は平均を取る（(30)のシード差対策）。"""
-    if not os.path.exists(f"{MODEL_DIR}/meta.json"):
-        sys.exit(f"{MODEL_DIR}/meta.json が無い。先に `python3 ml/train_prod.py` を実行してください。")
-    meta = json.load(open(f"{MODEL_DIR}/meta.json"))
-    boosters = [lgb.Booster(model_file=f"{MODEL_DIR}/{n}") for n in meta["models"]]
-    cat_maps = json.load(open(f"{MODEL_DIR}/cat_maps.json"))
-    cols = json.load(open(f"{MODEL_DIR}/feature_cols.json"))
+def load_model(model_dir=None):
+    """モデルを読む。シードごとのモデルを全部返し、予測は平均を取る（(30)のシード差対策）。
+
+    `model_dir` を渡すと別の容量のモデル（`ml/model_prod_l5/` など）を読める。
+    並行運用（(83)の高容量を実運用データで見比べる）で使う。
+    """
+    md = model_dir or MODEL_DIR
+    if not os.path.exists(f"{md}/meta.json"):
+        sys.exit(f"{md}/meta.json が無い。先に `python3 ml/train_prod.py` を実行してください。")
+    meta = json.load(open(f"{md}/meta.json"))
+    boosters = [lgb.Booster(model_file=f"{md}/{n}") for n in meta["models"]]
+    cat_maps = json.load(open(f"{md}/cat_maps.json"))
+    cols = json.load(open(f"{md}/feature_cols.json"))
     return boosters, cat_maps, cols, meta
 
 

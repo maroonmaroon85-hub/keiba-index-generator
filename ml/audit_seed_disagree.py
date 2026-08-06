@@ -34,9 +34,22 @@
 　超えなければ「モデルは市場より下手だが、**この区分では下手さが小さい**」という記述にとどまり、
 　**運用は変わらない**。それでも意味があるのは、(87)の「過信の集中」を独立に確認できるから。
 
+★★第2版で足したもの（1回目の結果を見てから足した。**効果を殺す方向の検査なので後付けでも妥当**）
+　1回目は指標Bで条件1〜3が通った（枠連: 差 −0.0838 → 除外50%で −0.0692）。だが
+　**cv_top は「1位馬の確率が小さいほど大きくなる」＝モデルの自信の無さと同義になりうる**。
+　もしそうなら、シードを5本引く必要すら無い（1本の予測から出る量で同じことができる）。
+　→ **交絡対照を2つ追加**し、同じ除外率で比べる:
+　　 C `p_top` … シード平均の1位馬確率（**シード1本でも作れる**）。これで同じ効果が出たら不一致は不要
+　　 D `mkt_top` … 市場の1位馬含意確率（**モデル不要**）。これで出たら「堅いレース」を選んだだけ
+　★判定を1つ足す: **条件5 — cv の効果が C・D の効果を同じ除外率で上回ること**。
+　　下回るなら「シード間不一致」という道具は**不要**であり、宿題4は閉じる。
+　なお指標Aは83.3%のレースが全シード一致（同点）で、パーセンタイル分割ができなかった。
+　**実際に落とせるのは16.7%まで**なので、Aは自然な水準（flip>0 など）で出し直す。
+
 実行: python3 ml/audit_seed_disagree.py [シード数(既定5)] [開始年(既定2015)]
 """
 import math
+import os
 import sys
 import warnings
 from collections import Counter
@@ -141,7 +154,9 @@ def collect(races, smap, y0):
             lp = math.log((v + 5) / 100.0) - math.log(PAYBACK[kind])
             rows.append({"kind": kind, "rid": r["rid"], "year": r["year"],
                          "dm": math.log(qm) + lp, "dk": math.log(qk) + lp,
-                         "flip": flip, "cv": cv, "n": r["n"]})
+                         "flip": flip, "cv": cv, "n": r["n"],
+                         # ★交絡対照。値が小さいほど「自信が無い」ので符号を反転して同じ向きに揃える
+                         "p_top": -float(p_use.max()), "mkt_top": -float(p_mkt.max())})
     return pd.DataFrame(rows)
 
 
@@ -153,20 +168,44 @@ def mci(x, alpha=0.01):
     return m, m - z * se, m + z * se
 
 
-def sweep(g, col):
-    """不一致の大きい側から落として、各水準の D を出す。"""
+def sweep(g, col, levels=None):
+    """不一致の大きい側から落として、各水準の D を出す。
+
+    ⚠**同点の扱い**: `flip` は83%が0で並ぶので分位では切れない（第2版で判明）。
+    　分位が同点に当たった水準は**その水準を欠測にする**。無作為に同点を割るのは
+    　「無作為除外」を混ぜることになり、プラセボと区別できなくなるため。
+    """
     out = []
-    for lv in LEVELS:
+    for lv in (levels or LEVELS):
         if lv == 0:
             keep = g
         else:
             thr = g[col].quantile(1 - lv)
             keep = g[g[col] < thr]
-            # ★同点が多い指標なので、切ったあとの実際の除外率を必ず出す
+            if len(keep) == 0 or len(keep) == len(g):
+                out.append({"lv": lv, "n": np.nan, "actual": np.nan, "dm": np.nan,
+                            "dk": np.nan, "diff": np.nan, "lo": np.nan, "hi": np.nan})
+                continue
         dm, dk = keep["dm"].to_numpy(), keep["dk"].to_numpy()
         diff, lo, hi = mci(dm - dk)
         out.append({"lv": lv, "n": len(keep), "actual": 1 - len(keep) / len(g),
                     "dm": dm.mean(), "dk": dk.mean(), "diff": diff, "lo": lo, "hi": hi})
+    return pd.DataFrame(out)
+
+
+def sweep_value(g, col, thrs):
+    """値そのもので切る（同点が多い指標A用）。thrs は「これ以上を落とす」境界。"""
+    out = [{"thr": None, "n": len(g), "actual": 0.0,
+            "dm": g["dm"].mean(), "dk": g["dk"].mean(),
+            "diff": (g["dm"] - g["dk"]).mean()}]
+    for t in thrs:
+        keep = g[g[col] < t]
+        if len(keep) < 500:
+            continue
+        dm, dk = keep["dm"].to_numpy(), keep["dk"].to_numpy()
+        diff, lo, hi = mci(dm - dk)
+        out.append({"thr": t, "n": len(keep), "actual": 1 - len(keep) / len(g),
+                    "dm": dm.mean(), "dk": dk.mean(), "diff": diff})
     return pd.DataFrame(out)
 
 
@@ -183,9 +222,18 @@ def main():
     n_seed = int(sys.argv[1]) if len(sys.argv) > 1 else 5
     y0 = int(sys.argv[2]) if len(sys.argv) > 2 else 2015
     print(f"(95) シード間不一致による除外（{y0}年以降・シード{n_seed}本・ウォークフォワード）")
-    print("★事前登録した4条件を全部満たしたときだけ『効いた』と言う\n")
-    smap = seed_probs(n_seed, y0)
-    df = collect(load_races(), smap, y0)
+    print("★事前登録した4条件＋交絡対照の条件5を全部満たしたときだけ『効いた』と言う\n")
+    # ★学習に25分かかるので、集めた行を保存して再解析を軽くする
+    cache = f"data/cache/seed_dis_{n_seed}_{y0}.csv"
+    if os.path.exists(cache):
+        df = pd.read_csv(cache)
+        print(f"  キャッシュを読んだ: {cache}")
+    else:
+        smap = seed_probs(n_seed, y0)
+        df = collect(load_races(), smap, y0)
+        os.makedirs(os.path.dirname(cache), exist_ok=True)
+        df.to_csv(cache, index=False)
+        print(f"  キャッシュを書いた: {cache}")
     print(f"\n対象 {len(df):,}件 / {df['rid'].nunique():,}レース")
 
     uni = df.drop_duplicates("rid")
@@ -199,9 +247,29 @@ def main():
         print("  ⚠**Aは同点が多い**（全シード一致が多数）ので、"
               "上位x%を落とそうとしても実際の除外率が水準どおりにならない。実測値を下に出す。")
 
-    for col, lab, tag in (("flip", "A top1_flip（主要）", "★"), ("cv", "B cv_top（副次）", "")):
+    # ───────── 指標A は同点だらけなので値で切る ─────────
+    print(f"\n{'='*100}")
+    print("★【A top1_flip（主要）】— 同点が多いので**値そのもの**で切る")
+    print(f"{'='*100}")
+    for kind in PARTS:
+        g = df[df["kind"] == kind]
+        if len(g) < 2000:
+            continue
+        s = sweep_value(g, "flip", [0.01, 0.25, 0.45])   # 「1本でも外れたら除外」「2本」「3本」
+        base = s.iloc[0]["diff"]
+        print(f"\n{'★' if kind == PRIMARY else ' '}{kind}")
+        print(f"{'落とす条件':<22}{'実除外':>8}{'R数':>9}{'D(モデル)':>12}"
+              f"{'D(市場)':>11}{'差':>11}{'0%からの変化':>14}")
+        for _, r in s.iterrows():
+            lab = "除外なし" if r["thr"] is None else f"flip≧{r['thr']:.2f} を除外"
+            print(f"{lab:<22}{r['actual']*100:>7.1f}%{r['n']:>9,.0f}{r['dm']:>+12.4f}"
+                  f"{r['dk']:>+11.4f}{r['diff']:>+11.4f}{r['diff']-base:>+14.4f}")
+
+    for col, lab, tag in (("cv", "B cv_top（副次）", "★"),
+                          ("p_top", "C p_top＝モデルの1位確率（交絡対照・シード1本で作れる）", "⚠"),
+                          ("mkt_top", "D mkt_top＝市場の1位確率（交絡対照・モデル不要）", "⚠")):
         print(f"\n{'='*100}")
-        print(f"{tag}【{lab}】で不一致の大きい側を落とす")
+        print(f"{tag}【{lab}】で不安定な側を落とす")
         print(f"{'='*100}")
         for kind in PARTS:
             g = df[df["kind"] == kind]
@@ -231,9 +299,40 @@ def main():
             print(f"   条件3 上昇幅 モデル {dm_rise:+.4f} vs 市場 {dk_rise:+.4f} {'○' if c3 else '✕'}"
                   f" / 差が0を超えたか {'○' if s['diff'].max() > 0 else '✕'}")
 
+    # ───────── ★条件5: 交絡対照との比較（同じ除外率で） ─────────
+    print(f"\n{'='*100}")
+    print("★★【条件5】交絡対照との比較 — シード間不一致は**そもそも要るのか**")
+    print(f"{'='*100}")
+    print("  同じ除外率で、B(cv) と C(p_top) と D(mkt_top) の『差の改善』を並べる。")
+    print("  ★C が B と同等以上なら、**シードを5本引く意味は無い**（1本の予測から作れる量で足りる）。")
+    print("  ★D が同等以上なら、**モデルすら要らない**（市場のオッズだけで同じことができる）。\n")
+    print(f"{'券種':<8}{'除外率':>8}{'B cv(不一致)':>14}{'C p_top':>11}{'D mkt_top':>12}"
+          f"{'B−C':>10}{'B−D':>10}{'判定':>18}")
+    verdict = {}
+    for kind in PARTS:
+        g = df[df["kind"] == kind]
+        if len(g) < 2000:
+            continue
+        sb, sc, sd = (sweep(g, c) for c in ("cv", "p_top", "mkt_top"))
+        for i in (3, 5):                       # 30% と 50%
+            b = sb.iloc[i]["diff"] - sb.iloc[0]["diff"]
+            c = sc.iloc[i]["diff"] - sc.iloc[0]["diff"]
+            d = sd.iloc[i]["diff"] - sd.iloc[0]["diff"]
+            ok = b > c and b > d
+            if i == 3:
+                verdict[kind] = ok
+            print(f"{kind:<8}{LEVELS[i]*100:>7.0f}%{b:>+14.4f}{c:>+11.4f}{d:>+12.4f}"
+                  f"{b-c:>+10.4f}{b-d:>+10.4f}{'○ 不一致が上' if ok else '✕ 対照に負け':>18}")
+    n_ok = sum(verdict.values())
+    print(f"\n  → 除外30%で不一致が対照を上回った券種: **{n_ok}/{len(verdict)}**")
+    if n_ok == 0:
+        print("  ★**条件5は全滅**。シード間不一致という道具は不要。宿題4は閉じる。")
+        print("  　（『モデルが自信を持てないレースを外す』という筋自体は生きているが、"
+              "それは1位確率で足りる）")
+
     print(f"\n{'='*100}")
     print("★読み方")
-    print("  ・条件1〜4が全部○のときだけ『不一致による除外は効く』と言える。1つでも✕なら効いていない。")
+    print("  ・条件1〜5が全部○のときだけ『不一致による除外は効く』と言える。1つでも✕なら効いていない。")
     print("  ・条件3が✕（市場のDも同じだけ上がる）なら、選んだのは"
           "**モデルが賢いレース**ではなく**当てやすいレース**。")
     print(f"  ・差が0を超えない限り、モデルは市場より下手なまま。(90)の枠連 −0.0846 が出発点。")

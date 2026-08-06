@@ -9,3 +9,4 @@ ml/model/
 ml/model_prod/
 data/nk_cache/
 keiba-index-generator/
+data/cache/

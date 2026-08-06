@@ -78,21 +78,21 @@ def seed_probs(n_seed, y0):
     ★学習に25分かかるうえ、**その後の集計でプロセスが落ちると全部やり直しになる**（実際2回落ちた）。
     　学習が終わった時点で必ずCSVに落とし、次回はそれを読む。
     """
-    raw = f"data/cache/seedraw_{n_seed}_{y0}.csv"
-    if os.path.exists(raw):
-        d = pd.read_csv(raw)
-        print(f"  シード別予測のキャッシュを読んだ: {raw}（{len(d):,}行）")
-        cols = [f"p{s}" for s in range(n_seed)]
-        out = {}
-        for rid, um, *ps in zip(d["raceid"], d["umaban"].astype(int), *[d[c] for c in cols]):
-            out.setdefault(rid, {})[int(um)] = np.array(ps, float)
-        return out
+    dirp = f"data/cache/seedraw_{n_seed}_{y0}"
+    os.makedirs(dirp, exist_ok=True)
+    # ★**年ごとに保存する**。3回続けて途中で殺されたので（例外なし＝OOM killer）、
+    # 　1年ぶん終わるたびに書き出して、次回はその年を飛ばす。
+    need = []
     d, fx = load_cached()
     ywin = (d["finish"] == 1).astype(int).to_numpy()
     year = d["date"].dt.year.to_numpy()
-    years = [yy for yy in range(y0, int(year.max()) + 1) if (year == yy).sum() > 5000]
-    out, parts = {}, []
-    for yy in years:
+    year_list = [yy for yy in range(y0, int(year.max()) + 1) if (year == yy).sum() > 5000]
+    for yy in year_list:
+        f = f"{dirp}/{yy}.csv"
+        if os.path.exists(f):
+            continue
+        need.append(yy)
+    for yy in need:
         tr, te = year < yy, year == yy
         ps = np.stack([lgb.LGBMClassifier(random_state=s, **PARAMS)
                        .fit(fx[tr], ywin[tr], categorical_feature=F.CAT_COLS)
@@ -100,12 +100,12 @@ def seed_probs(n_seed, y0):
         sub = d.loc[te, ["raceid", "umaban"]].copy()
         for s in range(n_seed):
             sub[f"p{s}"] = ps[:, s]
-        parts.append(sub)
-        print(f"  {yy} 学習完了（{n_seed}シード）", flush=True)
-    big = pd.concat(parts, ignore_index=True)
-    os.makedirs(os.path.dirname(raw), exist_ok=True)
-    big.to_csv(raw, index=False)
-    print(f"  シード別予測を保存した: {raw}（{len(big):,}行）", flush=True)
+        sub.to_csv(f"{dirp}/{yy}.csv", index=False)
+        print(f"  {yy} 学習完了・保存（{n_seed}シード）", flush=True)
+    del d, fx
+    big = pd.concat([pd.read_csv(f"{dirp}/{yy}.csv") for yy in year_list], ignore_index=True)
+    print(f"  シード別予測を読み込んだ: {dirp}（{len(big):,}行・{len(year_list)}年）", flush=True)
+    out = {}
     for rid, um, *ps_ in zip(big["raceid"], big["umaban"].astype(int),
                              *[big[f"p{s}"] for s in range(n_seed)]):
         out.setdefault(rid, {})[int(um)] = np.array(ps_, float)

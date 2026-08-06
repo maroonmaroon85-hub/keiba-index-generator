@@ -45,7 +45,9 @@ from audit_lbs_model import build, fit_exponent, fit_walk, race_probs
 
 RNG = np.random.default_rng(20260806)
 # (専門家名, 目標, 容量) — 学習して data/cache/ に置く
-EXPERTS = [("L2-win", "win", "l2"), ("L2-top3", "top3", "l2"), ("L5-win", "win", "l5")]
+ALL_EXPERTS = [("L2-win", "win", "l2"), ("L2-top3", "top3", "l2"), ("L5-win", "win", "l5")]
+# ★第2引数で専門家を絞れる。L5は学習が重く何度も落ちたので、まず2人で結果を出せるようにした
+EXPERTS = ALL_EXPERTS
 
 
 def expert_probs(name, target, cap, y0):
@@ -127,7 +129,11 @@ def mci(x, alpha=0.01):
 
 
 def main():
+    global EXPERTS
     y0 = int(sys.argv[1]) if len(sys.argv) > 1 else 2015
+    if len(sys.argv) > 2:
+        want = set(sys.argv[2].split(","))
+        EXPERTS = [e for e in ALL_EXPERTS if e[0] in want]
     print(f"(102) 多者混合（{y0}年以降）")
     print("★専門家: 市場 / " + " / ".join(n for n, _, _ in EXPERTS))
     maps = []

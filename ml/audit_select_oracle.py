@@ -122,33 +122,45 @@ def main():
 
     import lightgbm as lgb
     FEAT = [c for c in df.columns if c not in ("kind", "d")]
-    print(f"{'券種':<8}{'件数':>8}{'平均d':>10}{'dの標準偏差':>13}"
-          f"{'事前情報オラクル':>18}{'完全オラクル':>14}{'必要量':>9}{'判定':>10}")
+    print("⚠**第1版の設計ミスを直した版**: 最初は『わざと過学習させたモデル』を上界にしたが、")
+    print("　オッズ由来の連続値（p1/ent/hhi/sum_inv）が**レースの指紋になる**ので、モデルは")
+    print("　レースを丸暗記して完全オラクルとほぼ同値（+0.3561 vs +0.3575）になった。上界として無意味。")
+    print("　→ **ウォークフォワードで測る**。問いは『dは事前情報から予測できるか』の一点。\n")
+    print(f"{'券種':<8}{'件数':>8}{'平均d':>10}{'σ(d)':>9}{'予測の相関':>11}"
+          f"{'★実際に選べる':>15}{'完全オラクル':>13}{'必要量':>9}{'判定':>10}")
     for kind in PARTS:
-        g = df[df["kind"] == kind]
+        g = df[df["kind"] == kind].reset_index(drop=True)
         if len(g) < 2000:
             continue
-        X, y = g[FEAT], g["d"].to_numpy()
-        # ★わざと過学習させる。これが「反則をしても届かない」の反則の部分
-        m = lgb.LGBMRegressor(n_estimators=800, num_leaves=255, min_child_samples=5,
-                              learning_rate=0.1, verbose=-1).fit(X, y)
-        pred = m.predict(X)
-        k = int(len(g) * 0.1)
-        top_pre = y[np.argsort(-pred)[:k]].mean()        # 事前情報オラクル
-        top_all = np.sort(y)[::-1][:k].mean()            # 完全オラクル（到達不可能）
+        yrs_ = g["year"].to_numpy()
+        y = g["d"].to_numpy()
+        pred = np.full(len(g), np.nan)
+        for yy in sorted(set(yrs_.tolist())):
+            tr, te = yrs_ < yy, yrs_ == yy
+            if tr.sum() < 3000:
+                continue
+            m = lgb.LGBMRegressor(n_estimators=300, num_leaves=31, learning_rate=0.05,
+                                  verbose=-1).fit(g.loc[tr, FEAT], y[tr])
+            pred[te] = m.predict(g.loc[te, FEAT])
+        ok = ~np.isnan(pred)
+        yy_, pp = y[ok], pred[ok]
+        k = int(len(yy_) * 0.1)
+        r = float(np.corrcoef(yy_, pp)[0, 1])
+        top_wf = yy_[np.argsort(-pp)[:k]].mean()          # ★実運用で選べる値
+        top_all = np.sort(yy_)[::-1][:k].mean()           # 完全オラクル（到達不可能）
         need = -math.log(PAYBACK[kind])
-        ok = "★届く" if top_pre >= need else "届かない"
-        print(f"{kind:<8}{len(g):>8,}{y.mean():>+10.4f}{y.std():>13.4f}"
-              f"{top_pre:>+18.4f}{top_all:>+14.4f}{need:>9.4f}{ok:>10}")
+        mark = "★届く" if top_wf >= need else "届かない"
+        print(f"{kind:<8}{len(yy_):>8,}{yy_.mean():>+10.4f}{yy_.std():>9.3f}{r:>+11.4f}"
+              f"{top_wf:>+15.4f}{top_all:>+13.4f}{need:>9.4f}{mark:>10}")
 
     print("\n" + "=" * 104)
     print("★読み方")
-    print("  ・『事前情報オラクル』は**同じデータで学習して同じデータで選んだ**値。実運用では絶対に出ない。")
-    print("    それでも必要量に届かないなら、**レースを選ぶという手段そのものが閉じている**。")
-    print("  ・『完全オラクル』は d の上位10%をそのまま取った値＝**未来を完全に知っている場合**。")
-    print("    ここが必要量を超えていても、事前情報で当てられなければ意味は無い。")
-    print("  ・d の標準偏差が大きいのは**配当の裾**が効いているから。裾は事前に予測できない"
-          "（それができるなら配当そのものを予測できることになる）。")
+    print("  ・**完全オラクルは必要量を超える**（枠連 +0.358 > 0.255）。つまり**裾は実在する**。")
+    print("    儲かるレースは存在する。問題は『事前に見分けられるか』の一点に絞られる。")
+    print("  ・『実際に選べる』はウォークフォワード＝実運用と同じ手続き。")
+    print("    ここが必要量に届かないなら、**レースを選ぶという手段は閉じている**。")
+    print("  ・『予測の相関』が0付近なら、d は事前情報から**まったく予測できない**ということ。")
+    print("    d は配当の裾で決まるので、これを予測できるなら配当そのものを予測できることになる。")
 
 
 if __name__ == "__main__":

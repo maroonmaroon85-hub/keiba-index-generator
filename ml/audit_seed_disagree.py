@@ -75,21 +75,40 @@ def seed_probs(n_seed, y0):
     """ウォークフォワードで**シードごとの**勝率予測を作る。{raceid: {馬番: [p_seed...]}}
 
     ★production は seed 平均を使うので、q には平均を入れる。**シード別は不一致の測定にだけ使う**。
+    ★学習に25分かかるうえ、**その後の集計でプロセスが落ちると全部やり直しになる**（実際2回落ちた）。
+    　学習が終わった時点で必ずCSVに落とし、次回はそれを読む。
     """
+    raw = f"data/cache/seedraw_{n_seed}_{y0}.csv"
+    if os.path.exists(raw):
+        d = pd.read_csv(raw)
+        print(f"  シード別予測のキャッシュを読んだ: {raw}（{len(d):,}行）")
+        cols = [f"p{s}" for s in range(n_seed)]
+        out = {}
+        for rid, um, *ps in zip(d["raceid"], d["umaban"].astype(int), *[d[c] for c in cols]):
+            out.setdefault(rid, {})[int(um)] = np.array(ps, float)
+        return out
     d, fx = load_cached()
     ywin = (d["finish"] == 1).astype(int).to_numpy()
     year = d["date"].dt.year.to_numpy()
     years = [yy for yy in range(y0, int(year.max()) + 1) if (year == yy).sum() > 5000]
-    out = {}
+    out, parts = {}, []
     for yy in years:
         tr, te = year < yy, year == yy
         ps = np.stack([lgb.LGBMClassifier(random_state=s, **PARAMS)
                        .fit(fx[tr], ywin[tr], categorical_feature=F.CAT_COLS)
                        .predict_proba(fx[te])[:, 1] for s in range(n_seed)], axis=1)
-        sub = d.loc[te, ["raceid", "umaban"]]
-        for rid, um, row in zip(sub["raceid"], sub["umaban"].astype(int), ps):
-            out.setdefault(rid, {})[int(um)] = row
+        sub = d.loc[te, ["raceid", "umaban"]].copy()
+        for s in range(n_seed):
+            sub[f"p{s}"] = ps[:, s]
+        parts.append(sub)
         print(f"  {yy} 学習完了（{n_seed}シード）", flush=True)
+    big = pd.concat(parts, ignore_index=True)
+    os.makedirs(os.path.dirname(raw), exist_ok=True)
+    big.to_csv(raw, index=False)
+    print(f"  シード別予測を保存した: {raw}（{len(big):,}行）", flush=True)
+    for rid, um, *ps_ in zip(big["raceid"], big["umaban"].astype(int),
+                             *[big[f"p{s}"] for s in range(n_seed)]):
+        out.setdefault(rid, {})[int(um)] = np.array(ps_, float)
     return out
 
 

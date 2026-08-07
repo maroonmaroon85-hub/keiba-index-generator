@@ -54,7 +54,25 @@ def main():
             print(f"## {mark}{rc['label']}　軸{rc['axis']}番{rc['axis_name']}"
                   f"（枠連スコア{rc['waku_score']:.3f}）")
             print(f"枠連 {' '.join(rc.get('wakuren') or [])}"
-                  f"／三連複BOX {' '.join(rc.get('sanrenpuku_box') or [])}\n")
+                  f"／三連複BOX {' '.join(rc.get('sanrenpuku_box') or [])}")
+            # ★(111)(112) 甘い軸の三連複。オッズだけで決まるのでJSONに無ければその場で計算する
+            sa = rc.get("soft_axis")
+            if sa is None and rc.get("scores"):
+                try:
+                    import soft_axis as SA
+                    sa = SA.recommend([x["umaban"] for x in rc["scores"]],
+                                      [x["odds"] for x in rc["scores"]])
+                except Exception:
+                    sa = None
+            if sa:
+                if sa.get("buy"):
+                    print(f"★甘い軸 三連複 {sa['sanrenpuku']}（1点100円）"
+                          f"　軸{sa['axis']}番・複勝の期待払戻{sa['e_axis']:.0f}円"
+                          f"（裾{int(sa['tier']*100)}%）")
+                else:
+                    print(f"（甘い軸: 期待払戻{sa['e_axis']:.0f}円"
+                          f"＝買う基準{sa.get('buy_threshold', 86):.0f}円以下に届かず見送り）")
+            print()
             print(ST.header() if args.text else ST.md_header())
             for r in rows_of(rc):
                 print(ST.row(*r) if args.text else ST.md_row(*r))

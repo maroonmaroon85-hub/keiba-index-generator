@@ -33,6 +33,7 @@ import lightgbm as lgb
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import features as F
 import score_table as ST
+import soft_axis as SA
 from nk_link import build_map
 from predict import MODEL_DIR, MIN_FIELD, load_model
 from waku_umatan import bracket_probs, waku_of, waku_score, wakuren_buy
@@ -198,6 +199,18 @@ def main():
         # 「1番人気が取りこぼす」側に賭ける2着固定の方が配当が5割増える。
         # ただし三連複BOX4(84.5%)に届かないので既定では出さない（--sanrentan で明示的に出す）。
         tan = [f"{a}-{nums[0]}-{b}" for a, b in itertools.permutations(nums[1:4], 2)]
+        # ★(111)(112) 甘い軸の三連複。**オッズだけで決まる**のでモデルの除外判定とは独立に出す。
+        #   軸＝1番人気 / 紐＝2・3番人気。買うのは「軸の複勝の期待払戻E」が小さいレースだけ。
+        all_um = [h["umaban"] for h in rc["horses"]]
+        all_od = [h["odds"] for h in rc["horses"]]
+        soft = (SA.recommend(all_um, all_od)
+                if len(all_od) >= 3 and all(o and o > 0 for o in all_od) else None)
+        if soft and soft["buy"]:
+            print(f"       ★甘い軸 三連複 {soft['sanrenpuku']}（1点100円）"
+                  f"  軸{soft['axis']}番・複勝の期待払戻{soft['e_axis']:.0f}円"
+                  f"（裾{int(soft['tier']*100)}%）")
+        elif soft:
+            print(f"       （甘い軸: 期待払戻{soft['e_axis']:.0f}円＝閾値100円超で見送り）")
         if not skip:
             print(f"       枠連 {' '.join(f'{a}-{b}' for a, b in pairs)}"
                   f"（{len(pairs)}点 {len(pairs)*100}円）"
@@ -247,6 +260,7 @@ def main():
                           "odds_at": rc["odds_at"],
                           "wakuren": [f"{a}-{b}" for a, b in pairs], "sanrenpuku_box": trio,
                           "sanrentan_2nd": tan,
+                          **({"soft_axis": soft} if soft else {}),
                           **({"l5": alt} if alt else {})})
 
     buy = [r for r in out_races if not r["excluded"]]

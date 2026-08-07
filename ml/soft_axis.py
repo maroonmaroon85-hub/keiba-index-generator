@@ -90,18 +90,33 @@ def axis_expect(odds):
     return k, FUKU_PAYBACK / t3[k] * 100.0, t3[k]
 
 
+# ★「買う」と判定する既定の水準。**最も絞る(2%・≤86円)** を既定にする。
+# 　理由: 三連複のROI 96.0% は**この水準でしか出ていない**（≤90円で83.2% / ≤100円で81.4%）。
+# 　既定を緩くすると「96.0%を見て買ったつもりが、実際には81.4%の買い目だった」が起きる。
+DEFAULT_TIER = 0.02
+
+
 def tier_of(e):
-    """E が入る裾。該当しなければ None。"""
+    """E が入る裾（最も絞ったものを返す）。どれにも入らなければ None。"""
     for t, thr, _ in TIERS:
         if e <= thr:
             return t, thr
     return None
 
 
-def recommend(umabans, odds):
+def threshold_of(tier):
+    """裾の水準 → E の閾値[円]。"""
+    for t, thr, _ in TIERS:
+        if abs(t - tier) < 1e-9:
+            return thr
+    raise ValueError(f"tier は {[t for t, _, _ in TIERS]} のいずれか")
+
+
+def recommend(umabans, odds, tier=DEFAULT_TIER):
     """→ dict。買い目は**オッズ順**（モデルではない）で決める。
 
     軸＝1番人気 / 紐＝2・3番人気 → 三連複1点。
+    `tier` を緩めると買うレースは増えるが、**実測ROIは下がる**（96.0→83.2→79.3→81.4）。
     """
     if len(umabans) < 3:
         return None
@@ -109,13 +124,15 @@ def recommend(umabans, odds):
     k, e, q = axis_expect(odds)
     if e is None:
         return None
-    tier = tier_of(e)
+    thr = threshold_of(tier)
+    fell = tier_of(e)                       # 実際にどの裾まで入ったか（表示用）
     trio = sorted(umabans[i] for i in order[:3])
     return {"axis": umabans[order[0]], "trio": trio,
             "sanrenpuku": "-".join(str(x) for x in trio),
             "e_axis": round(e, 1), "q_axis": round(q, 4),
-            "tier": (None if tier is None else tier[0]),
-            "buy": tier is not None}
+            "tier": (None if fell is None else fell[0]),
+            "buy_tier": tier, "buy_threshold": thr,
+            "buy": e <= thr}
 
 
 def main():
@@ -126,9 +143,10 @@ def main():
     print(f"軸 {r['axis']}番（{min(odds):.1f}倍）")
     print(f"軸の3着以内確率 {r['q_axis']*100:.1f}%  →  複勝の期待払戻 {r['e_axis']:.0f}円")
     if r["buy"]:
-        print(f"★買う（裾{int(r['tier']*100)}%に入っている）  三連複 {r['sanrenpuku']}（1点100円）")
+        print(f"★買う（裾{int(r['tier']*100)}%）  三連複 {r['sanrenpuku']}（1点100円）")
     else:
-        print(f"見送り（Eが{TIERS[-1][1]:.0f}円を超えている＝甘くない）")
+        near = "" if r["tier"] is None else f"／緩い基準なら裾{int(r['tier']*100)}%には入る"
+        print(f"見送り（買う基準は{r['buy_threshold']:.0f}円以下{near}）")
 
 
 if __name__ == "__main__":

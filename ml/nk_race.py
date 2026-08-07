@@ -11,7 +11,10 @@ python3 ml/nk_race.py 20260809 札幌 3      # 日付・場名・R
 python3 ml/nk_race.py 20260809 3           # 日付・R（その日の全場の3Rを出す）
 python3 ml/nk_race.py 20260809             # 日付だけ（その日の全レースを判定・オッズは全部取り直す）
 python3 ml/nk_race.py --odds 1.4 4.5 7.2 … # ★ネット不要。手打ちしたオッズで判定だけする
+python3 ml/nk_race.py 20260809 --tier 5    # 水準を緩める（既定は2＝最も絞る）
 ```
+★**既定は「最も絞る」(裾2%・≤86円)**。ROI 96.0% はこの水準でしか出ていない。
+　`--tier 5` / `10` / `20` で緩められるが、実測ROIは 83.2 / 79.3 / 81.4% に下がる。
 
 ★判定の中身は `ml/soft_axis.py` と同じ（オッズだけで決まる）
 　軸＝1番人気 ／ 紐＝2・3番人気 → 三連複1点。
@@ -29,9 +32,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import soft_axis as SA
 
 
-def judge(umabans, odds, label=""):
+def judge(umabans, odds, label="", tier=SA.DEFAULT_TIER):
     """1レース分の判定を1行で出す。→ 買うなら True。"""
-    r = SA.recommend(umabans, odds)
+    r = SA.recommend(umabans, odds, tier)
     if r is None:
         print(f"{label}  判定不可（頭数不足かオッズ欠損）")
         return False
@@ -40,7 +43,8 @@ def judge(umabans, odds, label=""):
         print(f"★買う  {label}  三連複 {r['sanrenpuku']}（1点100円）  {tag}"
               f"  裾{int(r['tier']*100)}%")
         return True
-    print(f"  見送り {label}  {tag}（閾値{SA.TIERS[-1][1]:.0f}円超）")
+    near = "" if r["tier"] is None else f"／裾{int(r['tier']*100)}%までなら該当"
+    print(f"  見送り {label}  {tag}（買う基準は{r['buy_threshold']:.0f}円以下{near}）")
     return False
 
 
@@ -48,13 +52,19 @@ def main():
     a = sys.argv[1:]
     if not a:
         sys.exit(__doc__)
+    # ★水準の切り替え。既定は最も絞る(2%・≤86円)。緩めると買う数は増えるがROIは下がる
+    tier = SA.DEFAULT_TIER
+    if "--tier" in a:
+        i = a.index("--tier")
+        tier = float(a[i + 1]) / (100.0 if float(a[i + 1]) > 1 else 1.0)
+        del a[i:i + 2]
 
     # ── オッズ手打ちモード（ネット不要）──
     if a[0] == "--odds":
         odds = [float(x) for x in a[1:]]
         if len(odds) < 3:
             sys.exit("--odds のあとに単勝オッズを頭数ぶん並べる")
-        judge(list(range(1, len(odds) + 1)), odds, "手入力")
+        judge(list(range(1, len(odds) + 1)), odds, "手入力", tier)
         return
 
     from nk_fetch import CACHE, get, names_cache, race_ids_of_day
@@ -64,6 +74,8 @@ def main():
     place = next((x for x in a[1:] if not x.isdigit()), None)
     rno = next((int(x) for x in a[1:] if x.isdigit()), None)
 
+    print(f"判定の基準: 軸の複勝の期待払戻 {SA.threshold_of(tier):.0f}円以下"
+          f"（裾{int(tier*100)}%）\n")
     ids = race_ids_of_day(ymd)
     if not ids:
         sys.exit("レース一覧が取れなかった（日付が違う／まだ公開されていない）")
@@ -101,7 +113,7 @@ def main():
         um = [int(h["umaban"]) for h in hs if odds.get(int(h["umaban"]))]
         od = [odds[u] for u in um]
         lab = f"{PLACES.get(rid[4:6],'')}{int(rid[10:12])}R {meta['name'][:14]} @{at}"
-        if judge(um, od, lab):
+        if judge(um, od, lab, tier):
             n_buy += 1
     if len(sel) > 1:
         print(f"\n{len(sel)}レース中 {n_buy}レースが該当")

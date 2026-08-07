@@ -70,7 +70,8 @@ def main():
                           f"　軸{sa['axis']}番・複勝の期待払戻{sa['e_axis']:.0f}円"
                           f"（裾{int(sa['tier']*100)}%）")
                 else:
-                    print(f"（甘い軸: 期待払戻{sa['e_axis']:.0f}円＝閾値100円超で見送り）")
+                    print(f"（甘い軸: 期待払戻{sa['e_axis']:.0f}円"
+                          f"＝買う基準{sa.get('buy_threshold', 86):.0f}円以下に届かず見送り）")
             print()
             print(ST.header() if args.text else ST.md_header())
             for r in rows_of(rc):

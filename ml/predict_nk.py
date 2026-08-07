@@ -210,7 +210,8 @@ def main():
                   f"  軸{soft['axis']}番・複勝の期待払戻{soft['e_axis']:.0f}円"
                   f"（裾{int(soft['tier']*100)}%）")
         elif soft:
-            print(f"       （甘い軸: 期待払戻{soft['e_axis']:.0f}円＝閾値100円超で見送り）")
+            print(f"       （甘い軸: 期待払戻{soft['e_axis']:.0f}円"
+                  f"＝買う基準{soft['buy_threshold']:.0f}円以下に届かず見送り）")
         if not skip:
             print(f"       枠連 {' '.join(f'{a}-{b}' for a, b in pairs)}"
                   f"（{len(pairs)}点 {len(pairs)*100}円）"

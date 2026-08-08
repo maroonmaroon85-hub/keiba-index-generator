@@ -48,38 +48,47 @@ NAMES = {1: "単勝", 2: "複勝", 3: "枠連", 4: "馬連", 5: "ワイド",
 
 
 def parse_combo(txt, t):
-    """→ ({組キー: オッズ}, 取得時点)。組キーは '020305' のような馬番2桁ずつの連結。
+    """→ ({組キー: オッズ}, 取得時点, {捨てた生の値: 件数})。組キーは '020305'（馬番2桁ずつ）。
 
     ⚠値は `['1.9', '0', '3']` の形（[オッズ, 上限, 人気順]）。
     　範囲を持つ券種（複勝・ワイド）は2つめが上限なので、**下限だけを取ると過小評価**になる。
     　ここでは**下限（1つめ）を返す**。範囲の扱いは呼び出し側で決める。
     　カンマ区切り（'2,403.0'）が入るので必ず除去する。
+
+    ★**負の値は番兵であってオッズではない**（2026-08-08に実測して判明）。
+    　新潟4Rで三連複 `010208→-3.0`、枠連 `0505→-3.0` が出た。オッズは定義上正なので、
+    　これは取消・発売中止などを表す netkeiba 側の印。**素通しすると「最低オッズ」が壊れ、
+    　これから引く閾値がすべて狂う**ので、**0以下は必ず落とす**。
+    　何を落としたかは3つめの戻り値で分かるようにしてある（黙って消さない）。
     """
     try:
         j = json.loads(txt)
     except (ValueError, TypeError):
-        return {}, ""
+        return {}, "", {}
     d = j.get("data")
     if not isinstance(d, dict):
-        return {}, ""
+        return {}, "", {}
     at = str(d.get("official_datetime", "") or "")
     od = d.get("odds")
     if not isinstance(od, dict):
-        return {}, at
+        return {}, at, {}
     tbl = od.get(str(t))
     if not isinstance(tbl, dict):
-        return {}, at
-    out = {}
+        return {}, at, {}
+    out, drop = {}, {}
     for k, v in tbl.items():
         val = v[0] if isinstance(v, (list, tuple)) and v else v
         s = str(val).replace(",", "").strip()
-        if s in ("", "--", "---", "0"):
-            continue
         try:
-            out[str(k)] = float(s)
+            f = float(s)
         except ValueError:
+            drop[s] = drop.get(s, 0) + 1
             continue
-    return out, at
+        if f <= 0:                      # ★番兵。オッズではない
+            drop[s] = drop.get(s, 0) + 1
+            continue
+        out[str(k)] = f
+    return out, at, drop
 
 
 def fetch(rid, t, now=False):
@@ -89,14 +98,14 @@ def fetch(rid, t, now=False):
     b = get(API.format(t=t, rid=rid), key,
             referer=f"https://race.netkeiba.com/odds/index.html?race_id={rid}")
     if not b:
-        return {}, ""
-    odds, at = parse_combo(b.decode("utf-8", "replace"), t)
+        return {}, "", {}
+    odds, at, drop = parse_combo(b.decode("utf-8", "replace"), t)
     if not odds and not now:
         try:                       # 空はキャッシュに残さない（後で取り直せるように）
             os.remove(os.path.join(CACHE, key))
         except OSError:
             pass
-    return odds, at
+    return odds, at, drop
 
 
 def save(rid, t, odds, at):
@@ -128,7 +137,7 @@ def main():
         if len(a) < 2:
             sys.exit("--old のあとに netkeiba の race_id（12桁）を書いて")
         rid = a[1]
-        odds, at = fetch(rid, t)
+        odds, at, drop = fetch(rid, t)
         print(f"race_id={rid} type={t}（{NAMES.get(t, t)}）")
         if odds:
             ex = list(odds.items())[:3]
@@ -137,7 +146,16 @@ def main():
             print("  → **過去レースも返る＝遡って集められる**")
         else:
             print(f"  取れなかった（@{at}）→ 過去分は諦めて、今後の分だけ貯める")
+        if drop:
+            print(f"  ※オッズでない値を落とした: {drop}")
         return
+
+    # ★一覧ファイルから遡って集めるモード（`nk_odds_targets.py` が作る）
+    if a[0] == "--list":
+        if len(a) < 2:
+            sys.exit("--list のあとに race_id 一覧ファイルを書いて")
+        rids = [x.strip() for x in open(a[1], encoding="utf-8") if x.strip()]
+        return collect(rids, t, now, label=lambda r: r)
 
     from nk_fetch import race_ids_of_day
     from nk_parse import PLACES
@@ -154,20 +172,34 @@ def main():
         sys.exit(f"該当なし。その日の開催: "
                  f"{' '.join(sorted({PLACES.get(r[4:6],'?') for r in ids}))}")
 
-    print(f"{NAMES.get(t, t)}（type={t}）を {len(sel)}レース ぶん取る\n")
-    n_ok = 0
-    for rid in sel:
-        odds, at = fetch(rid, t, now)
-        lab = f"{PLACES.get(rid[4:6],'')}{int(rid[10:12])}R"
+    collect(sel, t, now,
+            label=lambda r: f"{PLACES.get(r[4:6],'')}{int(r[10:12])}R")
+
+
+def collect(rids, t, now, label):
+    """race_id のリストを順に取って保存する。日付指定でも一覧ファイルでも共通。"""
+    name = NAMES.get(t, t)
+    print(f"{name}（type={t}）を {len(rids)}レース ぶん取る\n")
+    n_ok, dropped = 0, {}
+    for i, rid in enumerate(rids):
+        odds, at, drop = fetch(rid, t, now)
+        for k, v in drop.items():
+            dropped[k] = dropped.get(k, 0) + v
+        lab = label(rid)
         if not odds:
             print(f"  {lab}  まだ出ていない（発売前か未発売）")
             continue
         f = save(rid, t, odds, at)
         n_ok += 1
         best = min(odds.items(), key=lambda kv: kv[1])
-        print(f"  {lab}  {len(odds)}件 @{at}  最低オッズ {best[0]}→{best[1]}倍  → {f}")
-    print(f"\n{n_ok}/{len(sel)}レース 保存した。")
-    print("★このデータが貯まると「三連複が○倍以下なら見送る」を検証できるようになる。")
+        prog = f"[{i+1}/{len(rids)}] " if len(rids) > 60 else ""
+        print(f"  {prog}{lab}  {len(odds)}件 @{at}  最低オッズ {best[0]}→{best[1]}倍  → {f}")
+    print(f"\n{n_ok}/{len(rids)}レース 保存した。")
+    if dropped:
+        # ★黙って消さない。負の値は取消などの番兵なので、何が来たかを毎回見せる。
+        print("※オッズでない値を落とした（0以下・数値でない）: "
+              + " / ".join(f"{k!r}×{v}" for k, v in sorted(dropped.items())))
+    print(f"★このデータが貯まると「{name}が○倍以下なら見送る」を検証できるようになる。")
 
 
 if __name__ == "__main__":

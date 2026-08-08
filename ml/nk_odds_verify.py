@@ -90,7 +90,7 @@ def main():
     hit = miss = 0
     for rid in ids:
         combo, yen = pay[nk_raceid(rid)]
-        odds, at = fetch(rid, t)
+        odds, at, _ = fetch(rid, t)
         lab = f"{PLACES.get(rid[4:6],'')}{int(rid[10:12])}R"
         k = combo_key(combo)
         o = odds.get(k)

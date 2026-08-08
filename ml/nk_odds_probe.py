@@ -15,9 +15,12 @@
 使い方（Macで実行）:
     python3 ml/nk_odds_probe.py 202607010511            # netkeibaのrace_id（12桁）
     python3 ml/nk_odds_probe.py 20260808 中京 5         # 日付・場・R でも指定できる
-    python3 ml/nk_odds_probe.py 20260808 中京 5 6       # 券種を絞る（6=三連複）
+    python3 ml/nk_odds_probe.py 20260808 中京 5 --type 6,7   # 券種を絞る
 
-netkeibaの type の割り当ては公表されていないので、**1〜9を順に叩いて中身を見る**。
+★**実測で判明した割り当て**（2026-08-08）
+　　type=5 … **ワイド**（キー `'0102'`＝馬番2桁ずつ、値は [下限, 上限, 人気順] の3つ）
+　　→ 値が3つで範囲を持つのがワイドの特徴。三連複は 6 か 7 のはず。
+残りは 1〜9 を順に叩いて確かめる。
 保存先: data/nk_cache/probe_<race_id>_type<N>.json
 """
 import json
@@ -56,10 +59,13 @@ def main():
     a = sys.argv[1:]
     if not a:
         sys.exit(__doc__)
-    types = [int(x) for x in a if x.isdigit() and len(x) == 1]
-    a = [x for x in a if not (x.isdigit() and len(x) == 1)]
-    if not types:
-        types = list(range(1, 10))
+    # ★券種は --type で明示的に指定する。
+    # 　以前は「1桁の数字＝券種」としていたため、レース番号の 5 を券種として食っていた。
+    types = list(range(1, 10))
+    if "--type" in a:
+        i = a.index("--type")
+        types = [int(x) for x in a[i + 1].split(",")]
+        del a[i:i + 2]
 
     from nk_fetch import CACHE, get, race_ids_of_day
     from nk_parse import PLACES

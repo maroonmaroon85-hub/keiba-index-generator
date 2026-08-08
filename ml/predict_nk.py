@@ -200,13 +200,13 @@ def main():
         # ただし三連複BOX4(84.5%)に届かないので既定では出さない（--sanrentan で明示的に出す）。
         tan = [f"{a}-{nums[0]}-{b}" for a, b in itertools.permutations(nums[1:4], 2)]
         # ★(111)(112) 甘い軸の三連複。**オッズだけで決まる**のでモデルの除外判定とは独立に出す。
-        #   軸＝1番人気 / 紐＝2・3番人気。買うのは「軸の複勝の期待払戻E」が小さいレースだけ。
+        #   人気上位3頭ちょうどで1点（流しではない）。買うのは「軸の複勝の期待払戻E」が小さいレースだけ。
         all_um = [h["umaban"] for h in rc["horses"]]
         all_od = [h["odds"] for h in rc["horses"]]
         soft = (SA.recommend(all_um, all_od)
                 if len(all_od) >= 3 and all(o and o > 0 for o in all_od) else None)
         if soft and soft["buy"]:
-            print(f"       ★甘い軸 三連複 {soft['sanrenpuku']}（1点100円）"
+            print(f"       ★甘い軸 三連複 {soft['sanrenpuku']}（人気上位3頭・1点100円）"
                   f"  軸{soft['axis']}番・複勝の期待払戻{soft['e_axis']:.0f}円"
                   f"（裾{int(soft['tier']*100)}%）")
         elif soft:

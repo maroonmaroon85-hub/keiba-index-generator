@@ -18,7 +18,7 @@ python3 ml/nk_race.py 20260809 --short     # 中身を出さず1行だけにす�
 　`--tier 5` / `10` / `20` で緩められるが、実測ROIは 83.2 / 79.3 / 81.4% に下がる。
 
 ★判定の中身は `ml/soft_axis.py` と同じ（オッズだけで決まる）
-　軸＝1番人気 ／ 紐＝2・3番人気 → 三連複1点。
+　**人気上位3頭（1・2・3番人気）ちょうどで三連複1点**。★流しではない。3頭固定で1点。
 　買うのは「軸の複勝の期待払戻 E」が閾値以下のレースだけ（≤86円=裾2% / ≤90円=5% / ≤94円=10%）。
 
 ⚠**この買い目は「期待値がプラス」ではない**（(112)）。
@@ -37,11 +37,11 @@ def show_detail(r, label):
     """★買い目の中身を出す。すべて単勝オッズだけから計算している（モデル不使用）。"""
     print(f"\n{label}")
     if r["buy"]:
-        print(f"★買う  三連複 {r['sanrenpuku']}（1点100円）\n")
+        print(f"★買う  三連複 {r['sanrenpuku']}（人気上位3頭・1点100円）\n")
     else:
         near = "" if r["tier"] is None else f"／裾{int(r['tier']*100)}%までなら該当"
         print(f"  見送り  （買う基準は{r['buy_threshold']:.0f}円以下{near}）")
-        print(f"  参考の買い目 三連複 {r['sanrenpuku']}\n")
+        print(f"  参考の買い目 三連複 {r['sanrenpuku']}（人気上位3頭）\n")
     thr = r["buy_threshold"]
     gap = thr - r["e_axis"]
     room = f"余裕 {gap:.0f}円" if gap >= 0 else f"{-gap:.0f}円 足りない"
@@ -51,10 +51,11 @@ def show_detail(r, label):
               f"　→ 期待払戻 {r['trio_expect']:.0f}円")
         print(f"  ※期待払戻は「市場が正しければこの配当」という目安。"
               f"**実際の配当がこれを上回るほど甘い**というのがこの買い方の趣旨")
-    print(f"\n  {'馬番':>4}{'単勝':>9}{'勝率':>8}{'3着以内':>9}   ")
+    print(f"\n  {'人気':>4}{'馬番':>6}{'単勝':>9}{'勝率':>8}{'3着以内':>9}   ")
     for h in r["horses"]:
-        mark = f"  ← {h['role']}" if h["role"] else ""
-        print(f"  {h['umaban']:>4}{h['odds']:>8.1f}倍{h['win']*100:>7.1f}%"
+        mark = "  ★この3頭を買う" if h["role"] and h["pop"] == 1 else (
+            "  ★" if h["role"] else "")
+        print(f"  {h['pop']:>4}{h['umaban']:>6}{h['odds']:>8.1f}倍{h['win']*100:>7.1f}%"
               f"{h['top3']*100:>8.1f}%{mark}")
 
 
@@ -69,7 +70,7 @@ def judge(umabans, odds, label="", tier=SA.DEFAULT_TIER, verbose=True):
         return r["buy"]
     tag = f"軸{r['axis']}番({min(odds):.1f}倍) 複勝の期待払戻{r['e_axis']:.0f}円"
     if r["buy"]:
-        print(f"★買う  {label}  三連複 {r['sanrenpuku']}（1点100円）  {tag}"
+        print(f"★買う  {label}  三連複 {r['sanrenpuku']}（人気上位3頭・1点100円）  {tag}"
               f"  裾{int(r['tier']*100)}%")
         return True
     near = "" if r["tier"] is None else f"／裾{int(r['tier']*100)}%までなら該当"

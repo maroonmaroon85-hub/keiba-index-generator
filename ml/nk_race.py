@@ -12,6 +12,7 @@ python3 ml/nk_race.py 20260809 3           # 日付・R（その日の全場の3
 python3 ml/nk_race.py 20260809             # 日付だけ（その日の全レースを判定・オッズは全部取り直す）
 python3 ml/nk_race.py --odds 1.4 4.5 7.2 … # ★ネット不要。手打ちしたオッズで判定だけする
 python3 ml/nk_race.py 20260809 --tier 5    # 水準を緩める（既定は2＝最も絞る）
+python3 ml/nk_race.py 20260809 --short     # 中身を出さず1行だけにする
 ```
 ★**既定は「最も絞る」(裾2%・≤86円)**。ROI 96.0% はこの水準でしか出ていない。
 　`--tier 5` / `10` / `20` で緩められるが、実測ROIは 83.2 / 79.3 / 81.4% に下がる。
@@ -32,12 +33,40 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import soft_axis as SA
 
 
-def judge(umabans, odds, label="", tier=SA.DEFAULT_TIER):
-    """1レース分の判定を1行で出す。→ 買うなら True。"""
-    r = SA.recommend(umabans, odds, tier)
+def show_detail(r, label):
+    """★買い目の中身を出す。すべて単勝オッズだけから計算している（モデル不使用）。"""
+    print(f"\n{label}")
+    if r["buy"]:
+        print(f"★買う  三連複 {r['sanrenpuku']}（1点100円）\n")
+    else:
+        near = "" if r["tier"] is None else f"／裾{int(r['tier']*100)}%までなら該当"
+        print(f"  見送り  （買う基準は{r['buy_threshold']:.0f}円以下{near}）")
+        print(f"  参考の買い目 三連複 {r['sanrenpuku']}\n")
+    thr = r["buy_threshold"]
+    gap = thr - r["e_axis"]
+    room = f"余裕 {gap:.0f}円" if gap >= 0 else f"{-gap:.0f}円 足りない"
+    print(f"  軸の複勝の期待払戻  {r['e_axis']:.0f}円（買う基準 {thr:.0f}円以下・{room}）")
+    if r.get("trio_expect"):
+        print(f"  この組の的中確率    {r['trio_prob']*100:.1f}%"
+              f"　→ 期待払戻 {r['trio_expect']:.0f}円")
+        print(f"  ※期待払戻は「市場が正しければこの配当」という目安。"
+              f"**実際の配当がこれを上回るほど甘い**というのがこの買い方の趣旨")
+    print(f"\n  {'馬番':>4}{'単勝':>9}{'勝率':>8}{'3着以内':>9}   ")
+    for h in r["horses"]:
+        mark = f"  ← {h['role']}" if h["role"] else ""
+        print(f"  {h['umaban']:>4}{h['odds']:>8.1f}倍{h['win']*100:>7.1f}%"
+              f"{h['top3']*100:>8.1f}%{mark}")
+
+
+def judge(umabans, odds, label="", tier=SA.DEFAULT_TIER, verbose=True):
+    """1レース分の判定。★既定では中身（推奨馬・確率・期待払戻）まで出す。"""
+    r = SA.detail(umabans, odds, tier)
     if r is None:
         print(f"{label}  判定不可（頭数不足かオッズ欠損）")
         return False
+    if verbose:
+        show_detail(r, label)
+        return r["buy"]
     tag = f"軸{r['axis']}番({min(odds):.1f}倍) 複勝の期待払戻{r['e_axis']:.0f}円"
     if r["buy"]:
         print(f"★買う  {label}  三連複 {r['sanrenpuku']}（1点100円）  {tag}"
@@ -54,6 +83,10 @@ def main():
         sys.exit(__doc__)
     # ★水準の切り替え。既定は最も絞る(2%・≤86円)。緩めると買う数は増えるがROIは下がる
     tier = SA.DEFAULT_TIER
+    # ★中身は毎回出す。一覧だけにしたいときは --short
+    verbose = "--short" not in a
+    if not verbose:
+        a.remove("--short")
     if "--tier" in a:
         i = a.index("--tier")
         tier = float(a[i + 1]) / (100.0 if float(a[i + 1]) > 1 else 1.0)
@@ -64,7 +97,7 @@ def main():
         odds = [float(x) for x in a[1:]]
         if len(odds) < 3:
             sys.exit("--odds のあとに単勝オッズを頭数ぶん並べる")
-        judge(list(range(1, len(odds) + 1)), odds, "手入力", tier)
+        judge(list(range(1, len(odds) + 1)), odds, "手入力", tier, verbose)
         return
 
     from nk_fetch import CACHE, get, names_cache, race_ids_of_day
@@ -113,7 +146,7 @@ def main():
         um = [int(h["umaban"]) for h in hs if odds.get(int(h["umaban"]))]
         od = [odds[u] for u in um]
         lab = f"{PLACES.get(rid[4:6],'')}{int(rid[10:12])}R {meta['name'][:14]} @{at}"
-        if judge(um, od, lab, tier):
+        if judge(um, od, lab, tier, verbose):
             n_buy += 1
     if len(sel) > 1:
         print(f"\n{len(sel)}レース中 {n_buy}レースが該当")

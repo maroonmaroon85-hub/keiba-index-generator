@@ -82,24 +82,20 @@ def load_done(t):
 
 
 def targets(y0, y1, list_path, tail_path):
-    """取りに行くrace_id一覧。**2%裾を先頭に置く**（途中で止まっても分析が成立するように）。"""
-    if list_path:
-        return [x.strip() for x in open(list_path, encoding="utf-8") if x.strip()]
-    from audit_crosspool import load_races
-    from nk_odds_targets import to_nk_raceid
-    ids = []
-    for r in load_races():
-        if not (y0 <= r["year"] <= y1):
-            continue
-        rid = to_nk_raceid(r["rid"])
-        if rid:
-            ids.append(rid)
-    ids = sorted(set(ids))
-    if tail_path and os.path.exists(tail_path):
-        tail = [x.strip() for x in open(tail_path, encoding="utf-8") if x.strip()]
-        head = [r for r in tail if r in set(ids)]
-        rest = [r for r in ids if r not in set(head)]
-        return head + rest
+    """取りに行くrace_id一覧。**2%裾が先頭**（途中で止まっても分析が成立するように）。
+
+    ★**一覧ファイルを読むだけ**にしてある。以前はここで `a.csv` を読んでいたが、
+    　`audit_crosspool` は pandas に依存していて **Macでは動かない**（実際に落ちた）。
+    　「Mac側は標準ライブラリだけ」という決めごとを破っていた。
+    　一覧はcloud側で `nk_odds_targets.py --all` が作り、gitで渡す。
+    """
+    path = list_path or f"{OUT}/targets_all.txt"
+    if not os.path.exists(path):
+        sys.exit(f"{path} が無い。cloud側で `python3 ml/nk_odds_targets.py --all` を回して"
+                 "git経由で渡すこと（Macにはpandasが無いのでここでは作れない）。")
+    ids = [x.strip() for x in open(path, encoding="utf-8") if x.strip()]
+    if (y0, y1) != (2000, 2100):
+        ids = [r for r in ids if y0 <= int(r[:4]) <= y1]
     return ids
 
 

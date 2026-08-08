@@ -62,6 +62,27 @@ def main():
     import soft_axis as SA
     from audit_crosspool import load_races
 
+    # ★全レース版。**Mac側にpandasが無い**ので、対象一覧はここ（cloud）で作ってファイルで渡す。
+    # 　`nk_odds_bulk.py` はこのファイルを読むだけになり、標準ライブラリだけで動く。
+    if "--all" in a:
+        races = load_races()
+        ids = sorted({rid for r in races if (rid := to_nk_raceid(r["rid"]))})
+        tail_path = f"{OUT}/targets_2pct.txt"
+        head = []
+        if os.path.exists(tail_path):
+            s = set(ids)
+            head = [x.strip() for x in open(tail_path, encoding="utf-8")
+                    if x.strip() and x.strip() in s]
+        rest = [r for r in ids if r not in set(head)]
+        os.makedirs(OUT, exist_ok=True)
+        path = f"{OUT}/targets_all.txt"
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("".join(f"{r}\n" for r in head + rest))
+        print(f"全 {len(ids)} レース → {path}")
+        print(f"  先頭 {len(head)} 本は2%裾（★途中で止まっても分析が成立するように前に置く）")
+        print(f"  収集にかかる時間: 約 {len(ids)*1.5/3600:.1f} 時間（1.5秒間隔）")
+        return
+
     thr = next((th for tv, th, _ in SA.TIERS if abs(tv - tier) < 1e-9), None)
     if thr is None:
         sys.exit(f"裾 {tier:.0%} は soft_axis.TIERS に無い（{[t[0] for t in SA.TIERS]}）")

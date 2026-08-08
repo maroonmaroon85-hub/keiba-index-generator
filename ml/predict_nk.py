@@ -86,9 +86,12 @@ def main():
     print(f"出馬表: {args.entries} {len(races)}レース / 対象日 {today.date()}")
     print("過去走を読み込み中…")
 
+    # ★空のDSnkは飛ばす。まだ走っていない日に `nk_fetch.py results` を当てると
+    # 　0バイトのCSVができ、pandasが EmptyDataError で止まる（8/09で実際に踏んだ）。
+    ds = [p for p in sorted(glob.glob("data/nk/DSnk*.CSV")) if os.path.getsize(p) > 0]
     frames = [F.load_files()] + [
         pd.read_csv(p, header=None, encoding="shift_jis", encoding_errors="replace",
-                    dtype=str, keep_default_na=False) for p in sorted(glob.glob("data/nk/DSnk*.CSV"))]
+                    dtype=str, keep_default_na=False) for p in ds]
     d = F.to_model(pd.concat(frames, ignore_index=True))
     # ★予測対象のレースが過去走データに既に入っていると、下の synth と二重になり
     #   同じ馬が2回並ぶ（実際に8/01の成績取込後に踏んだ）。先に落とす。

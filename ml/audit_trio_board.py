@@ -208,7 +208,8 @@ def part_b_wf(rows, ws=(0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5)):
         if tr.sum() < 1000:
             continue
         j = int(np.argmax(dtab[:, tr].mean(axis=1)))
-        picked.append((yy, ws[j], int(te.sum())))
+        m, lo, hi = mci(dtab[j, te])
+        picked.append((yy, ws[j], int(te.sum()), m, lo, hi))
         out.extend(dtab[j, te].tolist())
     return np.array(out), picked
 
@@ -263,8 +264,16 @@ def main():
         print(f"\n★ウォークフォワード（wを前年までで決める）: {len(d):,}件  "
               f"E[d] = {m:+.4f}  99%CI [{lo:+.4f}, {hi:+.4f}]  "
               f"必要量の {m / NEED:.1%}")
-        print("  年ごとに選ばれたw: "
-              + " ".join(f"{y}:{w:g}({n})" for y, w, n in picked))
+        # ★年分割（判定基準）。**特定の年が引っ張っているだけ**でないかを見る
+        print(f"\n  {'年':>6}{'選ばれたw':>10}{'R数':>7}{'E[d]':>10}{'99%CI下':>10}{'上':>9}"
+              f"   符号")
+        pos = 0
+        for y, w, n, m, lo, hi in picked:
+            pos += m > 0
+            print(f"  {y:>6}{w:>10.2f}{n:>7}{m:>+10.4f}{lo:>+10.4f}{hi:>+9.4f}"
+                  f"   {'＋' if m > 0 else '−'}{'★' if lo > 0 else ''}")
+        print(f"  → {pos}/{len(picked)} 年で正。★は99%CIが0を除外した年"
+              "（1年3,000件では検出力が足りないので、★が少なくても弱点ではない）")
 
 
 if __name__ == "__main__":

@@ -15,9 +15,14 @@
 
 ★Macで放置するときの注意
 　・**スリープすると止まる**（前セッションで実測済み）。`caffeinate` で抑える。
-　・ターミナルを閉じても続くように `nohup` を付け、出力はログに落とす。
-　　　caffeinate -is nohup python3 ml/nk_odds_bulk.py > /tmp/odds.log 2>&1 &
+　・ターミナルを閉じても続くように `nohup`、出力はログに落とす。**寝て止まっても自動で再開する**形:
+　　　nohup caffeinate -ims bash -c \\
+　　　  'until python3 ml/nk_odds_bulk.py; do sleep 300; done' > /tmp/odds.log 2>&1 &
+　　　（`-i`アイドルスリープ抑止 `-m`ディスク `-s`システム。`-d`は付けない＝画面は消えてよい）
+　・**終了コードは 0=全部終わった / 1=途中で止まった**。上の `until` はそれを見て回している。
+　・⚠`caffeinate` でも**ノートの蓋を閉じると寝る**。蓋は開けたまま・電源につないでおく。
 　・様子を見る:  tail -f /tmp/odds.log     途中経過:  python3 ml/nk_odds_bulk.py --status
+　・止める:      pkill -f nk_odds_bulk; pkill caffeinate
 
 使い方:
     python3 ml/nk_odds_bulk.py                    # 全期間の三連複(type=7)。裾を先に取る
@@ -170,10 +175,12 @@ def main():
 
     ledger = open(f"{OUT}/done_type{t}.txt", "a", encoding="utf-8")
     files, t0, n_ok, n_empty, fails = {}, time.time(), 0, 0, 0
+    done_all = True          # ★最後まで行けたか。**終了コードに使う**（自動再開の判定用）
     try:
         for i, rid in enumerate(todo):
             if hours and time.time() - t0 > hours * 3600:
                 print(f"\n{hours}時間たったので止める。**同じコマンドで続きから再開できる**。")
+                done_all = False
                 break
             txt = fetch_raw(rid, t)
             if txt.startswith("__ERR__"):
@@ -182,6 +189,7 @@ def main():
                 if fails >= MAX_FAIL:
                     print(f"\n★{MAX_FAIL}連続で失敗した。**ブロックされている可能性が高いので止める**。"
                           "\n　時間をおいて同じコマンドを打てば続きから再開する。")
+                    done_all = False
                     break
                 continue
             fails = 0
@@ -209,12 +217,18 @@ def main():
                       f"経過{el/3600:.2f}h 残り{eta:.2f}h", flush=True)
     except KeyboardInterrupt:
         print("\n中断した。**同じコマンドで続きから再開できる**。")
+        done_all = False
     finally:
         ledger.close()
 
     print(f"\n保存 {n_ok} / 空 {n_empty} レース。台帳: {OUT}/done_type{t}.txt")
     print(f"続きをやるとき: python3 ml/nk_odds_bulk.py --type {t}"
           + (f" --from {y0}" if y0 > 2000 else ""))
+    # ★終了コード: 0=全部終わった / 1=途中で止まった。
+    # 　これで `until python3 ml/nk_odds_bulk.py; do sleep 300; done` が正しく動く
+    # 　（Macが寝て止まっても、起きたら勝手に続きから再開する）。
+    if not done_all:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

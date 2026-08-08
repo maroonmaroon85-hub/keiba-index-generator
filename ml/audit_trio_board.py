@@ -186,6 +186,33 @@ def part_b(rows, ws=(0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0)):
     return out
 
 
+def part_b_wf(rows, ws=(0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5)):
+    """★ウォークフォワード。**wを同じデータで選んだら有利になりすぎる**ので、
+    　 その年より**前**の年だけでwを決め、その年に当てる。実運用でできる手続きと同じ。"""
+    prep, yrs = [], []
+    for x in rows:
+        v = prep_b(x)
+        if v is not None:
+            prep.append(v)
+            yrs.append(x["year"])
+    yrs = np.array(yrs)
+    dtab = np.empty((len(ws), len(prep)))       # [w][レース] の d を先に作る
+    for j, w in enumerate(ws):
+        for i, (lp, lh, k) in enumerate(prep):
+            z = (1 - w) * lp + w * lh
+            z -= z.max()
+            dtab[j, i] = (z[k] - math.log(np.exp(z).sum())) - lp[k]
+    out, picked = [], []
+    for yy in sorted(set(yrs.tolist())):
+        tr, te = yrs < yy, yrs == yy
+        if tr.sum() < 1000:
+            continue
+        j = int(np.argmax(dtab[:, tr].mean(axis=1)))
+        picked.append((yy, ws[j], int(te.sum())))
+        out.extend(dtab[j, te].tolist())
+    return np.array(out), picked
+
+
 def main():
     y0 = int(sys.argv[1]) if len(sys.argv) > 1 else 2013
     boards = load_boards()
@@ -228,7 +255,16 @@ def main():
     for w, n, m, lo, hi in part_b(rows):
         print(f"{w:>6.2f}{n:>7}{m:>10.4f}{lo:>10.4f}{hi:>9.4f}")
     print("  ★w=0 は板そのもの＝定義上 0.0000。0を有意に超えるwがあれば"
-          "**単勝プールに無い情報が三連複プールにある**ということ。")
+          "**三連複プールが単勝プールの情報を取り込みきれていない**ということ。")
+
+    d, picked = part_b_wf(rows)
+    if len(d) >= 100:
+        m, lo, hi = mci(d)
+        print(f"\n★ウォークフォワード（wを前年までで決める）: {len(d):,}件  "
+              f"E[d] = {m:+.4f}  99%CI [{lo:+.4f}, {hi:+.4f}]  "
+              f"必要量の {m / NEED:.1%}")
+        print("  年ごとに選ばれたw: "
+              + " ".join(f"{y}:{w:g}({n})" for y, w, n in picked))
 
 
 if __name__ == "__main__":

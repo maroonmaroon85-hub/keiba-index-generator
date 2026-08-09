@@ -4,6 +4,40 @@
 
 ---
 
+## ★残っているMac作業（2026-08-09時点・上から順に）
+
+**① オッズ板の収集を完走させる**（残り3,736本＝約1.6時間）
+```
+cd ~/keiba-index-generator
+git pull --no-rebase --no-edit origin claude/handoff-env-check-2kexpo
+nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py; rc=$?; \
+  [ $rc -eq 0 ] && break; [ $rc -eq 2 ] && { echo "★ブロックの疑いで停止"; break; }; \
+  sleep 300; done' > /tmp/odds.log 2>&1 &
+```
+38,445/42,181 まで済み。**終わったら push**（`git add -A data/nk_odds` → commit → pull --no-rebase --no-edit → push）。
+⚠**結論は37,000本で確定済み**（(A) ρ=−1.000／(B) 年分割11/13年）。残りで数字は小数第4位しか動かない。
+　**急ぐ作業ではない。開催日の直前オッズ取得と競合させないこと**。
+⚠2026-08-09に**20連続失敗で止まった**が、`--old ... --now` で叩き直せたので**ブロックではなく一時的な断**だった。
+　**キャッシュがあるので `--now` を付けないと切り分けにならない**（一度これで判断を誤りかけた）。
+
+**② 開催日の成績を記録する**（(111)の標本を増やす唯一の手段。**8/8がまだ未記録**）
+```
+python3 ml/nk_fetch.py results 20260808
+python3 ml/nk_fetch.py results 20260809
+python3 ml/nk_link.py
+python3 ml/nk_score.py
+```
+⚠**まだ走っていない日に results を当てると0バイトのCSVができる**。予想側は飛ばすよう直したが、
+　`data/nk/DSnk<日付>.CSV` が0バイトなら**消してから取り直す**のが確実。
+
+**③ 直前オッズで買うかを決める**（当日・発走30分前）
+```
+python3 ml/nk_race.py <日付> <場> <R>
+```
+`★買う` が出た3頭だけ三連複1点。出なければ見送り（**年間60レースしか出ないので、出ない週が正常**）。
+
+---
+
 ## 0. まずこれを言う（新セッションへの指示文）
 
 > 競馬の予想モデルのプロジェクト。作業ディレクトリは `keiba-index-generator`。

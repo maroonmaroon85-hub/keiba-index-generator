@@ -16,10 +16,13 @@
 ★Macで放置するときの注意
 　・**スリープすると止まる**（前セッションで実測済み）。`caffeinate` で抑える。
 　・ターミナルを閉じても続くように `nohup`、出力はログに落とす。**寝て止まっても自動で再開する**形:
-　　　nohup caffeinate -ims bash -c \\
-　　　  'until python3 ml/nk_odds_bulk.py; do sleep 300; done' > /tmp/odds.log 2>&1 &
+　　　nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py; rc=$?; \\
+　　　  [ $rc -eq 0 ] && break; [ $rc -eq 2 ] && { echo "★ブロックの疑いで停止"; break; }; \\
+　　　  sleep 300; done' > /tmp/odds.log 2>&1 &
 　　　（`-i`アイドルスリープ抑止 `-m`ディスク `-s`システム。`-d`は付けない＝画面は消えてよい）
-　・**終了コードは 0=全部終わった / 1=途中で止まった**。上の `until` はそれを見て回している。
+　・**終了コードは 0=全部終わった / 1=途中で止まった / 2=連続失敗で止まった**。
+　　⚠**2で再開してはいけない**。最初は `until ...; do sleep 300; done` で回していたが、
+　　　これだと2でも5分後に叩き直してしまい、「連続失敗したら止まる」配慮が無意味だった。
 　・⚠`caffeinate` でも**ノートの蓋を閉じると寝る**。蓋は開けたまま・電源につないでおく。
 　・様子を見る:  tail -f /tmp/odds.log     途中経過:  python3 ml/nk_odds_bulk.py --status
 　・止める:      pkill -f nk_odds_bulk; pkill caffeinate
@@ -172,6 +175,7 @@ def main():
     ledger = open(f"{OUT}/done_type{t}.txt", "a", encoding="utf-8")
     files, t0, n_ok, n_empty, fails = {}, time.time(), 0, 0, 0
     done_all = True          # ★最後まで行けたか。**終了コードに使う**（自動再開の判定用）
+    blocked = False          # ★連続失敗で止まったか。**これは「すぐ再開してはいけない」印**
     try:
         for i, rid in enumerate(todo):
             if hours and time.time() - t0 > hours * 3600:
@@ -186,6 +190,7 @@ def main():
                     print(f"\n★{MAX_FAIL}連続で失敗した。**ブロックされている可能性が高いので止める**。"
                           "\n　時間をおいて同じコマンドを打てば続きから再開する。")
                     done_all = False
+                    blocked = True
                     break
                 continue
             fails = 0
@@ -220,9 +225,13 @@ def main():
     print(f"\n保存 {n_ok} / 空 {n_empty} レース。台帳: {OUT}/done_type{t}.txt")
     print(f"続きをやるとき: python3 ml/nk_odds_bulk.py --type {t}"
           + (f" --from {y0}" if y0 > 2000 else ""))
-    # ★終了コード: 0=全部終わった / 1=途中で止まった。
-    # 　これで `until python3 ml/nk_odds_bulk.py; do sleep 300; done` が正しく動く
-    # 　（Macが寝て止まっても、起きたら勝手に続きから再開する）。
+    # ★終了コード: 0=全部終わった / 1=途中で止まった / **2=連続失敗で止まった**。
+    # 　1と2を分けるのが要点。1（スリープ・時間切れ）は**すぐ再開してよい**が、
+    # 　2は**ブロックされている疑い**なので、自動で叩き直してはいけない。
+    # 　最初 `until ... ; do sleep 300; done` で回していたが、これだと2でも5分後に
+    # 　再開してしまい、「連続失敗したら止まる」という(70)⑤の配慮が無意味になっていた。
+    if blocked:
+        sys.exit(2)
     if not done_all:
         sys.exit(1)
 

@@ -11,7 +11,9 @@
 ★測るもの
 　L2（現行）と L5（高容量）それぞれのモデル確率から**枠連の q** を作り、
 　**全枠組で正規化**して E[d] = E[log q − log q_pool] を出す。
-　⚠(118)でモデル側のDが −0.1988 と出たのは**正規化していなかった**から。ここでは直す。
+　⚠**混合の正規化定数は必ず計算する**。「両モデルで同じ形だから差には効かない」と考えて
+　　省いたら、L5−L2 が **−0.24 nat**（このプロジェクトの量の10倍）という明らかな作り物が出た。
+　　Z = Σ q_market^(1−w)·q_model^w は**モデルごとに違う**（尖っているほど変わる）。省いてはいけない。
 　さらに**市場と対数線形で混ぜたとき**のDも出す（運用に効くのはこちら）。
 
 ★★事前登録（測る前に宣言）
@@ -39,6 +41,7 @@ sys.path.insert(0, "ml")
 from audit_crosspool import PAYBACK, load_races, payoff, probs, zq
 from audit_crosspool2 import PAYKEY, realized
 from audit_lbs import build_matrix, fit_lambda, q_of_lbs
+from audit_lbs import frame_members, g_pair_unordered, stage_w
 from waku_umatan import waku_of
 
 WS = [0.0, 0.1, 0.2, 0.3, 0.5]           # ★先に宣言した混合重み
@@ -62,22 +65,57 @@ def load_expert(path):
     return out
 
 
+def mkt_waku_dist(r, p, lam2):
+    """λ補正Harvilleの**枠連の全枠組**の分布 {(枠a,枠b): q}。q_of_lbs と同じ式を全組に当てる。"""
+    w2 = stage_w(p, lam2)
+    W2 = w2.sum()
+    wk = frame_members(r)
+    ws = sorted(wk)
+    out = {}
+    for i, a in enumerate(ws):
+        for b in ws[i:]:
+            q = 0.0
+            if a == b:
+                mem = wk[a]
+                for x in range(len(mem)):
+                    for y in range(x + 1, len(mem)):
+                        q += g_pair_unordered(p, w2, W2, mem[x], mem[y])
+            else:
+                for x in wk[a]:
+                    for y in wk[b]:
+                        q += g_pair_unordered(p, w2, W2, x, y)
+            if q > 0:
+                out[(a, b)] = q
+    tot = sum(out.values())
+    return {k: v / tot for k, v in out.items()} if tot > 0 else None
+
+
 def waku_dist(nums, pw, n):
     """馬ごとの確率 → **全枠組で正規化した**枠連の分布 {(枠a,枠b): q}。
 
-    ★(118)では正規化していなかったのでDの水準が−0.1988になった。ここが今回の修正点。
+    ★2つ直した点（どちらも最初は間違えていた）:
+    　1. **全枠組で正規化する**。(118)では省いてDの水準が−0.1988になった。
+    　2. **1頭しかいない枠にゾロ目を作らない**。1頭では同枠同士の枠連は成立しないのに
+    　　 bp[a]^2 を割り当てていた。**存在しない組に確率を捨てる量がモデルごとに違う**ので、
+    　　 モデル間の比較が歪む。さらに市場側と枠組の集合が食い違い、**6割のレースが落ちていた**。
     """
     s = sum(pw.values())
     if s <= 0:
         return None
-    bp = {}
+    bp, cnt = {}, {}
     for u in nums:
         w = waku_of(u, n)
         bp[w] = bp.get(w, 0.0) + pw[u] / s
+        cnt[w] = cnt.get(w, 0) + 1
     ws = sorted(bp)
     out = {}
     for a, b in combinations_with_replacement(ws, 2):
-        out[(a, b)] = bp[a] * bp[a] if a == b else 2.0 * bp[a] * bp[b]
+        if a == b:
+            if cnt[a] < 2:          # ★1頭ではゾロ目にならない
+                continue
+            out[(a, b)] = bp[a] * bp[a]
+        else:
+            out[(a, b)] = 2.0 * bp[a] * bp[b]
     tot = sum(out.values())
     return {k: v / tot for k, v in out.items()} if tot > 0 else None
 
@@ -127,31 +165,41 @@ def main():
         if not v or v <= 0:
             continue
         key = tuple(sorted(combo))
-        row = {"year": yy, "lg": math.log((v + 5) / 100.0) - math.log(PAYBACK["枠連"]),
-               "q_mkt": q_mkt}
+        md = mkt_waku_dist(r, p_mkt, l2)
+        if not md or md.get(key, 0.0) <= 0:
+            continue
+        dists = {}
         ok = True
         for k in EXPERTS:
-            dist = waku_dist(nums, ex[k][r["rid"]], r["n"])
-            if not dist or dist.get(key, 0.0) <= 0:
+            dd = waku_dist(nums, ex[k][r["rid"]], r["n"])
+            if not dd or dd.get(key, 0.0) <= 0 or set(dd) != set(md):
                 ok = False
                 break
-            row[f"q_{k}"] = dist[key]
-        if ok:
-            rows.append(row)
+            dists[k] = dd
+        if not ok:
+            continue
+        # ★混合は**全枠組で正規化**してから実現組を読む。ここを省くと結果が壊れる
+        row = {"year": yy, "lg": math.log((v + 5) / 100.0) - math.log(PAYBACK["枠連"])}
+        keys = sorted(md)
+        lm = np.array([math.log(md[t]) for t in keys])
+        j = keys.index(key)
+        row["d_mkt"] = lm[j]
+        for k in EXPERTS:
+            lk = np.array([math.log(dists[k][t]) for t in keys])
+            for w in WS:
+                z = (1 - w) * lm + w * lk
+                z = z - z.max()
+                row[f"{k}_{w}"] = float(z[j] - math.log(np.exp(z).sum()))
+        rows.append(row)
 
     df = pd.DataFrame(rows)
     print(f"(121) 容量 L2 vs L5 を D で測る（{y0}年以降・{len(df):,}レース）")
     print("★(81)はROI・1シードで「L5が+2.78pt・CI[+0.07,+5.51]」と結論していた\n")
 
     lg = df["lg"].to_numpy()
-    lm = np.log(df["q_mkt"].to_numpy())
     print(f"{'w':>5}{'L2のD':>11}{'L5のD':>11}{'L5−L2':>10}{'99%CI':>22}{'判定':>7}")
     for w in WS:
-        d = {}
-        for k in EXPERTS:
-            lq = (1 - w) * lm + w * np.log(df[f"q_{k}"].to_numpy())
-            d[k] = lq + lg          # ※対数線形の混合。正規化定数は枠組ごとに変わるが、
-            #                          両モデルで同じ形なので**差**の比較には効かない
+        d = {k: df[f"{k}_{w}"].to_numpy() + lg for k in EXPERTS}
         diff = d["L5"] - d["L2"]
         m, lo, hi = mci(diff)
         print(f"{w:>5.1f}{d['L2'].mean():>+11.4f}{d['L5'].mean():>+11.4f}"
@@ -160,9 +208,7 @@ def main():
 
     print("\n★年分割（w=0.2）")
     w = 0.2
-    lq2 = (1 - w) * lm + w * np.log(df["q_L2"].to_numpy())
-    lq5 = (1 - w) * lm + w * np.log(df["q_L5"].to_numpy())
-    diff = lq5 - lq2
+    diff = df[f"L5_{w}"].to_numpy() - df[f"L2_{w}"].to_numpy()
     pos = 0
     yl = sorted(df["year"].unique())
     for yy in yl:

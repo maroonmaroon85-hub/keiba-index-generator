@@ -32,7 +32,8 @@ def load_pays(pattern="data/nk/pay*.csv"):
 
 
 def main():
-    pat = sys.argv[1] if len(sys.argv) > 1 else "data/reco/reco_*.json"
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    pat = args[0] if args else "data/reco/reco_*.json"
     files = sorted(glob.glob(pat))
     if not files:
         sys.exit(f"{pat} に推奨JSONがありません")
@@ -40,8 +41,12 @@ def main():
     print(f"払戻: {len(pays)}レース読込\n")
 
     # (表示名, 推奨JSONのキー, 1点の金額, 着順どおりか)
-    BETS = [("枠連", "wakuren", 100, False), ("三連複", "sanrenpuku_box", 100, False),
-            ("三連単", "sanrentan_2nd", 100, True)]
+    # ★三連単は**買わない**（(54)でROI79.3%＝三連複BOX4の84.5%に届かない）。
+    # 　推奨JSONには常に入っているが、合計に混ぜると「買ってもいない券種の負け」が
+    # 　成績に載って読み違える。--sanrentan を付けたときだけ集計する。
+    BETS = [("枠連", "wakuren", 100, False), ("三連複", "sanrenpuku_box", 100, False)]
+    if "--sanrentan" in sys.argv:
+        BETS.append(("三連単", "sanrentan_2nd", 100, True))
     # ★並行運用((83))。--dual で予測したJSONには "l5" が入っているので、同じ集計を別枠で回す。
     #   ⚠これは**決着には使えない**。1.6ptの差を実測で捉えるには約68,000レース＝43年かかる。
     #   目的は「L5が実際に動くか」「的中率が実際に下がるか」の確認と、重大な異常の検出。

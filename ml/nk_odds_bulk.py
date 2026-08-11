@@ -46,6 +46,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nk_fetch import ODDS_API as API     # ★URLの定義は nk_fetch に1本化した
@@ -118,7 +119,9 @@ def iter_records(t=7, years=None):
                     line = line.strip()
                     if line:
                         yield json.loads(line)
-        except (EOFError, OSError, ValueError) as e:
+        except (EOFError, OSError, ValueError, zlib.error) as e:
+            # ★zlib.error は OSError の子ではないので、明示しないと素通りして落ちる
+            # 　（2026-08-11に実際に落ちた）。壊れたのは末尾だけなので、読めた分は使う。
             print(f"  ※{path} は途中までしか読めなかった（{e}）", file=sys.stderr)
 
 

@@ -46,12 +46,17 @@ NAMES = {1: "単勝", 2: "複勝", 3: "枠連", 4: "馬連", 5: "ワイド",
          6: "馬単", 7: "三連複", 8: "三連単"}
 
 
-def parse_combo(txt, t):
+RANGE_TYPES = {2, 5}      # ★複勝・ワイドは [下限, 上限] の範囲を持つ。下限だけだと過小評価
+
+
+def parse_combo(txt, t, keep_range=None):
     """→ ({組キー: オッズ}, 取得時点, {捨てた生の値: 件数})。組キーは '020305'（馬番2桁ずつ）。
 
     ⚠値は `['1.9', '0', '3']` の形（[オッズ, 上限, 人気順]）。
-    　範囲を持つ券種（複勝・ワイド）は2つめが上限なので、**下限だけを取ると過小評価**になる。
-    　ここでは**下限（1つめ）を返す**。範囲の扱いは呼び出し側で決める。
+    　★**範囲を持つ券種（複勝type=2・ワイドtype=5）は `[下限, 上限]` のまま返す**。
+    　　下限だけにすると q_pool を系統的に過大評価する。(124)で複勝の層別Dを出すのに要る。
+    　　**集めてからでは直せない**（18時間の取り直しになる）ので先に入れた。
+    　範囲を持たない券種は float を返す（従来どおり）。
     　カンマ区切り（'2,403.0'）が入るので必ず除去する。
 
     ★**負の値は番兵であってオッズではない**（2026-08-08に実測して判明）。
@@ -74,19 +79,29 @@ def parse_combo(txt, t):
     tbl = od.get(str(t))
     if not isinstance(tbl, dict):
         return {}, at, {}
+    if keep_range is None:
+        keep_range = t in RANGE_TYPES
     out, drop = {}, {}
     for k, v in tbl.items():
-        val = v[0] if isinstance(v, (list, tuple)) and v else v
-        s = str(val).replace(",", "").strip()
-        try:
-            f = float(s)
-        except ValueError:
-            drop[s] = drop.get(s, 0) + 1
+        vals = list(v) if isinstance(v, (list, tuple)) else [v]
+
+        def num(x):
+            y = str(x).replace(",", "").strip()
+            try:
+                return float(y)
+            except ValueError:
+                return None
+
+        f = num(vals[0]) if vals else None
+        if f is None or f <= 0:         # ★番兵。オッズではない
+            drop[str(vals[0] if vals else v)] = drop.get(str(vals[0] if vals else v), 0) + 1
             continue
-        if f <= 0:                      # ★番兵。オッズではない
-            drop[s] = drop.get(s, 0) + 1
-            continue
-        out[str(k)] = f
+        if keep_range:
+            # ★範囲を持つ券種は **[下限, 上限]** を残す。上限が0/欠損なら下限で埋める。
+            hi = num(vals[1]) if len(vals) > 1 else None
+            out[str(k)] = [f, hi if (hi and hi >= f) else f]
+        else:
+            out[str(k)] = f
     return out, at, drop
 
 
@@ -190,9 +205,11 @@ def collect(rids, t, now, label):
             continue
         f = save(rid, t, odds, at)
         n_ok += 1
-        best = min(odds.items(), key=lambda kv: kv[1])
+        def _lo(v):
+            return v[0] if isinstance(v, (list, tuple)) else v
+        best = min(odds.items(), key=lambda kv: _lo(kv[1]))
         prog = f"[{i+1}/{len(rids)}] " if len(rids) > 60 else ""
-        print(f"  {prog}{lab}  {len(odds)}件 @{at}  最低オッズ {best[0]}→{best[1]}倍  → {f}")
+        print(f"  {prog}{lab}  {len(odds)}件 @{at}  最低オッズ {best[0]}→{_lo(best[1])}倍  → {f}")
     print(f"\n{n_ok}/{len(rids)}レース 保存した。")
     if dropped:
         # ★黙って消さない。負の値は取消などの番兵なので、何が来たかを毎回見せる。

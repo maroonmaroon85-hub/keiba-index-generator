@@ -87,8 +87,8 @@ def main():
 
     for t in types:
         key = f"probe_{rid}_type{t}.json"
-        b = get(f"https://race.netkeiba.com/api/api_get_jra_odds.html"
-                f"?type={t}&locale=ja&race_id={rid}&action=init", key,
+        from nk_fetch import ODDS_API
+        b = get(ODDS_API.format(t=t, rid=rid), key,
                 referer=f"https://race.netkeiba.com/odds/index.html?race_id={rid}")
         if not b:
             print(f"  type={t}  取得できなかった")

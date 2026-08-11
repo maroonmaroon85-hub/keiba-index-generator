@@ -39,10 +39,9 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from nk_fetch import ODDS_API as API     # ★URLの定義は nk_fetch に1本化した
 
 OUT = "data/nk_odds"
-API = ("https://race.netkeiba.com/api/api_get_jra_odds.html"
-       "?type={t}&locale=ja&race_id={rid}&action=init")
 NAMES = {1: "単勝", 2: "複勝", 3: "枠連", 4: "馬連", 5: "ワイド",
          6: "馬単", 7: "三連複", 8: "三連単"}
 

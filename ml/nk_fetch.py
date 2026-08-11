@@ -35,6 +35,14 @@ from nk_parse import (PLACES, parse_result, parse_result_live, parse_shutuba, pa
                       parse_pedigree, to_ds_rows, nk_raceid)
 
 UA = "Mozilla/5.0 (compatible; personal-research/1.0)"
+
+# ★オッズAPIのURLは**ここだけ**で定義する（nk_odds_combo / nk_odds_bulk / nk_odds_probe が読む）。
+# 　2026-08-09に旧URL `?type=N&locale=ja&race_id=…&action=init` が **HTTP 400** を返し始めた。
+# 　サイト自体は正常だったので締め出しではなく**仕様変更**。ブラウザの実物を見ると
+# 　`pid` と `input` が増えていた（`callback`/`output=jsonp`/`compress` も付くが**不要**と実測）。
+# 　⚠**4ファイルに同じURLを散らしていたので直すのが面倒だった**。二度と散らさないこと。
+ODDS_API = ("https://race.netkeiba.com/api/api_get_jra_odds.html"
+            "?pid=api_get_jra_odds&input=UTF-8&type={t}&race_id={rid}&action=init")
 CACHE = "data/nk_cache"
 OUT = "data/nk"
 WAIT = 1.5
@@ -173,8 +181,7 @@ def cmd_entries(ymd):
             continue
         ttl, hs, meta = parse_shutuba(b, nm)
         # オッズは毎回取り直す（キャッシュしない＝時点が変わるため）
-        u = (f"https://race.netkeiba.com/api/api_get_jra_odds.html"
-             f"?type=1&locale=ja&race_id={rid}&action=init")
+        u = ODDS_API.format(t=1, rid=rid)
         key = f"odds_{rid}_{int(time.time())}.json"
         ob = get(u, key, referer=f"https://race.netkeiba.com/race/shutuba.html?race_id={rid}")
         odds, at = parse_odds_json(ob.decode("utf-8", "replace")) if ob else ({}, "")

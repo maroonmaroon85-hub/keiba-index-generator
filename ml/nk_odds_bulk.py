@@ -48,10 +48,9 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from nk_fetch import ODDS_API as API     # ★URLの定義は nk_fetch に1本化した
 
 OUT = "data/nk_odds"
-API = ("https://race.netkeiba.com/api/api_get_jra_odds.html"
-       "?type={t}&locale=ja&race_id={rid}&action=init")
 UA = "Mozilla/5.0 (compatible; personal-research/1.0)"
 WAIT = 1.5
 MAX_FAIL = 20        # ★これだけ連続で失敗したら止める（ブロックされている可能性が高い）

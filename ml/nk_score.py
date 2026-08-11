@@ -32,7 +32,8 @@ def load_pays(pattern="data/nk/pay*.csv"):
 
 
 def main():
-    pat = sys.argv[1] if len(sys.argv) > 1 else "data/reco/reco_*.json"
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    pat = args[0] if args else "data/reco/reco_*.json"
     files = sorted(glob.glob(pat))
     if not files:
         sys.exit(f"{pat} に推奨JSONがありません")
@@ -40,8 +41,12 @@ def main():
     print(f"払戻: {len(pays)}レース読込\n")
 
     # (表示名, 推奨JSONのキー, 1点の金額, 着順どおりか)
-    BETS = [("枠連", "wakuren", 100, False), ("三連複", "sanrenpuku_box", 100, False),
-            ("三連単", "sanrentan_2nd", 100, True)]
+    # ★三連単は**買わない**（(54)でROI79.3%＝三連複BOX4の84.5%に届かない）。
+    # 　推奨JSONには常に入っているが、合計に混ぜると「買ってもいない券種の負け」が
+    # 　成績に載って読み違える。--sanrentan を付けたときだけ集計する。
+    BETS = [("枠連", "wakuren", 100, False), ("三連複", "sanrenpuku_box", 100, False)]
+    if "--sanrentan" in sys.argv:
+        BETS.append(("三連単", "sanrentan_2nd", 100, True))
     # ★並行運用((83))。--dual で予測したJSONには "l5" が入っているので、同じ集計を別枠で回す。
     #   ⚠これは**決着には使えない**。1.6ptの差を実測で捉えるには約68,000レース＝43年かかる。
     #   目的は「L5が実際に動くか」「的中率が実際に下がるか」の確認と、重大な異常の検出。
@@ -49,6 +54,7 @@ def main():
     tot = {k: [0, 0, 0] for k, _, _, _ in BETS}
     tot.update({k: [0, 0, 0] for k, _, _, _ in ALT})
     n_diff = n_dual = 0     # 購入, 払戻, 的中本数
+    soft = [0, 0, 0, []]    # ★甘い軸の三連複1点: 購入, 払戻, 的中, 明細
     for fp in files:
         reco = json.load(open(fp, encoding="utf-8"))
         print(f"=== {reco['date']}（{fp}）")
@@ -60,7 +66,9 @@ def main():
                 p = next((v for k, v in pays.items()
                           if k.endswith(f"{rc['r']:02d}")and rc["label"][:2] in k), None)
             line = f"  {rc['label']:8s} 軸{rc['axis']:>2}番"
-            for name, key, unit, ordered in BETS:
+            # ★枠連が発売されないレース（9頭未満）は、甘い軸の三連複だけを記録している。
+            # 　枠連・三連複BOXの「払戻データなし」を出しても意味が無いので飛ばす。
+            for name, key, unit, ordered in ([] if rc.get("waku_na") else BETS):
                 combos = rc.get(key) or []
                 if not combos or not p or name not in p:
                     if key != "sanrentan_2nd":   # 三連単は既定で買わないので「なし」を出さない
@@ -77,6 +85,20 @@ def main():
                 tot[name][1] += ret
                 tot[name][2] += len(hits)
                 line += f"  {name}: {bet}円→{ret:,}円" + (f" 的中{hits[0][0]}" if hits else "")
+            # ★甘い軸の三連複1点（(112)運用）。**これが実際に買っている買い目**なのに
+            # 　採点されていなかった（8/8の中京5Rが記録から漏れていた）。
+            # 　★`buy` が真のレースだけ数える。年間60レースしか出ない水準なので、
+            # 　　緩い裾のものを混ぜると別の戦略の成績になってしまう。
+            sa = rc.get("soft_axis")
+            if sa and sa.get("buy") and p and "三連複" in p:
+                c = sa["sanrenpuku"]
+                k = tuple(sorted(int(x) for x in c.split("-")))
+                v = p["三連複"].get(k, 0)
+                soft[0] += 100
+                soft[1] += v
+                soft[2] += v > 0
+                soft[3].append((reco["date"], rc["label"], c, v))
+                line += f"  ★甘い軸{c}: 100円→{v:,}円"
             l5 = rc.get("l5")
             if l5:
                 n_dual += 1
@@ -106,6 +128,20 @@ def main():
         print(f"\n※L5併記 {n_dual}レース中 {n_diff}レース（{n_diff/n_dual*100:.0f}%）で買い目が現行と違う。"
               "★この比較で優劣は決着しない（1.6ptの差には約68,000レース＝43年必要）。"
               "見ているのは『L5が動くか』『的中率が実際に下がるか』だけ")
+    # ★甘い軸の三連複（(112)運用）。**現在ほんとうに買っているのはこれだけ**
+    if soft[0]:
+        bet, ret, hit, rows = soft
+        print(f"\n★甘い軸の三連複1点（裾2%・買うと判定した分だけ）")
+        for d, lab, c, v in rows:
+            print(f"   {d} {lab:8s} {c:10s} {'的中 ' + format(v, ',') + '円' if v else '外れ'}")
+        print(f"   購入{bet:,}円 / 払戻{ret:,}円 / 収支{ret-bet:+,}円 / "
+              f"回収率{ret/bet*100:.1f}% / 的中{hit}/{bet//100}本")
+        print("   ⚠**年間60レースしか出ない**。(111)の実測は656レースで99%CI[76.0,116.0]＝"
+              "判定不能。**数年かけて積む標本**であって、今の数字は読まないこと。")
+    else:
+        print("\n★甘い軸の三連複: 買うと判定したレースはまだ無い"
+              "（年間60レース程度なので、出ない週が正常）")
+
     print("\n※1日の結果に意味は無い（枠連の的中率は30%、三連複BOX4は20%）。"
           "長期の目安は両方とも84.5%。数十レース積んでから読むこと。")
 

@@ -5,7 +5,7 @@
   "title": "|    - netkeiba",
   "place": "札幌",
   "r": 5,
-  "odds_at": "",
+  "odds_at": "2026-08-09 07:16:17",
   "horses": [],
   "name": "|    - netkeiba",
   "surface": "",
@@ -19,7 +19,7 @@
   "title": "富良野特別(2勝クラス) 出馬表 | 2026年8月9日 札幌10R レース情報(JRA) - netkeiba",
   "place": "札幌",
   "r": 10,
-  "odds_at": "",
+  "odds_at": "2026-08-09 06:45:27",
   "horses": [
    {
     "waku": "1",
@@ -33,7 +33,7 @@
     "jockey_id": "01190",
     "trainer_id": "01177",
     "horse_id": "2023103696",
-    "odds": null
+    "odds": 7.9
    },
    {
     "waku": "2",
@@ -47,7 +47,7 @@
     "jockey_id": "01221",
     "trainer_id": "01138",
     "horse_id": "2023101704",
-    "odds": null
+    "odds": 12.4
    },
    {
     "waku": "3",
@@ -61,7 +61,7 @@
     "jockey_id": "01178",
     "trainer_id": "01194",
     "horse_id": "2022101572",
-    "odds": null
+    "odds": 10.5
    },
    {
     "waku": "3",
@@ -75,7 +75,7 @@
     "jockey_id": "01095",
     "trainer_id": "01105",
     "horse_id": "2022105486",
-    "odds": null
+    "odds": 47.0
    },
    {
     "waku": "4",
@@ -89,7 +89,7 @@
     "jockey_id": "01204",
     "trainer_id": "01171",
     "horse_id": "2019102163",
-    "odds": null
+    "odds": 65.2
    },
    {
     "waku": "4",
@@ -103,7 +103,7 @@
     "jockey_id": "01192",
     "trainer_id": "01164",
     "horse_id": "2023100937",
-    "odds": null
+    "odds": 29.4
    },
    {
     "waku": "5",
@@ -117,7 +117,7 @@
     "jockey_id": "01102",
     "trainer_id": "01181",
     "horse_id": "2022102394",
-    "odds": null
+    "odds": 18.7
    },
    {
     "waku": "5",
@@ -131,7 +131,7 @@
     "jockey_id": "01140",
     "trainer_id": "01109",
     "horse_id": "2022110130",
-    "odds": null
+    "odds": 5.0
    },
    {
     "waku": "6",
@@ -145,7 +145,7 @@
     "jockey_id": "01166",
     "trainer_id": "01085",
     "horse_id": "2022106851",
-    "odds": null
+    "odds": 40.2
    },
    {
     "waku": "6",
@@ -159,7 +159,7 @@
     "jockey_id": "01185",
     "trainer_id": "01138",
     "horse_id": "2022100321",
-    "odds": null
+    "odds": 38.7
    },
    {
     "waku": "7",
@@ -173,7 +173,7 @@
     "jockey_id": "01214",
     "trainer_id": "01208",
     "horse_id": "2022105610",
-    "odds": null
+    "odds": 38.7
    },
    {
     "waku": "7",
@@ -187,7 +187,7 @@
     "jockey_id": "01115",
     "trainer_id": "01070",
     "horse_id": "2021101928",
-    "odds": null
+    "odds": 22.1
    },
    {
     "waku": "8",
@@ -201,7 +201,7 @@
     "jockey_id": "01015",
     "trainer_id": "01018",
     "horse_id": "2023104324",
-    "odds": null
+    "odds": 2.0
    },
    {
     "waku": "8",
@@ -215,7 +215,7 @@
     "jockey_id": "01109",
     "trainer_id": "01023",
     "horse_id": "2022103753",
-    "odds": null
+    "odds": 49.5
    }
   ],
   "name": "富良野特別(2勝クラス)",
@@ -230,7 +230,7 @@
   "title": "ＵＨＢ賞(OP) 出馬表 | 2026年8月9日 札幌11R レース情報(JRA) - netkeiba",
   "place": "札幌",
   "r": 11,
-  "odds_at": "",
+  "odds_at": "2026-08-09 07:22:57",
   "horses": [
    {
     "waku": "1",
@@ -244,7 +244,7 @@
     "jockey_id": "01185",
     "trainer_id": "01144",
     "horse_id": "2020103356",
-    "odds": null
+    "odds": 67.5
    },
    {
     "waku": "1",
@@ -258,7 +258,7 @@
     "jockey_id": "01221",
     "trainer_id": "01205",
     "horse_id": "2021105358",
-    "odds": null
+    "odds": 24.4
    },
    {
     "waku": "2",
@@ -272,7 +272,7 @@
     "jockey_id": "01095",
     "trainer_id": "01160",
     "horse_id": "2023107008",
-    "odds": null
+    "odds": 4.3
    },
    {
     "waku": "2",
@@ -286,7 +286,7 @@
     "jockey_id": "01166",
     "trainer_id": "01086",
     "horse_id": "2020103962",
-    "odds": null
+    "odds": 133.6
    },
    {
     "waku": "3",
@@ -300,7 +300,7 @@
     "jockey_id": "01032",
     "trainer_id": "01055",
     "horse_id": "2021105774",
-    "odds": null
+    "odds": 14.6
    },
    {
     "waku": "3",
@@ -314,7 +314,7 @@
     "jockey_id": "01015",
     "trainer_id": "01204",
     "horse_id": "2021105599",
-    "odds": null
+    "odds": 23.8
    },
    {
     "waku": "4",
@@ -328,7 +328,7 @@
     "jockey_id": "01192",
     "trainer_id": "01110",
     "horse_id": "2021100522",
-    "odds": null
+    "odds": 15.5
    },
    {
     "waku": "4",
@@ -342,7 +342,7 @@
     "jockey_id": "01190",
     "trainer_id": "01075",
     "horse_id": "2022100490",
-    "odds": null
+    "odds": 18.1
    },
    {
     "waku": "5",
@@ -356,7 +356,7 @@
     "jockey_id": "01140",
     "trainer_id": "01195",
     "horse_id": "2018103515",
-    "odds": null
+    "odds": 11.8
    },
    {
     "waku": "5",
@@ -370,7 +370,7 @@
     "jockey_id": "01115",
     "trainer_id": "01173",
     "horse_id": "2022102887",
-    "odds": null
+    "odds": 5.3
    },
    {
     "waku": "6",
@@ -384,7 +384,7 @@
     "jockey_id": "01223",
     "trainer_id": "01099",
     "horse_id": "2022103304",
-    "odds": null
+    "odds": 67.9
    },
    {
     "waku": "6",
@@ -398,7 +398,7 @@
     "jockey_id": "01214",
     "trainer_id": "01051",
     "horse_id": "2020109102",
-    "odds": null
+    "odds": 21.6
    },
    {
     "waku": "7",
@@ -412,7 +412,7 @@
     "jockey_id": "01102",
     "trainer_id": "01112",
     "horse_id": "2022103592",
-    "odds": null
+    "odds": 5.5
    },
    {
     "waku": "7",
@@ -426,7 +426,7 @@
     "jockey_id": "01178",
     "trainer_id": "01181",
     "horse_id": "2023105203",
-    "odds": null
+    "odds": 7.4
    },
    {
     "waku": "8",
@@ -440,7 +440,7 @@
     "jockey_id": "01109",
     "trainer_id": "01202",
     "horse_id": "2020105203",
-    "odds": null
+    "odds": 51.9
    },
    {
     "waku": "8",
@@ -454,7 +454,7 @@
     "jockey_id": "05203",
     "trainer_id": "01061",
     "horse_id": "2021100130",
-    "odds": null
+    "odds": 16.2
    }
   ],
   "name": "ＵＨＢ賞(OP)",
@@ -469,7 +469,7 @@
   "title": "石狩特別(1勝クラス) 出馬表 | 2026年8月9日 札幌12R レース情報(JRA) - netkeiba",
   "place": "札幌",
   "r": 12,
-  "odds_at": "",
+  "odds_at": "2026-08-09 06:58:17",
   "horses": [
    {
     "waku": "1",
@@ -483,7 +483,7 @@
     "jockey_id": "01178",
     "trainer_id": "01089",
     "horse_id": "2023100207",
-    "odds": null
+    "odds": 6.4
    },
    {
     "waku": "2",
@@ -497,7 +497,7 @@
     "jockey_id": "00660",
     "trainer_id": "01190",
     "horse_id": "2023103451",
-    "odds": null
+    "odds": 4.3
    },
    {
     "waku": "3",
@@ -511,7 +511,7 @@
     "jockey_id": "01095",
     "trainer_id": "01147",
     "horse_id": "2022102135",
-    "odds": null
+    "odds": 6.0
    },
    {
     "waku": "4",
@@ -525,7 +525,7 @@
     "jockey_id": "01112",
     "trainer_id": "01128",
     "horse_id": "2023103351",
-    "odds": null
+    "odds": 10.8
    },
    {
     "waku": "5",
@@ -539,7 +539,7 @@
     "jockey_id": "01221",
     "trainer_id": "01127",
     "horse_id": "2022106645",
-    "odds": null
+    "odds": 18.1
    },
    {
     "waku": "6",
@@ -553,7 +553,7 @@
     "jockey_id": "01185",
     "trainer_id": "01075",
     "horse_id": "2022105766",
-    "odds": null
+    "odds": 32.5
    },
    {
     "waku": "7",
@@ -567,7 +567,7 @@
     "jockey_id": "01115",
     "trainer_id": "01193",
     "horse_id": "2023100521",
-    "odds": null
+    "odds": 12.1
    },
    {
     "waku": "8",
@@ -581,7 +581,7 @@
     "jockey_id": "01102",
     "trainer_id": "01126",
     "horse_id": "2023106905",
-    "odds": null
+    "odds": 2.2
    }
   ],
   "name": "石狩特別(1勝クラス)",
@@ -596,7 +596,7 @@
   "title": "２歳新馬 出馬表 | 2026年8月9日 新潟2R レース情報(JRA) - netkeiba",
   "place": "新潟",
   "r": 2,
-  "odds_at": "",
+  "odds_at": "2026-08-09 07:06:42",
   "horses": [
    {
     "waku": "1",
@@ -610,7 +610,7 @@
     "jockey_id": "01161",
     "trainer_id": "01089",
     "horse_id": "2024102437",
-    "odds": null
+    "odds": 17.5
    },
    {
     "waku": "2",
@@ -624,7 +624,7 @@
     "jockey_id": "01217",
     "trainer_id": "01077",
     "horse_id": "2024103173",
-    "odds": null
+    "odds": 82.2
    },
    {
     "waku": "3",
@@ -638,7 +638,7 @@
     "jockey_id": "01203",
     "trainer_id": "01035",
     "horse_id": "2024100867",
-    "odds": null
+    "odds": 23.8
    },
    {
     "waku": "4",
@@ -652,7 +652,7 @@
     "jockey_id": "01122",
     "trainer_id": "01056",
     "horse_id": "2024100105",
-    "odds": null
+    "odds": 4.1
    },
    {
     "waku": "5",
@@ -666,7 +666,7 @@
     "jockey_id": "01144",
     "trainer_id": "01169",
     "horse_id": "2024100002",
-    "odds": null
+    "odds": 3.2
    },
    {
     "waku": "6",
@@ -680,7 +680,7 @@
     "jockey_id": "01220",
     "trainer_id": "01108",
     "horse_id": "2024106236",
-    "odds": null
+    "odds": 4.6
    },
    {
     "waku": "6",
@@ -694,7 +694,7 @@
     "jockey_id": "00689",
     "trainer_id": "01195",
     "horse_id": "2024103919",
-    "odds": null
+    "odds": 7.2
    },
    {
     "waku": "7",
@@ -708,7 +708,7 @@
     "jockey_id": "01184",
     "trainer_id": "01150",
     "horse_id": "2024102067",
-    "odds": null
+    "odds": 25.4
    },
    {
     "waku": "7",
@@ -722,7 +722,7 @@
     "jockey_id": "01085",
     "trainer_id": "01031",
     "horse_id": "2024104006",
-    "odds": null
+    "odds": 23.8
    },
    {
     "waku": "8",
@@ -736,7 +736,7 @@
     "jockey_id": "01174",
     "trainer_id": "01150",
     "horse_id": "2024100678",
-    "odds": null
+    "odds": 8.4
    },
    {
     "waku": "8",
@@ -750,7 +750,7 @@
     "jockey_id": "01153",
     "trainer_id": "01174",
     "horse_id": "2024100754",
-    "odds": null
+    "odds": 26.6
    }
   ],
   "name": "２歳新馬",
@@ -765,7 +765,7 @@
   "title": "佐渡Ｓ(3勝クラス) 出馬表 | 2026年8月9日 新潟6R レース情報(JRA) - netkeiba",
   "place": "新潟",
   "r": 6,
-  "odds_at": "",
+  "odds_at": "2026-08-09 06:55:32",
   "horses": [
    {
     "waku": "1",
@@ -779,7 +779,7 @@
     "jockey_id": "01197",
     "trainer_id": "01192",
     "horse_id": "2023103687",
-    "odds": null
+    "odds": 1.4
    },
    {
     "waku": "2",
@@ -793,7 +793,7 @@
     "jockey_id": "05212",
     "trainer_id": "01061",
     "horse_id": "2021105704",
-    "odds": null
+    "odds": 14.4
    },
    {
     "waku": "3",
@@ -807,7 +807,7 @@
     "jockey_id": "01135",
     "trainer_id": "01115",
     "horse_id": "2021104865",
-    "odds": null
+    "odds": 10.5
    },
    {
     "waku": "4",
@@ -821,7 +821,7 @@
     "jockey_id": "01075",
     "trainer_id": "01141",
     "horse_id": "2021101724",
-    "odds": null
+    "odds": 12.6
    },
    {
     "waku": "4",
@@ -835,7 +835,7 @@
     "jockey_id": "01161",
     "trainer_id": "01205",
     "horse_id": "2020100976",
-    "odds": null
+    "odds": 49.4
    },
    {
     "waku": "5",
@@ -849,7 +849,7 @@
     "jockey_id": "01085",
     "trainer_id": "01109",
     "horse_id": "2022100019",
-    "odds": null
+    "odds": 10.3
    },
    {
     "waku": "5",
@@ -863,7 +863,7 @@
     "jockey_id": "01216",
     "trainer_id": "01062",
     "horse_id": "2020106535",
-    "odds": null
+    "odds": 50.3
    },
    {
     "waku": "6",
@@ -877,7 +877,7 @@
     "jockey_id": "01096",
     "trainer_id": "01171",
     "horse_id": "2020100934",
-    "odds": null
+    "odds": 78.3
    },
    {
     "waku": "6",
@@ -891,7 +891,7 @@
     "jockey_id": "01160",
     "trainer_id": "01097",
     "horse_id": "2020104753",
-    "odds": null
+    "odds": 28.9
    },
    {
     "waku": "7",
@@ -905,7 +905,7 @@
     "jockey_id": "01220",
     "trainer_id": "01191",
     "horse_id": "2021105453",
-    "odds": null
+    "odds": 43.4
    },
    {
     "waku": "7",
@@ -919,7 +919,7 @@
     "jockey_id": "01163",
     "trainer_id": "01092",
     "horse_id": "2022110054",
-    "odds": null
+    "odds": 19.2
    },
    {
     "waku": "8",
@@ -933,7 +933,7 @@
     "jockey_id": "00733",
     "trainer_id": "01134",
     "horse_id": "2018106154",
-    "odds": null
+    "odds": 126.4
    },
    {
     "waku": "8",
@@ -947,7 +947,7 @@
     "jockey_id": "01150",
     "trainer_id": "01182",
     "horse_id": "2022101134",
-    "odds": null
+    "odds": 28.2
    }
   ],
   "name": "佐渡Ｓ(3勝クラス)",
@@ -962,7 +962,7 @@
   "title": "レパードＳ(G3) 出馬表 | 2026年8月9日 新潟7R レース情報(JRA) - netkeiba",
   "place": "新潟",
   "r": 7,
-  "odds_at": "",
+  "odds_at": "2026-08-09 07:33:02",
   "horses": [
    {
     "waku": "1",
@@ -976,7 +976,7 @@
     "jockey_id": "01092",
     "trainer_id": "01058",
     "horse_id": "2023103919",
-    "odds": null
+    "odds": 30.5
    },
    {
     "waku": "2",
@@ -990,7 +990,7 @@
     "jockey_id": "01184",
     "trainer_id": "00423",
     "horse_id": "2023101154",
-    "odds": null
+    "odds": 16.4
    },
    {
     "waku": "3",
@@ -1004,7 +1004,7 @@
     "jockey_id": "01197",
     "trainer_id": "01070",
     "horse_id": "2023107091",
-    "odds": null
+    "odds": 30.6
    },
    {
     "waku": "4",
@@ -1018,7 +1018,7 @@
     "jockey_id": "01216",
     "trainer_id": "01110",
     "horse_id": "2023104387",
-    "odds": null
+    "odds": 16.5
    },
    {
     "waku": "5",
@@ -1032,7 +1032,7 @@
     "jockey_id": "05386",
     "trainer_id": "01038",
     "horse_id": "2023106821",
-    "odds": null
+    "odds": 12.4
    },
    {
     "waku": "5",
@@ -1046,7 +1046,7 @@
     "jockey_id": "01160",
     "trainer_id": "01088",
     "horse_id": "2023101269",
-    "odds": null
+    "odds": 5.4
    },
    {
     "waku": "6",
@@ -1060,7 +1060,7 @@
     "jockey_id": "01077",
     "trainer_id": "01106",
     "horse_id": "2023104103",
-    "odds": null
+    "odds": 80.3
    },
    {
     "waku": "6",
@@ -1074,7 +1074,7 @@
     "jockey_id": "01150",
     "trainer_id": "01163",
     "horse_id": "2023104927",
-    "odds": null
+    "odds": 50.7
    },
    {
     "waku": "7",
@@ -1088,7 +1088,7 @@
     "jockey_id": "01220",
     "trainer_id": "01149",
     "horse_id": "2023107036",
-    "odds": null
+    "odds": 3.6
    },
    {
     "waku": "7",
@@ -1102,7 +1102,7 @@
     "jockey_id": "01144",
     "trainer_id": "01121",
     "horse_id": "2023104733",
-    "odds": null
+    "odds": 16.8
    },
    {
     "waku": "8",
@@ -1116,7 +1116,7 @@
     "jockey_id": "01174",
     "trainer_id": "01130",
     "horse_id": "2023101134",
-    "odds": null
+    "odds": 4.7
    },
    {
     "waku": "8",
@@ -1130,7 +1130,7 @@
     "jockey_id": "01163",
     "trainer_id": "01157",
     "horse_id": "2023105303",
-    "odds": null
+    "odds": 4.3
    }
   ],
   "name": "レパードＳ(G3)",
@@ -1145,7 +1145,7 @@
   "title": "驀進特別(2勝クラス) 出馬表 | 2026年8月9日 新潟8R レース情報(JRA) - netkeiba",
   "place": "新潟",
   "r": 8,
-  "odds_at": "",
+  "odds_at": "2026-08-09 07:08:57",
   "horses": [
    {
     "waku": "1",
@@ -1159,7 +1159,7 @@
     "jockey_id": "01197",
     "trainer_id": "01218",
     "horse_id": "2021104777",
-    "odds": null
+    "odds": 70.1
    },
    {
     "waku": "1",
@@ -1173,7 +1173,7 @@
     "jockey_id": "01163",
     "trainer_id": "01130",
     "horse_id": "2022106637",
-    "odds": null
+    "odds": 40.8
    },
    {
     "waku": "2",
@@ -1187,7 +1187,7 @@
     "jockey_id": "01184",
     "trainer_id": "01177",
     "horse_id": "2021104365",
-    "odds": null
+    "odds": 57.7
    },
    {
     "waku": "2",
@@ -1201,7 +1201,7 @@
     "jockey_id": "01169",
     "trainer_id": "01115",
     "horse_id": "2021106986",
-    "odds": null
+    "odds": 31.4
    },
    {
     "waku": "3",
@@ -1215,7 +1215,7 @@
     "jockey_id": "05212",
     "trainer_id": "01131",
     "horse_id": "2020102674",
-    "odds": null
+    "odds": 30.8
    },
    {
     "waku": "3",
@@ -1229,7 +1229,7 @@
     "jockey_id": "01135",
     "trainer_id": "01153",
     "horse_id": "2022106187",
-    "odds": null
+    "odds": 45.5
    },
    {
     "waku": "4",
@@ -1243,7 +1243,7 @@
     "jockey_id": "01122",
     "trainer_id": "01052",
     "horse_id": "2022104190",
-    "odds": null
+    "odds": 43.6
    },
    {
     "waku": "4",
@@ -1257,7 +1257,7 @@
     "jockey_id": "00689",
     "trainer_id": "01221",
     "horse_id": "2023106613",
-    "odds": null
+    "odds": 15.6
    },
    {
     "waku": "5",
@@ -1271,7 +1271,7 @@
     "jockey_id": "01075",
     "trainer_id": "01124",
     "horse_id": "2020103477",
-    "odds": null
+    "odds": 31.5
    },
    {
     "waku": "5",
@@ -1285,7 +1285,7 @@
     "jockey_id": "01150",
     "trainer_id": "01101",
     "horse_id": "2022104216",
-    "odds": null
+    "odds": 43.8
    },
    {
     "waku": "6",
@@ -1299,7 +1299,7 @@
     "jockey_id": "01161",
     "trainer_id": "01171",
     "horse_id": "2022101604",
-    "odds": null
+    "odds": 3.2
    },
    {
     "waku": "6",
@@ -1313,7 +1313,7 @@
     "jockey_id": "01092",
     "trainer_id": "01179",
     "horse_id": "2020104174",
-    "odds": null
+    "odds": 12.1
    },
    {
     "waku": "7",
@@ -1327,7 +1327,7 @@
     "jockey_id": "01216",
     "trainer_id": "01110",
     "horse_id": "2021100144",
-    "odds": null
+    "odds": 8.4
    },
    {
     "waku": "7",
@@ -1341,7 +1341,7 @@
     "jockey_id": "01203",
     "trainer_id": "01207",
     "horse_id": "2021104074",
-    "odds": null
+    "odds": 18.1
    },
    {
     "waku": "8",
@@ -1355,7 +1355,7 @@
     "jockey_id": "01220",
     "trainer_id": "01173",
     "horse_id": "2022104387",
-    "odds": null
+    "odds": 6.8
    },
    {
     "waku": "8",
@@ -1369,7 +1369,7 @@
     "jockey_id": "01144",
     "trainer_id": "01182",
     "horse_id": "2021106066",
-    "odds": null
+    "odds": 14.1
    },
    {
     "waku": "8",
@@ -1383,7 +1383,7 @@
     "jockey_id": "01174",
     "trainer_id": "01108",
     "horse_id": "2021100356",
-    "odds": null
+    "odds": 5.4
    }
   ],
   "name": "驀進特別(2勝クラス)",
@@ -1398,7 +1398,7 @@
   "title": "２歳新馬 出馬表 | 2026年8月9日 中京2R レース情報(JRA) - netkeiba",
   "place": "中京",
   "r": 2,
-  "odds_at": "",
+  "odds_at": "2026-08-09 07:15:12",
   "horses": [
    {
     "waku": "1",
@@ -1412,7 +1412,7 @@
     "jockey_id": "01171",
     "trainer_id": "01168",
     "horse_id": "2024106661",
-    "odds": null
+    "odds": 2.7
    },
    {
     "waku": "2",
@@ -1426,7 +1426,7 @@
     "jockey_id": "01126",
     "trainer_id": "01055",
     "horse_id": "2024106355",
-    "odds": null
+    "odds": 4.5
    },
    {
     "waku": "3",
@@ -1440,7 +1440,7 @@
     "jockey_id": "01088",
     "trainer_id": "01098",
     "horse_id": "2024105976",
-    "odds": null
+    "odds": 2.5
    },
    {
     "waku": "4",
@@ -1454,7 +1454,7 @@
     "jockey_id": "01127",
     "trainer_id": "01112",
     "horse_id": "2024104028",
-    "odds": null
+    "odds": 55.0
    },
    {
     "waku": "5",
@@ -1468,7 +1468,7 @@
     "jockey_id": "00732",
     "trainer_id": "01066",
     "horse_id": "2024105997",
-    "odds": null
+    "odds": 15.5
    },
    {
     "waku": "6",
@@ -1482,7 +1482,7 @@
     "jockey_id": "05691",
     "trainer_id": "01130",
     "horse_id": "2024107238",
-    "odds": null
+    "odds": 15.5
    },
    {
     "waku": "7",
@@ -1496,7 +1496,7 @@
     "jockey_id": "01125",
     "trainer_id": "01078",
     "horse_id": "2024104727",
-    "odds": null
+    "odds": 51.5
    },
    {
     "waku": "8",
@@ -1510,7 +1510,7 @@
     "jockey_id": "01124",
     "trainer_id": "01216",
     "horse_id": "2024104008",
-    "odds": null
+    "odds": 27.5
    },
    {
     "waku": "8",
@@ -1524,7 +1524,7 @@
     "jockey_id": "01170",
     "trainer_id": "01018",
     "horse_id": "2024103582",
-    "odds": null
+    "odds": 14.0
    }
   ],
   "name": "２歳新馬",
@@ -1539,7 +1539,7 @@
   "title": "２歳新馬 出馬表 | 2026年8月9日 中京3R レース情報(JRA) - netkeiba",
   "place": "中京",
   "r": 3,
-  "odds_at": "",
+  "odds_at": "2026-08-09 06:46:42",
   "horses": [
    {
     "waku": "1",
@@ -1553,7 +1553,7 @@
     "jockey_id": "01170",
     "trainer_id": "01018",
     "horse_id": "2024102103",
-    "odds": null
+    "odds": 22.9
    },
    {
     "waku": "2",
@@ -1567,7 +1567,7 @@
     "jockey_id": "01126",
     "trainer_id": "01117",
     "horse_id": "2024107009",
-    "odds": null
+    "odds": 3.6
    },
    {
     "waku": "3",
@@ -1581,7 +1581,7 @@
     "jockey_id": "05429",
     "trainer_id": "01164",
     "horse_id": "2024100126",
-    "odds": null
+    "odds": 38.4
    },
    {
     "waku": "4",
@@ -1595,7 +1595,7 @@
     "jockey_id": "01171",
     "trainer_id": "01206",
     "horse_id": "2024105941",
-    "odds": null
+    "odds": 10.0
    },
    {
     "waku": "5",
@@ -1609,7 +1609,7 @@
     "jockey_id": "00732",
     "trainer_id": "01123",
     "horse_id": "2024100601",
-    "odds": null
+    "odds": 55.2
    },
    {
     "waku": "6",
@@ -1623,7 +1623,7 @@
     "jockey_id": "01088",
     "trainer_id": "01203",
     "horse_id": "2024106649",
-    "odds": null
+    "odds": 1.4
    },
    {
     "waku": "7",
@@ -1637,7 +1637,7 @@
     "jockey_id": "01154",
     "trainer_id": "01178",
     "horse_id": "2024105806",
-    "odds": null
+    "odds": 13.6
    },
    {
     "waku": "8",
@@ -1651,7 +1651,7 @@
     "jockey_id": "01208",
     "trainer_id": "01193",
     "horse_id": "2024104835",
-    "odds": null
+    "odds": 27.0
    }
   ],
   "name": "２歳新馬",
@@ -1666,7 +1666,7 @@
   "title": "浜名湖特別(2勝クラス) 出馬表 | 2026年8月9日 中京6R レース情報(JRA) - netkeiba",
   "place": "中京",
   "r": 6,
-  "odds_at": "",
+  "odds_at": "2026-08-09 07:08:27",
   "horses": [
    {
     "waku": "1",
@@ -1680,7 +1680,7 @@
     "jockey_id": "01208",
     "trainer_id": "01071",
     "horse_id": "2023106283",
-    "odds": null
+    "odds": 2.6
    },
    {
     "waku": "2",
@@ -1694,7 +1694,7 @@
     "jockey_id": "05691",
     "trainer_id": "01157",
     "horse_id": "2023105380",
-    "odds": null
+    "odds": 3.4
    },
    {
     "waku": "3",
@@ -1708,7 +1708,7 @@
     "jockey_id": "01126",
     "trainer_id": "01111",
     "horse_id": "2023100553",
-    "odds": null
+    "odds": 6.7
    },
    {
     "waku": "4",
@@ -1722,7 +1722,7 @@
     "jockey_id": "01171",
     "trainer_id": "01170",
     "horse_id": "2020103647",
-    "odds": null
+    "odds": 6.4
    },
    {
     "waku": "5",
@@ -1736,7 +1736,7 @@
     "jockey_id": "01088",
     "trainer_id": "01157",
     "horse_id": "2021105585",
-    "odds": null
+    "odds": 5.3
    },
    {
     "waku": "6",
@@ -1750,7 +1750,7 @@
     "jockey_id": "01138",
     "trainer_id": "01092",
     "horse_id": "2019100606",
-    "odds": null
+    "odds": 13.0
    },
    {
     "waku": "7",
@@ -1764,7 +1764,7 @@
     "jockey_id": "01168",
     "trainer_id": "01149",
     "horse_id": "2021105867",
-    "odds": null
+    "odds": 65.4
    }
   ],
   "name": "浜名湖特別(2勝クラス)",
@@ -1779,7 +1779,7 @@
   "title": "ＣＢＣ賞(G3) 出馬表 | 2026年8月9日 中京7R レース情報(JRA) - netkeiba",
   "place": "中京",
   "r": 7,
-  "odds_at": "",
+  "odds_at": "2026-08-09 06:43:47",
   "horses": [
    {
     "waku": "1",
@@ -1793,7 +1793,7 @@
     "jockey_id": "01138",
     "trainer_id": "01138",
     "horse_id": "2021107063",
-    "odds": null
+    "odds": 35.1
    },
    {
     "waku": "1",
@@ -1807,7 +1807,7 @@
     "jockey_id": "01141",
     "trainer_id": "00427",
     "horse_id": "2020110133",
-    "odds": null
+    "odds": 32.8
    },
    {
     "waku": "2",
@@ -1821,7 +1821,7 @@
     "jockey_id": "01170",
     "trainer_id": "01039",
     "horse_id": "2022103066",
-    "odds": null
+    "odds": 4.9
    },
    {
     "waku": "2",
@@ -1835,7 +1835,7 @@
     "jockey_id": "01176",
     "trainer_id": "01148",
     "horse_id": "2020103325",
-    "odds": null
+    "odds": 120.5
    },
    {
     "waku": "3",
@@ -1849,7 +1849,7 @@
     "jockey_id": "01187",
     "trainer_id": "01138",
     "horse_id": "2021103932",
-    "odds": null
+    "odds": 14.3
    },
    {
     "waku": "3",
@@ -1863,7 +1863,7 @@
     "jockey_id": "01171",
     "trainer_id": "01209",
     "horse_id": "2021105880",
-    "odds": null
+    "odds": 8.2
    },
    {
     "waku": "4",
@@ -1877,7 +1877,7 @@
     "jockey_id": "01088",
     "trainer_id": "01151",
     "horse_id": "2022104933",
-    "odds": null
+    "odds": 4.6
    },
    {
     "waku": "4",
@@ -1891,7 +1891,7 @@
     "jockey_id": "01037",
     "trainer_id": "01216",
     "horse_id": "2021101924",
-    "odds": null
+    "odds": 45.5
    },
    {
     "waku": "5",
@@ -1905,7 +1905,7 @@
     "jockey_id": "01152",
     "trainer_id": "01198",
     "horse_id": "2022106394",
-    "odds": null
+    "odds": 20.7
    },
    {
     "waku": "5",
@@ -1919,7 +1919,7 @@
     "jockey_id": "00732",
     "trainer_id": "01091",
     "horse_id": "2021103092",
-    "odds": null
+    "odds": 42.2
    },
    {
     "waku": "6",
@@ -1933,7 +1933,7 @@
     "jockey_id": "01186",
     "trainer_id": "01121",
     "horse_id": "2020105400",
-    "odds": null
+    "odds": 45.3
    },
    {
     "waku": "6",
@@ -1947,7 +1947,7 @@
     "jockey_id": "01180",
     "trainer_id": "01109",
     "horse_id": "2021110164",
-    "odds": null
+    "odds": 11.9
    },
    {
     "waku": "7",
@@ -1961,7 +1961,7 @@
     "jockey_id": "01127",
     "trainer_id": "01097",
     "horse_id": "2023107020",
-    "odds": null
+    "odds": 18.3
    },
    {
     "waku": "7",
@@ -1975,7 +1975,7 @@
     "jockey_id": "01126",
     "trainer_id": "01196",
     "horse_id": "2022110026",
-    "odds": null
+    "odds": 14.5
    },
    {
     "waku": "7",
@@ -1989,7 +1989,7 @@
     "jockey_id": "01154",
     "trainer_id": "01136",
     "horse_id": "2021101598",
-    "odds": null
+    "odds": 6.8
    },
    {
     "waku": "8",
@@ -2003,7 +2003,7 @@
     "jockey_id": "05691",
     "trainer_id": "01170",
     "horse_id": "2022101623",
-    "odds": null
+    "odds": 45.7
    },
    {
     "waku": "8",
@@ -2017,7 +2017,7 @@
     "jockey_id": "01200",
     "trainer_id": "01062",
     "horse_id": "2023103162",
-    "odds": null
+    "odds": 12.9
    },
    {
     "waku": "8",
@@ -2031,7 +2031,7 @@
     "jockey_id": "01130",
     "trainer_id": "01161",
     "horse_id": "2019103605",
-    "odds": null
+    "odds": 129.6
    }
   ],
   "name": "ＣＢＣ賞(G3)",
@@ -2046,7 +2046,7 @@
   "title": "揖斐川特別(2勝クラス) 出馬表 | 2026年8月9日 中京8R レース情報(JRA) - netkeiba",
   "place": "中京",
   "r": 8,
-  "odds_at": "",
+  "odds_at": "2026-08-09 07:17:27",
   "horses": [
    {
     "waku": "1",
@@ -2060,7 +2060,7 @@
     "jockey_id": "01186",
     "trainer_id": "01139",
     "horse_id": "2020106491",
-    "odds": null
+    "odds": 55.7
    },
    {
     "waku": "2",
@@ -2074,7 +2074,7 @@
     "jockey_id": "05691",
     "trainer_id": "01180",
     "horse_id": "2022105791",
-    "odds": null
+    "odds": 5.3
    },
    {
     "waku": "3",
@@ -2088,7 +2088,7 @@
     "jockey_id": "01208",
     "trainer_id": "01065",
     "horse_id": "2020104561",
-    "odds": null
+    "odds": 31.4
    },
    {
     "waku": "4",
@@ -2102,7 +2102,7 @@
     "jockey_id": "01170",
     "trainer_id": "01199",
     "horse_id": "2023103628",
-    "odds": null
+    "odds": 6.2
    },
    {
     "waku": "5",
@@ -2116,7 +2116,7 @@
     "jockey_id": "01126",
     "trainer_id": "01130",
     "horse_id": "2022110123",
-    "odds": null
+    "odds": 9.5
    },
    {
     "waku": "6",
@@ -2130,7 +2130,7 @@
     "jockey_id": "01168",
     "trainer_id": "01106",
     "horse_id": "2022102260",
-    "odds": null
+    "odds": 24.9
    },
    {
     "waku": "6",
@@ -2144,7 +2144,7 @@
     "jockey_id": "00732",
     "trainer_id": "01032",
     "horse_id": "2021104295",
-    "odds": null
+    "odds": 26.6
    },
    {
     "waku": "7",
@@ -2158,7 +2158,7 @@
     "jockey_id": "01141",
     "trainer_id": "01121",
     "horse_id": "2021106164",
-    "odds": null
+    "odds": 23.5
    },
    {
     "waku": "7",
@@ -2172,7 +2172,7 @@
     "jockey_id": "01200",
     "trainer_id": "01142",
     "horse_id": "2021103821",
-    "odds": null
+    "odds": 41.6
    },
    {
     "waku": "8",
@@ -2186,7 +2186,7 @@
     "jockey_id": "01138",
     "trainer_id": "01091",
     "horse_id": "2020106101",
-    "odds": null
+    "odds": 34.1
    },
    {
     "waku": "8",
@@ -2200,7 +2200,7 @@
     "jockey_id": "01088",
     "trainer_id": "01157",
     "horse_id": "2023107082",
-    "odds": null
+    "odds": 1.7
    }
   ],
   "name": "揖斐川特別(2勝クラス)",

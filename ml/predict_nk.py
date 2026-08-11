@@ -62,6 +62,31 @@ def load_entries(path):
     return out
 
 
+def soft_of(rc):
+    """★甘い軸の三連複（(111)(112)）。**単勝オッズだけで決まる**——モデルも枠連も要らない。"""
+    um = [h["umaban"] for h in rc["horses"]]
+    od = [h["odds"] for h in rc["horses"]]
+    if len(od) < 3 or not all(o and o > 0 for o in od):
+        return None
+    return SA.recommend(um, od)
+
+
+def keep_soft(out_races, rc, soft):
+    """枠連の対象外レースでも、**買うと判定した甘い軸だけは記録に残す**。
+
+    `nk_score.py` はこの JSON を採点するので、ここで落とすと
+    **実際に買った買い目が成績に入らない**（8/08の中京5Rで実際に起きた）。
+    枠連・三連複BOXの買い目は無いので `waku_na` を立て、採点側でそこだけ飛ばす。
+    """
+    if not (soft and soft["buy"]):
+        return
+    out_races.append({"raceid": rc["raceid"], "label": rc.get("label")
+                      or f"{rc['place']}{rc['r']}R", "r": rc["r"],
+                      "fieldsize": len(rc["horses"]), "axis": soft["axis"],
+                      "excluded": False, "waku_na": True,
+                      "odds_at": rc.get("odds_at", ""), "soft_axis": soft})
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("entries")
@@ -160,11 +185,23 @@ def main():
                 f"{rc['name'][:10]:10s} {len(rc['horses'])}頭 馬場{rc['cond']}")
         g = sub[sub["raceid"] == rc["raceid"]]
         lost = miss.get(rc["raceid"], [])
+        # ★(111)(112) 甘い軸の三連複は**オッズだけで決まる**ので、
+        # 　枠連の発売可否ともモデルの予想可否とも無関係。**下の continue より前に出す**。
+        # 　⚠以前はこの計算が continue の後にあったため、**8頭立てが丸ごと落ちていた**。
+        # 　　少頭数ほど断然人気が出やすい＝2%裾が出やすいので、いちばん要るレースを捨てていた
+        # 　　（実際、2026-08-08に買った1本目の中京5Rが8頭立てで、記録から漏れた）。
+        soft = soft_of(rc)
+        if soft and soft["buy"]:
+            print(f"       ★甘い軸 三連複 {soft['sanrenpuku']}（人気上位3頭・1点100円）"
+                  f"  軸{soft['axis']}番・複勝の期待払戻{soft['e_axis']:.0f}円"
+                  f"（裾{int(soft['tier']*100)}%）")
         if len(rc["horses"]) < MIN_FIELD:
             print(f"    {head}  対象外（{MIN_FIELD}頭未満は枠連の発売なし）")
+            keep_soft(out_races, rc, soft)
             continue
         if len(g) < 3 or not np.isfinite(g["odds"].to_numpy(float)).all():
             print(f"    {head}  予想不可（過去走のある馬{len(g)}頭 / オッズ欠損）")
+            keep_soft(out_races, rc, soft)
             continue
         gg = g.sort_values("p", ascending=False, kind="mergesort")
         nums = gg["umaban"].astype(int).tolist()
@@ -202,17 +239,7 @@ def main():
         # 「1番人気が取りこぼす」側に賭ける2着固定の方が配当が5割増える。
         # ただし三連複BOX4(84.5%)に届かないので既定では出さない（--sanrentan で明示的に出す）。
         tan = [f"{a}-{nums[0]}-{b}" for a, b in itertools.permutations(nums[1:4], 2)]
-        # ★(111)(112) 甘い軸の三連複。**オッズだけで決まる**のでモデルの除外判定とは独立に出す。
-        #   人気上位3頭ちょうどで1点（流しではない）。買うのは「軸の複勝の期待払戻E」が小さいレースだけ。
-        all_um = [h["umaban"] for h in rc["horses"]]
-        all_od = [h["odds"] for h in rc["horses"]]
-        soft = (SA.recommend(all_um, all_od)
-                if len(all_od) >= 3 and all(o and o > 0 for o in all_od) else None)
-        if soft and soft["buy"]:
-            print(f"       ★甘い軸 三連複 {soft['sanrenpuku']}（人気上位3頭・1点100円）"
-                  f"  軸{soft['axis']}番・複勝の期待払戻{soft['e_axis']:.0f}円"
-                  f"（裾{int(soft['tier']*100)}%）")
-        elif soft:
+        if soft and not soft["buy"]:
             print(f"       （甘い軸: 期待払戻{soft['e_axis']:.0f}円"
                   f"＝買う基準{soft['buy_threshold']:.0f}円以下に届かず見送り）")
         if not skip:
@@ -271,7 +298,7 @@ def main():
                           **({"soft_axis": soft} if soft else {}),
                           **({"l5": alt} if alt else {})})
 
-    buy = [r for r in out_races if not r["excluded"]]
+    buy = [r for r in out_races if not r["excluded"] and not r.get("waku_na")]
     cost = sum(len(r["wakuren"]) * 100 for r in buy)
     print(f"\n購入対象 {len(buy)}レース / 判定 {len(out_races)}レース（除外 {len(out_races)-len(buy)}）")
     print(f"枠連 合計 {cost:,}円 ／ 三連複BOX4も買うなら +{len(buy)*400:,}円")

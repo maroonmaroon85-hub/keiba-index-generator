@@ -4,9 +4,9 @@
 
 ---
 
-## ★残っているMac作業（2026-08-09時点・上から順に）
+## ★残っているMac作業（2026-08-11時点）
 
-**① オッズ板の収集を完走させる**（残り3,736本＝約1.6時間）
+**① オッズ板の収集を完走させる**（残り約3,700本＝WAIT3秒なら約3時間）
 ```
 cd ~/keiba-index-generator
 git pull --no-rebase --no-edit origin claude/handoff-env-check-2kexpo
@@ -14,27 +14,27 @@ nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py; rc=$?; \
   [ $rc -eq 0 ] && break; [ $rc -eq 2 ] && { echo "★ブロックの疑いで停止"; break; }; \
   sleep 300; done' > /tmp/odds.log 2>&1 &
 ```
-38,445/42,181 まで済み。**終わったら push**（`git add -A data/nk_odds` → commit → pull --no-rebase --no-edit → push）。
-⚠**結論は37,000本で確定済み**（(A) ρ=−1.000／(B) 年分割11/13年）。残りで数字は小数第4位しか動かない。
-　**急ぐ作業ではない。開催日の直前オッズ取得と競合させないこと**。
-⚠2026-08-09に**20連続失敗で止まった**が、`--old ... --now` で叩き直せたので**ブロックではなく一時的な断**だった。
-　**キャッシュがあるので `--now` を付けないと切り分けにならない**（一度これで判断を誤りかけた）。
+38,445/42,181 まで済み。**終わったら push**。**急ぐ作業ではない**——
+**結論は37,000本で確定済み**（(A) ρ=−1.000／(B) 年分割11/13年）。残りで数字は小数第4位しか動かない。
 
-**② 開催日の成績を記録する**（(111)の標本を増やす唯一の手段。**8/8がまだ未記録**）
+**② 開催日の運用**（毎週・(112)の標本を積む唯一の手段）
 ```
-python3 ml/nk_fetch.py results 20260808
-python3 ml/nk_fetch.py results 20260809
-python3 ml/nk_link.py
-python3 ml/nk_score.py
-```
-⚠**まだ走っていない日に results を当てると0バイトのCSVができる**。予想側は飛ばすよう直したが、
-　`data/nk/DSnk<日付>.CSV` が0バイトなら**消してから取り直す**のが確実。
-
-**③ 直前オッズで買うかを決める**（当日・発走30分前）
-```
+# 当日朝（Mac）
+python3 ml/nk_fetch.py entries <日付>
+# 発走30分前（Mac・標準ライブラリだけで完結）
 python3 ml/nk_race.py <日付> <場> <R>
+# レース後（Mac）
+python3 ml/nk_fetch.py results <日付> && python3 ml/nk_fetch.py pedigree
+python3 ml/nk_link.py && python3 ml/nk_score.py
 ```
-`★買う` が出た3頭だけ三連複1点。出なければ見送り（**年間60レースしか出ないので、出ない週が正常**）。
+`★買う` が出た3頭だけ三連複1点。出なければ見送り（**年間60レースなので出ない週が正常**）。
+⚠**まだ走っていない日に results を当てると0バイトのCSVができる**。消してから取り直すこと。
+
+**③ 済んだこと**
+- ~~オッズAPIの400~~ → **(115)で解決（2026-08-11）**。`pid=api_get_jra_odds&input=UTF-8` が
+  必須になっていただけ。**URLは `nk_fetch.ODDS_API` に1本化した**。
+- ~~JRA公式を代替ソースとして調べる~~ → **不要になった**。ただし**運用がnetkeibaのAPI1本に
+  乗っている**という単一障害点は残っている。次に落ちたら、**推測せずまずブラウザのNetworkを見ること**。
 
 ---
 

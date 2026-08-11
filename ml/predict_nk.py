@@ -315,7 +315,10 @@ def main():
     print(f"期待損失は投下額の約15%（枠連{int(cost*0.155):,}円ぶん）。増えることは期待しない。")
     if args.out:
         os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-        json.dump({"date": str(today.date()), "waku_score_p20": th, "races": out_races},
+        # ★キー名は `waku_score_p20` のままにしない。(117)で除外率を40%にしたので、
+        # 　中身が40%の閾値なのに名前がp20だと必ず取り違える。**実際の水準も一緒に書く**。
+        json.dump({"date": str(today.date()), "excl_pct": args.excl,
+                   "waku_score_th": th, "races": out_races},
                   open(args.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         print(f"保存: {args.out}")
 

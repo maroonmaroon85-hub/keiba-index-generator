@@ -128,8 +128,12 @@ def main():
         print(f"  {name:<18}{len(x):>7,}R  的中{(x>0).mean()*100:5.2f}%  ROI {x.mean()*100:5.1f}%"
               f"  （HANDOFF記載 84.5%）")
 
-    # ===== 2. 枠連スコアの下位20%閾値（(62): 絞りは「除外」にしか使えない） =====
-    p20 = float(np.percentile(scores, 20))
+    # ===== 2. 枠連スコアの除外閾値 =====
+    # ★(62)は「下位20%」をROIで決めた。(117)でDで測り直したところ、**除外率を上げるほど
+    # 　E[d|S]が単調に上がる**（20% +0.0218 → 40% +0.0235、全水準★、10/10年で正）。
+    # 　→ **複数の水準を保存し、predict側で選べるようにする**（既定は40%）。
+    pcts = {str(k): float(np.percentile(scores, k)) for k in (10, 20, 30, 40, 50)}
+    p20 = pcts["20"]
     dfw = pd.DataFrame(rows_w)
     xw = (dfw["pay"] / (dfw["k"] * 100)).to_numpy(float)
     hi = dfw["sc"].to_numpy() >= p20
@@ -157,7 +161,8 @@ def main():
         "races": int(d["raceid"].nunique()),
         "date_from": str(d["date"].min().date()),
         "date_to": str(d["date"].max().date()),
-        "waku_score_p20": p20,
+        "waku_score_p20": p20,           # 後方互換（古いreco/predictが読む）
+        "waku_score_pcts": pcts,         # ★(117)以後はこちらを使う
         "oos": oos,
         "note": "枠連スコア閾値は前30%学習モデルのOOS分布から算出。保存モデルは全期間学習なので厳密には別分布。",
     }

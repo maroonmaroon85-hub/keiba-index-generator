@@ -5,7 +5,8 @@ netkeiba の出馬表JSON（`ml/nk_fetch.py entries` の出力）から買い目
 入力に対して行う版で、**モデルも買い方も判定も predict.py と同一**（`ml/model_prod/`）:
   ・本命 枠連 軸枠×紐枠2（平均194円・ROI 84.5%・的中30.0%・的中時545円）
   ・対抗 三連複 BOX上位4（400円・ROI 84.5%・的中20.2%・的中時1,674円）
-  ・枠連スコア（積ベース）下位20%は除外（(62)。回収率を上げる絞りは存在しない）
+  ・枠連スコア（積ベース）**下位40%は除外**（(62)で20%→**(117)でDで測り直して40%に**。
+    E[d|S] 20%:+0.0218 → 40%:+0.0235。★それでも必要量の9.2%＝損が減るだけ）
   ・9頭未満は対象外（枠連が発売されない）
 
 DG版との違いは3つだけ:
@@ -92,6 +93,8 @@ def main():
     ap.add_argument("entries")
     ap.add_argument("--date", default=None, help="開催日 YYYY-MM-DD（既定はファイル名から）")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--excl", type=int, default=40,
+                    help="枠連スコア下位N%%を除外（既定40。(117)で20→40に変更）")
     ap.add_argument("--no-exclude", action="store_true")
     ap.add_argument("--dual", action="store_true",
                     help="高容量モデル(ml/model_prod_l5)の買い目も併記し、JSONにも記録する。"
@@ -104,7 +107,14 @@ def main():
     today = pd.Timestamp(f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:8]}") if len(ymd) == 8 else pd.Timestamp(args.date)
 
     boosters, cat_maps, cols, meta = load_model()
-    th = meta["waku_score_p20"]
+    # ★除外率は(117)で測り直して 20% → **40%** にした。
+    # 　E[d|S] が 20%で+0.0218 → 40%で+0.0235（単調・全水準★・10/10年で正）。
+    # 　⚠それでも必要量0.2549の9.2%。**損が減るだけで儲かるようにはならない**。
+    pcts = meta.get("waku_score_pcts") or {}
+    th = float(pcts.get(str(args.excl), meta["waku_score_p20"]))
+    if str(args.excl) not in pcts:
+        print(f"⚠ meta に {args.excl}% の閾値が無いので下位20%を使う"
+              "（`python3 ml/train_prod.py` を回し直すと全水準が入る）")
     races = load_entries(args.entries)
     print(f"モデル: {MODEL_DIR}（{meta['target']} / シード{meta['n_seed']}本平均 / "
           f"{meta['date_from']}〜{meta['date_to']}）")

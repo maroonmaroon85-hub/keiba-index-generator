@@ -21,9 +21,13 @@
 　　 理由: 枠連は三連複より薄いプール（組が少ない）なので、単勝からの情報の残り方は
 　　 　　　同程度かやや大きいと見る。**ただし必要量 0.2549 の 1〜2% にすぎない**。
 　　 ⚠(117)(122)(123)で予想を3回外している。この予想も外れる前提で読むこと。
-　6. **★運用が変わる条件を先に書く**: ウォークフォワードのDが **+0.005を超え**、かつ
+　6. **★運用が変わる条件を先に書く**: ウォークフォワードの**上積み**が **+0.005を超え**、かつ
 　　 **年分割で10/13年以上**正なら、**現行のqに枠連プールを混ぜる**価値がある。
 　　 それ未満なら記述にとどめ、**運用は変えない**。
+　　 ⚠**2026-08-11の訂正**: 最初この条件を「Dが+0.005」と書いていたが、**基準の取り違え**だった。
+　　 　d(w) は**プール基準**なので、w=1.0 の値は「λ補正Harville vs 枠連プール」＝
+　　 　**既知の枠連D=+0.0182 と同じ量**。それを新しい利得と読むと**二重計上**になる。
+　　 　**現行の最良は w=1.0 なので、上積みは d(w) − d(1.0) で測る**。
 
 実行（板を集めたあと）: python3 ml/audit_waku_board.py [開始年(既定2015)]
 　　★先にMacで: python3 ml/nk_odds_bulk.py --type 3   （枠連は9頭以上でしか発売されない）
@@ -153,6 +157,24 @@ def main():
     print("  ★w=0 は板そのもの＝定義上0。0を有意に超えるwがあれば"
           "**枠連プールが単勝プールの情報を取り込みきれていない**")
 
+    # ★★★ここが判定の本体（事前登録の書き方を訂正）
+    # 　d(w) は **プール基準**なので、w=1.0 の値は「λ補正Harville vs 枠連プール」＝
+    # 　**既知の枠連D=+0.0182 と同じ量**。これを「新しい利得」と読むと**二重計上**になる。
+    # 　★現行の最良は w=1.0（λ補正Harville）なので、**上積みは d(w) − d(1.0)** で測る。
+    print("\n★★上積み＝ d(w) − d(w=1.0)（**現行の最良を基準にする**。ここが判定の本体）")
+    print("　⚠事前登録6の『D>+0.005』はプール基準で書いてしまっていた。**基準の取り違え**を訂正する。")
+    j1 = WS.index(1.0)
+    print(f"{'w':>6}{'上積み':>10}{'99%CI下':>10}{'上':>9}{'判定':>7}")
+    inc_best = None
+    for j, w in enumerate(WS):
+        if w == 1.0:
+            continue
+        m, lo, hi = mci(dtab[j] - dtab[j1])
+        if inc_best is None or m > inc_best[1]:
+            inc_best = (w, m, lo)
+        print(f"{w:>6.2f}{m:>+10.4f}{lo:>+10.4f}{hi:>+9.4f}"
+              f"{('★' if lo > 0 else ''):>7}")
+
     # ★ウォークフォワード（wを前年までで決める）
     out, picked = [], []
     for yy in sorted(set(yrs_.tolist())):
@@ -171,9 +193,31 @@ def main():
         for yy, w, n, mm, lo2 in picked:
             print(f"   {yy}  w={w:<5g} {n:>5}本  {mm:+.4f}" + ("  ★" if lo2 > 0 else ""))
         print(f"   → {pos}/{len(picked)} 年で正")
-        print("\n★運用の判定（事前登録6のとおり）")
-        ok = m > 0.005 and pos >= 10
-        print(f"   D>+0.005 かつ 10年以上で正 → {'**満たした。混ぜる価値がある**' if ok else '満たさない。**運用は変えない**'}")
+        # ★上積みのウォークフォワード（これが運用の判定に使う数字）
+        inc = []
+        picked2 = []
+        for yy in sorted(set(yrs_.tolist())):
+            tr, te = yrs_ < yy, yrs_ == yy
+            if tr.sum() < 1000:
+                continue
+            cand = [k for k in range(len(WS)) if WS[k] != 1.0]
+            k = cand[int(np.argmax([(dtab[c, tr] - dtab[j1, tr]).mean() for c in cand]))]
+            v = dtab[k, te] - dtab[j1, te]
+            picked2.append((yy, WS[k], int(te.sum()), float(v.mean())))
+            inc.extend(v.tolist())
+        mi, loi, hii = mci(np.array(inc))
+        posi = sum(1 for _, _, _, vv in picked2 if vv > 0)
+        print(f"\n★★上積みのウォークフォワード: {len(inc):,}件  "
+              f"**{mi:+.4f}**  99%CI [{loi:+.4f}, {hii:+.4f}]  必要量の {mi/NEED:.1%}")
+        for yy, w, n, vv in picked2:
+            print(f"   {yy}  w={w:<5g} {n:>5}本  {vv:+.4f}")
+        print(f"   → {posi}/{len(picked2)} 年で正")
+        print("\n★運用の判定（**上積みで**判定する。事前登録6の基準の取り違えを訂正）")
+        ok = mi > 0.005 and posi >= 10
+        print(f"   上積み>+0.005 かつ 10年以上で正 → "
+              f"{'**満たした。混ぜる価値がある**' if ok else '**満たさない。運用は変えない**'}")
+        print(f"   ※参考: w=1.0（現行の最良）の対プール値 {dtab[j1].mean():+.4f} は"
+              f"**既知の枠連D=+0.0182 と同じ量**。板から測っても一致した＝道具の検算。")
 
 
 if __name__ == "__main__":

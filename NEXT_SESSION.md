@@ -8,7 +8,7 @@
 
 **① 枠連の板を集める**（`--type 3`・**いま走っている**）
 ```
-tail -3 /tmp/waku.log                       # 進捗
+tail -3 ~/waku.log                       # 進捗
 python3 ml/nk_odds_bulk.py --type 3 --status
 ```
 ⚠枠連は**9頭以上でしか発売されない**ので「空」がそこそこ出るのが正常。
@@ -18,7 +18,7 @@ python3 ml/nk_odds_bulk.py --type 3 --status
 ```
 nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py --type 4; rc=$?; \
   [ $rc -eq 0 ] && break; [ $rc -eq 2 ] && { echo "★ブロックの疑いで停止"; break; }; \
-  sleep 300; done' > /tmp/umaren.log 2>&1 &
+  sleep 300; done' > ~/umaren.log 2>&1 &
 ```
 ★**(127)のため**。枠連D=+0.0182 は本プロジェクトで**唯一プラスの数字**だが、(89)⑥が
 「**枠連プールが甘い**のか**Harvilleが枠集約で誤差を相殺している**のか分離できない」と留保したまま。
@@ -32,7 +32,7 @@ cd ~/keiba-index-generator
 git pull --no-rebase --no-edit origin claude/handoff-env-check-2kexpo   # ★必須
 nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py --type 2; rc=$?; \
   [ $rc -eq 0 ] && break; [ $rc -eq 2 ] && { echo "★ブロックの疑いで停止"; break; }; \
-  sleep 300; done' > /tmp/fuku.log 2>&1 &
+  sleep 300; done' > ~/fuku.log 2>&1 &
 ```
 ⚠**`git pull` を必ず先に**。複勝は範囲を持つ券種で、`[下限, 上限]` を保存するパーサ修正が
 　入っている。無いと下限しか記録されず**18時間の取り直し**になる。
@@ -251,7 +251,7 @@ netkeibaの `api_get_jra_odds.html?type=N` で**過去レースの確定オッ�
 ### ★収集の続き（2026-08-09に再開する）
 ```
 cd ~/keiba-index-generator
-nohup caffeinate -ims bash -c 'until python3 ml/nk_odds_bulk.py; do sleep 300; done' > /tmp/odds.log 2>&1 &
+nohup caffeinate -ims bash -c 'until python3 ml/nk_odds_bulk.py; do sleep 300; done' > ~/odds.log 2>&1 &
 ```
 **台帳(`data/nk_odds/done_type7.txt`)があるので、いつ止めても続きから走る**。
 16,719/42,181 まで済み（残り約11時間）。全部揃ったら (113)(A)(B) を全期間で測り直す。

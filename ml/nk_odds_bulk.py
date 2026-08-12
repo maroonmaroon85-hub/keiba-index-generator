@@ -16,15 +16,18 @@
 ★Macで放置するときの注意
 　・**スリープすると止まる**（前セッションで実測済み）。`caffeinate` で抑える。
 　・ターミナルを閉じても続くように `nohup`、出力はログに落とす。**寝て止まっても自動で再開する**形:
+　　⚠**ログは `/tmp` に置かない**。**Macを再起動すると /tmp は消える**ので進捗が追えなくなる
+　　　（2026-08-11に実際に消した）。`~/waku.log` のようにホームへ。
+　　　★取得済みは台帳に残るので**データ自体は無駄にならない**。消えるのはログだけ。
 　　　nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py; rc=$?; \\
 　　　  [ $rc -eq 0 ] && break; [ $rc -eq 2 ] && { echo "★ブロックの疑いで停止"; break; }; \\
-　　　  sleep 300; done' > /tmp/odds.log 2>&1 &
+　　　  sleep 300; done' > ~/odds.log 2>&1 &
 　　　（`-i`アイドルスリープ抑止 `-m`ディスク `-s`システム。`-d`は付けない＝画面は消えてよい）
 　・**終了コードは 0=全部終わった / 1=途中で止まった / 2=連続失敗で止まった**。
 　　⚠**2で再開してはいけない**。最初は `until ...; do sleep 300; done` で回していたが、
 　　　これだと2でも5分後に叩き直してしまい、「連続失敗したら止まる」配慮が無意味だった。
 　・⚠`caffeinate` でも**ノートの蓋を閉じると寝る**。蓋は開けたまま・電源につないでおく。
-　・様子を見る:  tail -f /tmp/odds.log     途中経過:  python3 ml/nk_odds_bulk.py --status
+　・様子を見る:  tail -f ~/odds.log     途中経過:  python3 ml/nk_odds_bulk.py --status
 　・止める:      pkill -f nk_odds_bulk; pkill caffeinate
 
 使い方:

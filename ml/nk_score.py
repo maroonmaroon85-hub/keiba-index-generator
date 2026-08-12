@@ -59,16 +59,19 @@ def main():
         reco = json.load(open(fp, encoding="utf-8"))
         print(f"=== {reco['date']}（{fp}）")
         for rc in reco["races"]:
-            if rc.get("excluded"):
-                continue
+            # ★除外レースでも**甘い軸だけは採点する**。
+            # 　以前はここで `continue` していたので、除外レースに買い目が出ると
+            # 　**実際に買った1点が成績に入らない**（9頭未満で同じ穴を踏んでいる）。
+            # 　(117)で除外を20%→40%にしたぶん、該当する確率はちょうど2倍になった。
+            skip_bets = bool(rc.get("excluded"))
             p = pays.get(rc["raceid"] if "raceid" in rc else "")
             if p is None:      # 推奨JSONにraceidが無い版のため場所+Rから引けない場合がある
                 p = next((v for k, v in pays.items()
                           if k.endswith(f"{rc['r']:02d}")and rc["label"][:2] in k), None)
-            line = f"  {rc['label']:8s} 軸{rc['axis']:>2}番"
+            line = f"  {'×除外' if skip_bets else '    '}{rc['label']:8s} 軸{rc['axis']:>2}番"
             # ★枠連が発売されないレース（9頭未満）は、甘い軸の三連複だけを記録している。
             # 　枠連・三連複BOXの「払戻データなし」を出しても意味が無いので飛ばす。
-            for name, key, unit, ordered in ([] if rc.get("waku_na") else BETS):
+            for name, key, unit, ordered in ([] if (rc.get("waku_na") or skip_bets) else BETS):
                 combos = rc.get(key) or []
                 if not combos or not p or name not in p:
                     if key != "sanrentan_2nd":   # 三連単は既定で買わないので「なし」を出さない
@@ -99,7 +102,7 @@ def main():
                 soft[2] += v > 0
                 soft[3].append((reco["date"], rc["label"], c, v))
                 line += f"  ★甘い軸{c}: 100円→{v:,}円"
-            l5 = rc.get("l5")
+            l5 = None if skip_bets else rc.get("l5")
             if l5:
                 n_dual += 1
                 n_diff += 0 if l5.get("same_as_current") else 1
@@ -115,7 +118,9 @@ def main():
                     tot[name][1] += sum(v for _, v in hits)
                     tot[name][2] += len(hits)
                 line += ("  L5:同" if l5.get("same_as_current") else "  L5:違")
-            print(line)
+            # 除外レースで甘い軸も無いなら、何も足されていないので出さない
+            if not skip_bets or "★甘い軸" in line:
+                print(line)
 
     print()
     for name, _, _, _ in BETS + (ALT if n_dual else []):

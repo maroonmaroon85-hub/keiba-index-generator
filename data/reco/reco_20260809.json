@@ -1,6 +1,7 @@
 {
  "date": "2026-08-09",
- "waku_score_p20": 0.15112742453201755,
+ "excl_pct": 40,
+ "waku_score_th": 0.18048641300023058,
  "races": [
   {
    "raceid": "01261610",
@@ -372,7 +373,7 @@
     6
    ],
    "waku_score": 0.15306,
-   "excluded": false,
+   "excluded": true,
    "scores": [
     {
      "umaban": 1,
@@ -684,7 +685,7 @@
     14
    ],
    "waku_score": 0.16917,
-   "excluded": false,
+   "excluded": true,
    "scores": [
     {
      "umaban": 11,

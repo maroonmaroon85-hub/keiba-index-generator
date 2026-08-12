@@ -4,37 +4,70 @@
 
 ---
 
-## ★残っているMac作業（2026-08-11時点）
+## ★残っているMac作業（2026-08-11時点・上から順に）
 
-**① オッズ板の収集を完走させる**（残り約3,700本＝WAIT3秒なら約3時間）
+**① 枠連の板を集める**（`--type 3`・**いま走っている**）
+```
+tail -3 ~/waku.log                       # 進捗
+python3 ml/nk_odds_bulk.py --type 3 --status
+```
+⚠枠連は**9頭以上でしか発売されない**ので「空」がそこそこ出るのが正常。
+終わったら push → cloud側で **`python3 ml/audit_waku_board.py`（(125)）** を回す。
+
+**②-0 馬連の板を集める**（`--type 4`・①のあと。**これが最優先**）
+```
+nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py --type 4; rc=$?; \
+  [ $rc -eq 0 ] && break; [ $rc -eq 2 ] && { echo "★ブロックの疑いで停止"; break; }; \
+  sleep 300; done' > ~/umaren.log 2>&1 &
+```
+★**(127)のため**。枠連D=+0.0182 は本プロジェクトで**唯一プラスの数字**だが、(89)⑥が
+「**枠連プールが甘い**のか**Harvilleが枠集約で誤差を相殺している**のか分離できない」と留保したまま。
+**馬連を枠に集約すればHarvilleを一切使わない枠組分布が作れる**ので、留保が外れる。
+⚠**(a)が負なら、(112)(114)(117)で積み上げた枠連の利得が全部道具の癖だったことになる**。
+　土台を確かめる実験なので、他のどれより先にやる価値がある。
+
+**② 複勝の板を集める**（`--type 2`・②-0のあと）
 ```
 cd ~/keiba-index-generator
-git pull --no-rebase --no-edit origin claude/handoff-env-check-2kexpo
-nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py; rc=$?; \
+git pull --no-rebase --no-edit origin claude/handoff-env-check-2kexpo   # ★必須
+nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py --type 2; rc=$?; \
   [ $rc -eq 0 ] && break; [ $rc -eq 2 ] && { echo "★ブロックの疑いで停止"; break; }; \
-  sleep 300; done' > /tmp/odds.log 2>&1 &
+  sleep 300; done' > ~/fuku.log 2>&1 &
 ```
-38,445/42,181 まで済み。**終わったら push**。**急ぐ作業ではない**——
-**結論は37,000本で確定済み**（(A) ρ=−1.000／(B) 年分割11/13年）。残りで数字は小数第4位しか動かない。
+⚠**`git pull` を必ず先に**。複勝は範囲を持つ券種で、`[下限, 上限]` を保存するパーサ修正が
+　入っている。無いと下限しか記録されず**18時間の取り直し**になる。
+終わったら push → cloud側で **`python3 ml/audit_fuku_board.py`（(124)）** を回す。
 
-**② 開催日の運用**（毎週・(112)の標本を積む唯一の手段）
+**③ 本番モデルを再学習する**（除外率を40%にした分の閾値がmetaに要る）
 ```
-# 当日朝（Mac）
-python3 ml/nk_fetch.py entries <日付>
-# 発走30分前（Mac・標準ライブラリだけで完結）
-python3 ml/nk_race.py <日付> <場> <R>
-# レース後（Mac）
+python3 ml/train_prod.py 3
+```
+回さなくても**従来どおり20%除外で動く**（警告が出るだけ）。急がない。
+
+**④ 開催日の運用**（毎週・(112)の標本を積む唯一の手段）
+```
+python3 ml/nk_fetch.py entries <日付>                    # 当日朝
+python3 ml/nk_race.py <日付> <場> <R>                    # 発走30分前
 python3 ml/nk_fetch.py results <日付> && python3 ml/nk_fetch.py pedigree
 python3 ml/nk_link.py && python3 ml/nk_score.py
 ```
 `★買う` が出た3頭だけ三連複1点。出なければ見送り（**年間60レースなので出ない週が正常**）。
 ⚠**まだ走っていない日に results を当てると0バイトのCSVができる**。消してから取り直すこと。
 
-**③ 済んだこと**
-- ~~オッズAPIの400~~ → **(115)で解決（2026-08-11）**。`pid=api_get_jra_odds&input=UTF-8` が
-  必須になっていただけ。**URLは `nk_fetch.ODDS_API` に1本化した**。
-- ~~JRA公式を代替ソースとして調べる~~ → **不要になった**。ただし**運用がnetkeibaのAPI1本に
-  乗っている**という単一障害点は残っている。次に落ちたら、**推測せずまずブラウザのNetworkを見ること**。
+### 分析器はもう書いてある（データが届いたら回すだけ）
+| | 何を測るか | 待っているデータ |
+|---|---|---|
+| **(125)** `audit_waku_board.py` | 枠連プールは単勝の情報を取り込みきれているか | `--type 3` |
+| **(124)** `audit_fuku_board.py` | (99)②が「原理的に無理」とした複勝の**層別D** | `--type 2` |
+| **★(127)** `audit_waku_vs_umaren.py` | 枠連D=+0.0182 は本物か**Harvilleの誤差相殺**か | `--type 3` **＋ `--type 4`** |
+★どちらも**運用が変わる条件を先に書いてある**（(125)はWFのDが+0.005超かつ10/13年以上）。
+★どちらも**道具の検算**（板×100 と実配当のずれ）を入れてある。(113)の水準は0.14%。
+
+### 済んだこと
+- ~~オッズAPIの400~~ → **(115)で解決**。`pid` と `input` が必須になっていただけ。
+  **URLは `nk_fetch.ODDS_API` に1本化した**。次に落ちたら**推測せずブラウザのNetworkを見る**。
+- ~~三連複の板~~ → **(113)完了**。42,181本すべて収集済み。
+- ~~古い道具のまま残っていた結論の監査~~ → **(116)〜(122)で全項目完了**。
 
 ---
 
@@ -218,7 +251,7 @@ netkeibaの `api_get_jra_odds.html?type=N` で**過去レースの確定オッ�
 ### ★収集の続き（2026-08-09に再開する）
 ```
 cd ~/keiba-index-generator
-nohup caffeinate -ims bash -c 'until python3 ml/nk_odds_bulk.py; do sleep 300; done' > /tmp/odds.log 2>&1 &
+nohup caffeinate -ims bash -c 'until python3 ml/nk_odds_bulk.py; do sleep 300; done' > ~/odds.log 2>&1 &
 ```
 **台帳(`data/nk_odds/done_type7.txt`)があるので、いつ止めても続きから走る**。
 16,719/42,181 まで済み（残り約11時間）。全部揃ったら (113)(A)(B) を全期間で測り直す。

@@ -1,26 +1,28 @@
-"""TARGETの時系列オッズ（**枠連・馬連**）を読む。単勝用 `odds_ts.py` の組券版。
+"""TARGETの「**指定**時系列オッズ(CSV形式)」（枠連・馬連）を読む。(148)のための部品。
 
-★これは (148) のための部品。**まず1ファイル見てから確定させる**方針なので、
-　**列の意味を決め打ちせず、ヘッダ行から組キーを起こす**作りにしてある。
-
-想定している形（単勝版 `odds_ts.py` と同じ枠組み・Shift_JIS・列名行あり）:
+★実データで形式を確定させた（2026-08-14）。**1ファイルに全レースが入る**（フル形式とは違う）:
 ```
-レースID | 区分 | 月日時分 | 頭数 | 票数 | <組1> | <組2> | … | <組K>
+レースID,区分,月日時分,頭数,<券種>票数,枠1-1,枠1-2,…,枠8-8      ← 枠連は36組
+2026072501010101,1,07242058,8,0,0.0,0.0,…                      ← 前日20:58
+2026072501010101,1,07250901,8,…                                 ← 当日09:01
+2026072501010101,1,07250949,8,…                                 ← ★発走11分前
+2026072501010101,4,07251005,8,…                                 ← 確定（区分4）
 ```
 ・レースID … 16桁 `YYYYMMDD` + 場(2) + 回(2) + 日(2) + R(2)
-・区分     … 1=発売中 / 3=締切時点 / 4=確定
-・月日時分 … `MMDDHHMM`
-・**組の列名**は `1-2` `12` `1－2` などの表記ゆれがありうるので、
-　**ヘッダから数字だけ取り出して2つに割る**（`1-2`→(1,2) / `0102`→(1,2)）。
+・**区分 1=発売中 / 4=確定**。実測では **1が3行・4が1行＝1レース4時点**。
+・★**「最後の区分1」は発走の11分前でほぼ一定**（実測36レースで発走−11分）。
+　→ **(148)の「10分前」はこのスナップを使う**。
+・**行は時刻順に並んでいない**ので、**読んでから並べ替える**こと。
+・**8頭以下は枠連が発売されないので全0**。それが正常（実測: 9頭以上30レースは全て値あり）。
 
-★結合キーはファイル名の先頭2文字を除いた8桁（単勝版と同じ規則）。
+★手元の8桁raceidへの変換: `場(2) + 年下2桁(2) + 回(1桁) + 日(1桁) + R(2)`
+　例 `2026072501010101` → `01261101`（実測36レース中33本が既存データと一致）。
 
-⚠★**Macには pandas も numpy も無い**（HANDOFFの既知の制約。2026-08-13にここで一度落とした）。
-　→ **プローブ（`python3 ml/odds_ts_combo.py <dir>`）は標準ライブラリだけで動く**ようにしてある。
-　　 **解析側（load_dir / odds_at）だけが遅延importで numpy/pandas を使う**（クラウドで動かす）。
+⚠★**Macには pandas も numpy も無い**。**このファイルは標準ライブラリだけで動く**
+　（2026-08-13にここで一度落とした）。解析側（(148)）がクラウドで numpy に載せ替える。
 
 使い方:
-    python3 ml/odds_ts_combo.py data/odds_ts_waku      # ★Macで実行可。中身と列の解釈を表示
+    python3 ml/odds_ts_combo.py data/odds_ts_waku/ts_waku.csv    # ★Macで実行可
 """
 import csv
 import glob
@@ -28,15 +30,16 @@ import io
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 
 K_FINAL = "4"
-K_CLOSE = "3"
+K_SALE = "1"
 FIXED = 5          # レースID・区分・月日時分・頭数・票数
+LABELS = ("前日", "当日朝", "直前", "確定")
 
 
 def _key(cell):
-    """ヘッダのセル → (a, b)。取れなければ None。"""
+    """ヘッダのセル（`枠1-2` / `馬連1-2` など）→ (a, b)。取れなければ None。"""
     ds = re.findall(r"\d+", str(cell))
     if not ds:
         return None
@@ -52,99 +55,98 @@ def _key(cell):
     return (a, b) if a <= b else (b, a)
 
 
-def _dt(year, mmddhhmm):
-    return datetime(int(year), int(mmddhhmm[:2]), int(mmddhhmm[2:4]),
-                    int(mmddhhmm[4:6]), int(mmddhhmm[6:8]))
+def _dt(year, s):
+    return datetime(int(year), int(s[:2]), int(s[2:4]), int(s[4:6]), int(s[6:8]))
 
 
-def load_race(path):
-    """1ファイル → {raceid, date, post, times, kubun, keys, odds(T×K)}。読めなければ None。
+def rid8_of(rid16):
+    """16桁レースID → 手元の8桁raceid（場+年下2桁+回+日+R）。"""
+    if len(rid16) != 16 or not rid16.isdigit():
+        return None
+    y, jyo, kai, hi, rr = rid16[2:4], rid16[8:10], rid16[10:12], rid16[12:14], rid16[14:16]
+    return f"{jyo}{y}{int(kai)}{int(hi)}{rr}"
 
-    ★標準ライブラリだけで動く（Macで使うため）。odds は list[list[float|None]]。
+
+def load_file(path):
+    """1ファイル → {rid8: {"n":頭数, "snaps":{ラベル: (時刻, {組:オッズ})}}}。
+
+    ★ラベルは **前日 / 当日朝 / 直前 / 確定**。
+    　「直前」＝**区分1の最後**（実測で発走−11分）。「前日」＝区分1の最初。
+    　「当日朝」＝区分1の最後から1つ前。区分1が3行に満たなければ入らない。
     """
     txt = open(path, "rb").read().decode("shift_jis", "replace")
     rows = [r for r in csv.reader(io.StringIO(txt)) if r and r[0].strip()]
     if len(rows) < 2:
-        return None
-    head, body = rows[0], rows[1:]
-    keys = [_key(c) for c in head[FIXED:]]
+        return {}
+    keys = [_key(c) for c in rows[0][FIXED:]]
     if not any(k is not None for k in keys):
-        return None
-    rid16 = body[0][0].strip()
-    year = rid16[:4]
-    times, kubun, odds = [], [], []
-    for r in body:
-        if len(r) < FIXED + 1:
+        return {}
+    per = {}
+    for r in rows[1:]:
+        if len(r) < FIXED + 1 or not r[0].strip().isdigit():
             continue
-        times.append(_dt(year, r[2].strip()))
-        kubun.append(r[1].strip())
-        row = []
-        for i in range(len(keys)):
+        rid8 = rid8_of(r[0].strip())
+        if not rid8:
+            continue
+        vals = {}
+        for i, k in enumerate(keys):
+            if k is None or FIXED + i >= len(r):
+                continue
             try:
-                row.append(float(r[FIXED + i]))
-            except (IndexError, ValueError):
-                row.append(None)
-        odds.append(row)
-    if not times:
-        return None
-    close = [t for t, k in zip(times, kubun) if k == K_CLOSE]
-    return {"raceid": os.path.basename(path)[2:10], "rid16": rid16,
-            "date": datetime(int(rid16[:4]), int(rid16[4:6]), int(rid16[6:8])),
-            "post": close[-1] if close else times[-1],
-            "times": times, "kubun": kubun, "keys": keys, "odds": odds}
-
-
-def load_dir(d):
+                v = float(r[FIXED + i])
+            except ValueError:
+                continue
+            if v > 0:
+                vals[k] = v
+        per.setdefault(rid8, {"n": int(r[3] or 0), "rows": []})["rows"].append(
+            (r[1].strip(), _dt(r[0][:4], r[2].strip()), vals))
     out = {}
-    for p in sorted(glob.glob(os.path.join(d, "*.CSV")) + glob.glob(os.path.join(d, "*.csv"))):
-        rec = load_race(p)
-        if rec:
-            out[rec["raceid"]] = rec
+    for rid8, d in per.items():
+        rs = sorted(d["rows"], key=lambda x: x[1])
+        sale = [(t, v) for k, t, v in rs if k == K_SALE]
+        fin = [(t, v) for k, t, v in rs if k == K_FINAL]
+        snaps = {}
+        if sale:
+            snaps["前日"] = sale[0]
+            snaps["直前"] = sale[-1]
+            if len(sale) >= 3:
+                snaps["当日朝"] = sale[-2]
+        if fin:
+            snaps["確定"] = fin[-1]
+        if snaps:
+            out[rid8] = {"n": d["n"], "snaps": snaps}
     return out
 
 
-def odds_at(rec, when):
-    """`odds_ts.odds_at` と同じ規則。→ {組キー: オッズ} または None。"""
-    if when[0] == "final":
-        idx = [i for i, k in enumerate(rec["kubun"]) if k == K_FINAL]
-        i = idx[-1] if idx else len(rec["times"]) - 1
-    else:
-        if when[0] == "before":
-            cut = rec["post"] - timedelta(minutes=when[1])
-        else:
-            day = rec["date"] - timedelta(days=1) if when[0] == "prev" else rec["date"]
-            cut = day + timedelta(hours=when[1], minutes=when[2])
-        idx = [i for i, t in enumerate(rec["times"]) if t <= cut]
-        if not idx:
-            return None
-        i = idx[-1]
-    return {k: v for k, v in zip(rec["keys"], rec["odds"][i])
-            if k is not None and v is not None and v > 0}
+def load_dir(d):
+    """ディレクトリでもファイルでも受ける。複数ファイルはマージする。"""
+    if os.path.isfile(d):
+        return load_file(d)
+    out = {}
+    for p in sorted(glob.glob(os.path.join(d, "*.CSV")) + glob.glob(os.path.join(d, "*.csv"))):
+        out.update(load_file(p))
+    return out
 
 
 def main():
     d = sys.argv[1] if len(sys.argv) > 1 else "data/odds_ts_waku"
-    fs = sorted(glob.glob(os.path.join(d, "*.CSV")) + glob.glob(os.path.join(d, "*.csv")))
-    if not fs:
-        sys.exit(f"{d} にCSVが無い。TARGETから出して置くこと。")
-    print(f"{d}: {len(fs)} ファイル")
-    txt = open(fs[0], "rb").read().decode("shift_jis", "replace")
-    rows = [r for r in csv.reader(io.StringIO(txt)) if r and r[0].strip()]
-    print(f"\n★1ファイル目 {os.path.basename(fs[0])} のヘッダ（先頭12列）:")
-    print("  ", rows[0][:12])
-    print(f"  列数 {len(rows[0])} / 行数 {len(rows)-1}")
-    print(f"\n★組キーとして解釈できた列: ", end="")
-    keys = [_key(c) for c in rows[0][FIXED:]]
-    ok = [k for k in keys if k is not None]
-    print(f"{len(ok)}/{len(keys)}   例: {ok[:8]}")
-    rec = load_race(fs[0])
-    if rec is None:
-        sys.exit("⚠パースできなかった。ヘッダを見て `_key` を直すこと。")
-    print(f"\n★時点数 {len(rec['times'])} / 発走(区分3) {rec['post']}")
-    for w in (("prev", 21, 0), ("before", 30), ("before", 10), ("final",)):
-        o = odds_at(rec, w)
-        print(f"  {str(w):<20} 組数 {len(o) if o else 0}"
-              + (f"  例 {list(o.items())[:3]}" if o else ""))
+    rec = load_dir(d)
+    if not rec:
+        sys.exit(f"{d} が読めない。TARGETの「指定時系列オッズ(CSV形式)」で出したCSVを置くこと。")
+    print(f"{d}: {len(rec):,} レース")
+    ns = sorted(r["n"] for r in rec.values())
+    print(f"　頭数の中央値 {ns[len(ns)//2]}　（枠連は9頭以上でしか発売されない）")
+    for lab in LABELS:
+        have = [r for r in rec.values() if lab in r["snaps"]]
+        wv = [r for r in have if r["snaps"][lab][1]]
+        print(f"　{lab:<4} {len(have):>4}レースに存在 / うちオッズあり {len(wv):>4}"
+              + (f"　例 {list(list(wv[0]['snaps'][lab][1].items())[:3])}" if wv else ""))
+    k = sorted(rec)[0]
+    print(f"\n例 {k}（{rec[k]['n']}頭）:")
+    for lab in LABELS:
+        s = rec[k]["snaps"].get(lab)
+        if s:
+            print(f"  {lab:<4} {s[0]:%m-%d %H:%M}  組数 {len(s[1])}")
 
 
 if __name__ == "__main__":

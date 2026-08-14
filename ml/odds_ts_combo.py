@@ -15,8 +15,12 @@
 
 ★結合キーはファイル名の先頭2文字を除いた8桁（単勝版と同じ規則）。
 
+⚠★**Macには pandas も numpy も無い**（HANDOFFの既知の制約。2026-08-13にここで一度落とした）。
+　→ **プローブ（`python3 ml/odds_ts_combo.py <dir>`）は標準ライブラリだけで動く**ようにしてある。
+　　 **解析側（load_dir / odds_at）だけが遅延importで numpy/pandas を使う**（クラウドで動かす）。
+
 使い方:
-    python3 ml/odds_ts_combo.py data/odds_ts_waku      # ★まず中身を見る（列の解釈を表示）
+    python3 ml/odds_ts_combo.py data/odds_ts_waku      # ★Macで実行可。中身と列の解釈を表示
 """
 import csv
 import glob
@@ -24,9 +28,7 @@ import io
 import os
 import re
 import sys
-
-import numpy as np
-import pandas as pd
+from datetime import datetime, timedelta
 
 K_FINAL = "4"
 K_CLOSE = "3"
@@ -51,11 +53,15 @@ def _key(cell):
 
 
 def _dt(year, mmddhhmm):
-    return pd.Timestamp(f"{year}-{mmddhhmm[:2]}-{mmddhhmm[2:4]} {mmddhhmm[4:6]}:{mmddhhmm[6:8]}")
+    return datetime(int(year), int(mmddhhmm[:2]), int(mmddhhmm[2:4]),
+                    int(mmddhhmm[4:6]), int(mmddhhmm[6:8]))
 
 
 def load_race(path):
-    """1ファイル → {raceid, date, post, times, kubun, keys, odds(T×K)}。読めなければ None。"""
+    """1ファイル → {raceid, date, post, times, kubun, keys, odds(T×K)}。読めなければ None。
+
+    ★標準ライブラリだけで動く（Macで使うため）。odds は list[list[float|None]]。
+    """
     txt = open(path, "rb").read().decode("shift_jis", "replace")
     rows = [r for r in csv.reader(io.StringIO(txt)) if r and r[0].strip()]
     if len(rows) < 2:
@@ -72,18 +78,20 @@ def load_race(path):
             continue
         times.append(_dt(year, r[2].strip()))
         kubun.append(r[1].strip())
-        odds.append([pd.to_numeric(r[FIXED + i], errors="coerce")
-                     if FIXED + i < len(r) else np.nan for i in range(len(keys))])
+        row = []
+        for i in range(len(keys)):
+            try:
+                row.append(float(r[FIXED + i]))
+            except (IndexError, ValueError):
+                row.append(None)
+        odds.append(row)
     if not times:
         return None
-    kubun = np.array(kubun)
-    times = pd.DatetimeIndex(times)
-    close = times[kubun == K_CLOSE]
+    close = [t for t, k in zip(times, kubun) if k == K_CLOSE]
     return {"raceid": os.path.basename(path)[2:10], "rid16": rid16,
-            "date": pd.Timestamp(f"{rid16[:4]}-{rid16[4:6]}-{rid16[6:8]}"),
-            "post": close[-1] if len(close) else times[-1],
-            "times": times, "kubun": kubun, "keys": keys,
-            "odds": np.array(odds, dtype=float)}
+            "date": datetime(int(rid16[:4]), int(rid16[4:6]), int(rid16[6:8])),
+            "post": close[-1] if close else times[-1],
+            "times": times, "kubun": kubun, "keys": keys, "odds": odds}
 
 
 def load_dir(d):
@@ -98,21 +106,20 @@ def load_dir(d):
 def odds_at(rec, when):
     """`odds_ts.odds_at` と同じ規則。→ {組キー: オッズ} または None。"""
     if when[0] == "final":
-        idx = np.where(rec["kubun"] == K_FINAL)[0]
-        i = idx[-1] if len(idx) else -1
+        idx = [i for i, k in enumerate(rec["kubun"]) if k == K_FINAL]
+        i = idx[-1] if idx else len(rec["times"]) - 1
     else:
         if when[0] == "before":
-            cut = rec["post"] - pd.Timedelta(minutes=when[1])
+            cut = rec["post"] - timedelta(minutes=when[1])
         else:
-            day = rec["date"] - pd.Timedelta(days=1) if when[0] == "prev" else rec["date"]
-            cut = day + pd.Timedelta(hours=when[1], minutes=when[2])
-        idx = np.where(rec["times"] <= cut)[0]
-        if len(idx) == 0:
+            day = rec["date"] - timedelta(days=1) if when[0] == "prev" else rec["date"]
+            cut = day + timedelta(hours=when[1], minutes=when[2])
+        idx = [i for i, t in enumerate(rec["times"]) if t <= cut]
+        if not idx:
             return None
         i = idx[-1]
-    row = rec["odds"][i]
-    return {k: float(v) for k, v in zip(rec["keys"], row)
-            if k is not None and np.isfinite(v) and v > 0}
+    return {k: v for k, v in zip(rec["keys"], rec["odds"][i])
+            if k is not None and v is not None and v > 0}
 
 
 def main():

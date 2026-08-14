@@ -72,6 +72,8 @@ def main():
     rows = []
     for rid in ids:
         r = races[rid]
+        # ⚠odds_ts_combo は標準ライブラリだけで動く（Macで使うため）。
+        #   ここ（クラウド側）で numpy に載せ替える。
         if not r.get("wakuren"):
             continue
         rl = realized(r)

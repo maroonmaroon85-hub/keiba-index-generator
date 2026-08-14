@@ -1,7 +1,9 @@
 """(148) ★★★★★(141)を**発走前の両プール**で決着させる — **唯一100%を超えた数字の最終判定**
 
 ⚠**枠連と馬連の時系列オッズが要る**（TARGETの「指定時系列オッズ(CSV形式)」）。
-　`data/odds_ts_waku/` と `data/odds_ts_umaren/`。無ければ何もせず終了する。
+　`data/odds_ts_all/` `data/odds_ts_waku/` `data/odds_ts_umaren/` のどこに置いてもよい。
+　★**「全オッズ」を1ファイルに出した場合も同じ**（`load_pool` が券種の列だけ拾う）。
+　無ければ何もせず終了する。**集め方は `COLLECT_TS.md`**。
 
 ★★なぜこれが決定的か
 　(141)は**両プールの確定オッズ**で ROI 117.3% [103.9,130.8]（全期間）を出した。
@@ -47,7 +49,10 @@
 　　→ ★**真値の分かっている列を外す標本では、分からない列も読めない**。→ **判定基準32**。
 　★必要数（±0.005 nat を99%で）: 直前 単独 11,281R / **対応のある差 D(t)−D(確定) なら 4,685R**。
 　　（対応差は**事前登録に無い追加**。**見積もりにだけ使い、判定には使わない**。）
-　→ ★**枠連＋馬連の時系列を約4,700レース（1.5年・約150開催日）集めれば決着する**。
+　⚠★**その後「±0.005 nat」は自分で置いた恣意的な精度だと気づいて訂正した**。
+　　 **必要なのは「直前に確定と同じ優位(+0.0266)が在るか無いか」を分けること**なので、
+　　 **見分ける幅は0.0266**。→ ★**①陽性対照 522R(19開催日) / ②本判定 662R(25開催日)**。
+　→ ★**25開催日で決着する**（`ml/audit_overlay_ts_power.py` / `COLLECT_TS.md`）。
 
 実行: python3 ml/audit_overlay_ts.py
 """
@@ -60,19 +65,19 @@ sys.path.insert(0, "ml")
 from audit_cond_split import load_boards
 from audit_crosspool import PAYBACK, load_races, zq
 from audit_crosspool2 import realized
-from odds_ts_combo import LABELS, load_dir
+from odds_ts_combo import LABELS, POOL_DIRS, load_pool
 from waku_umatan import waku_of
 
 R = PAYBACK["枠連"]
 TH = 1.0 / R
-DW, DU = "data/odds_ts_waku", "data/odds_ts_umaren"
 
 
 def main():
-    tw, tu = load_dir(DW), load_dir(DU)
+    tw, tu = load_pool("枠"), load_pool("馬")
     if not tw or not tu:
-        sys.exit(f"{DW} と {DU} の両方が要る。TARGETの「指定時系列オッズ(CSV形式)」で\n"
-                 f"　枠連と馬連を出すこと。まず `python3 ml/odds_ts_combo.py {DW}` で読めるか確かめる。")
+        sys.exit("枠連と馬連の時系列が両方要る。TARGETの「指定時系列オッズ(CSV形式)」で出し、\n"
+                 f"　{' / '.join(POOL_DIRS)} のどれかに置くこと（全オッズ1ファイルでも可）。\n"
+                 "　まず `python3 ml/odds_ts_combo.py <パス>` で読めるか確かめる。")
     wb = load_boards()
     races = {r["rid"]: r for r in load_races()}
     ids = sorted(set(tw) & set(tu) & set(races))

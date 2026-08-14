@@ -22,10 +22,9 @@ import numpy as np
 sys.path.insert(0, "ml")
 from audit_crosspool import load_races, zq
 from audit_crosspool2 import realized
-from odds_ts_combo import LABELS, load_dir
+from odds_ts_combo import LABELS, load_pool
 from waku_umatan import waku_of
 
-DW, DU = "data/odds_ts_waku", "data/odds_ts_umaren"
 KNOWN = 0.0266   # ★(141)の「確定」でのD（31,130レース・11/11年で正）＝陽性対照の真値
 RESOL = 0.005    # 見分けたい幅（nat）
 PER_DAY = 27     # ★1開催日あたり判定に使えたレース数（実測: 出力36R→27R）
@@ -33,9 +32,9 @@ PER_DAY = 27     # ★1開催日あたり判定に使えたレース数（実測
 
 def per_race_d():
     """{rid: {ラベル: D}}。(148)の d と同じ計算。"""
-    tw, tu = load_dir(DW), load_dir(DU)
+    tw, tu = load_pool("枠"), load_pool("馬")
     if not tw or not tu:
-        sys.exit(f"{DW} と {DU} が要る。")
+        sys.exit("枠連と馬連の時系列が両方要る（COLLECT_TS.md 参照）。")
     races = {r["rid"]: r for r in load_races()}
     out = {}
     for rid in sorted(set(tw) & set(tu) & set(races)):

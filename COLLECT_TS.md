@@ -9,14 +9,21 @@
 ## 1開催日あたりの手順（Windows・TARGET frontier JV）
 
 ```
-【1】JV一括取得▼ → ★全オッズ(時系列も含む)(A)
-     ↑ 1回で枠連・馬連の時系列が両方落ちる。(J)と(U)を別々に押す必要は無い
-【2】F9 → 時系列オッズを★全オッズで出力 → 全選択 → ts_all_YYMMDD.csv
-【3】「前開催」ボタンで前の開催日へ → 【1】に戻る
+【1】JV一括取得▼ → 全オッズ(時系列も含む)(A)      ← ★ダウンロードだけ。CSVは出ない
+【2】F9 → 指定時系列オッズ(CSV形式) ▶ → 枠連(8枠固定)  → 全選択 → ts_waku_YYMMDD.csv
+【3】F9 → 指定時系列オッズ(CSV形式) ▶ → 馬連(18頭固定) → 全選択 → ts_umaren_YYMMDD.csv
+【4】「前開催」ボタンで前の開催日へ → 【1】に戻る
 ```
-★**置き場所は `data/odds_ts_all/`**。**1開催日1ファイル**。
-　（券種ごとに出す場合は `ts_waku_YYMMDD.csv` → `data/odds_ts_waku/`、
-　　`ts_umaren_YYMMDD.csv` → `data/odds_ts_umaren/`。**混在していても動く**）
+⚠★**F9側に「全オッズ」出力は無い**（2026-08-15に確認。`全オッズ(時系列も含む)(A)` は
+　`JV一括取得▼` の中＝**内部DBに落とすだけでCSVは出ない**）。**券種ごとに2ファイル出す**。
+★**【2】【3】は必ず「指定ファイル名」を聞いてくる**。**聞かれなければ別のメニューを開いている**。
+
+★置き場所: `ts_waku_*` → `data/odds_ts_waku/` ／ `ts_umaren_*` → `data/odds_ts_umaren/`
+★**出力サイズの目安**（36レース1開催日ぶん）: 枠連 **約43KB** / 馬連 **約162KB**。
+　**極端に小さいなら中身が空**なので出し直す。
+
+⚠★**Mac側の `~/keiba-data/` 直下に出したファイルは、しばらくすると `済み/` に移動される**
+　（何かが振り分けている・2026-08-15に判明）。**見当たらないときは `~/keiba-data/済み/` を見る**。
 
 ⚠**F9側の一括出力（複数開催日を一度に）は使えない**（2026-08-14に確認）。
 ⚠**ファイル名の YYMMDD を必ず変える**。同名だと上書きされる。
@@ -30,11 +37,11 @@
 
 ```bash
 cd ~/keiba-index-generator
-mkdir -p data/odds_ts_all
-cp ~/keiba-data/ts_all_*.csv data/odds_ts_all/
-python3 ml/odds_ts_combo.py data/odds_ts_all 枠
-python3 ml/odds_ts_combo.py data/odds_ts_all 馬
-git add data/odds_ts_all data/odds_ts_waku data/odds_ts_umaren
+cp ~/keiba-data/ts_waku_*.csv   ~/keiba-data/済み/ts_waku_*.csv   data/odds_ts_waku/   2>/dev/null
+cp ~/keiba-data/ts_umaren_*.csv ~/keiba-data/済み/ts_umaren_*.csv data/odds_ts_umaren/ 2>/dev/null
+python3 ml/odds_ts_combo.py data/odds_ts_waku
+python3 ml/odds_ts_combo.py data/odds_ts_umaren
+git add data/odds_ts_waku data/odds_ts_umaren
 git commit -m "時系列オッズ 追加ぶん"
 git push -u origin claude/handoff-env-check-2kexpo
 ```
@@ -56,37 +63,37 @@ git push -u origin claude/handoff-env-check-2kexpo
 `2026-07-25(土)` は **取得済み**（`data/odds_ts_waku/ts_waku.csv` と `data/odds_ts_umaren/ts_umaren.csv`。
 36R→判定に使えたのは27R）。**この2ファイルはそのまま置いておく**（`load_pool` が両方見る）。
 
-| # | 日付 | ファイル名 | 済 |
-|---|---|---|---|
-| 1 | 2026-07-19(日) | `ts_all_260719.csv` | ☐ |
-| 2 | 2026-07-18(土) | `ts_all_260718.csv` | ☐ |
-| 3 | 2026-07-12(日) | `ts_all_260712.csv` | ☐ |
-| 4 | 2026-07-11(土) | `ts_all_260711.csv` | ☐ |
-| 5 | 2026-07-05(日) | `ts_all_260705.csv` | ☐ |
-| 6 | 2026-07-04(土) | `ts_all_260704.csv` | ☐ |
-| 7 | 2026-06-28(日) | `ts_all_260628.csv` | ☐ |
-| 8 | 2026-06-27(土) | `ts_all_260627.csv` | ☐ |
-| 9 | 2026-06-21(日) | `ts_all_260621.csv` | ☐ |
-| 10 | 2026-06-20(土) | `ts_all_260620.csv` | ☐ |
-| 11 | 2026-06-14(日) | `ts_all_260614.csv` | ☐ |
-| 12 | 2026-06-13(土) | `ts_all_260613.csv` | ☐ |
-| 13 | 2026-06-07(日) | `ts_all_260607.csv` | ☐ |
-| 14 | 2026-06-06(土) | `ts_all_260606.csv` | ☐ |
-| 15 | 2026-05-31(日) | `ts_all_260531.csv` | ☐ |
-| 16 | 2026-05-30(土) | `ts_all_260530.csv` | ☐ |
-| 17 | 2026-05-24(日) | `ts_all_260524.csv` | ☐ |
-| 18 | 2026-05-23(土) | `ts_all_260523.csv` | ☐ |
-| 19 | 2026-05-17(日) | `ts_all_260517.csv` | ☐ |
-| 20 | 2026-05-16(土) | `ts_all_260516.csv` | ☐ |
-| 21 | 2026-05-10(日) | `ts_all_260510.csv` | ☐ |
-| 22 | 2026-05-09(土) | `ts_all_260509.csv` | ☐ |
-| 23 | 2026-05-03(日) | `ts_all_260503.csv` | ☐ |
-| 24 | 2026-05-02(土) | `ts_all_260502.csv` | ☐ |
-| 25 | 2026-04-26(日) | `ts_all_260426.csv` | ☐ |
+| # | 日付 | 枠連 | 馬連 | 済 |
+|---|---|---|---|---|
+| 1 | 2026-07-19(日) | `ts_waku_260719.csv` | `ts_umaren_260719.csv` | ☐ |
+| 2 | 2026-07-18(土) | `ts_waku_260718.csv` | `ts_umaren_260718.csv` | ☐ |
+| 3 | 2026-07-12(日) | `ts_waku_260712.csv` | `ts_umaren_260712.csv` | ☐ |
+| 4 | 2026-07-11(土) | `ts_waku_260711.csv` | `ts_umaren_260711.csv` | ☐ |
+| 5 | 2026-07-05(日) | `ts_waku_260705.csv` | `ts_umaren_260705.csv` | ☐ |
+| 6 | 2026-07-04(土) | `ts_waku_260704.csv` | `ts_umaren_260704.csv` | ☐ |
+| 7 | 2026-06-28(日) | `ts_waku_260628.csv` | `ts_umaren_260628.csv` | ☐ |
+| 8 | 2026-06-27(土) | `ts_waku_260627.csv` | `ts_umaren_260627.csv` | ☐ |
+| 9 | 2026-06-21(日) | `ts_waku_260621.csv` | `ts_umaren_260621.csv` | ☐ |
+| 10 | 2026-06-20(土) | `ts_waku_260620.csv` | `ts_umaren_260620.csv` | ☐ |
+| 11 | 2026-06-14(日) | `ts_waku_260614.csv` | `ts_umaren_260614.csv` | ☐ |
+| 12 | 2026-06-13(土) | `ts_waku_260613.csv` | `ts_umaren_260613.csv` | ☐ |
+| 13 | 2026-06-07(日) | `ts_waku_260607.csv` | `ts_umaren_260607.csv` | ☐ |
+| 14 | 2026-06-06(土) | `ts_waku_260606.csv` | `ts_umaren_260606.csv` | ☐ |
+| 15 | 2026-05-31(日) | `ts_waku_260531.csv` | `ts_umaren_260531.csv` | ☐ |
+| 16 | 2026-05-30(土) | `ts_waku_260530.csv` | `ts_umaren_260530.csv` | ☐ |
+| 17 | 2026-05-24(日) | `ts_waku_260524.csv` | `ts_umaren_260524.csv` | ☐ |
+| 18 | 2026-05-23(土) | `ts_waku_260523.csv` | `ts_umaren_260523.csv` | ☐ |
+| 19 | 2026-05-17(日) | `ts_waku_260517.csv` | `ts_umaren_260517.csv` | ☐ |
+| 20 | 2026-05-16(土) | `ts_waku_260516.csv` | `ts_umaren_260516.csv` | ☐ |
+| 21 | 2026-05-10(日) | `ts_waku_260510.csv` | `ts_umaren_260510.csv` | ☐ |
+| 22 | 2026-05-09(土) | `ts_waku_260509.csv` | `ts_umaren_260509.csv` | ☐ |
+| 23 | 2026-05-03(日) | `ts_waku_260503.csv` | `ts_umaren_260503.csv` | ☐ |
+| 24 | 2026-05-02(土) | `ts_waku_260502.csv` | `ts_umaren_260502.csv` | ☐ |
+| 25 | 2026-04-26(日) | `ts_waku_260426.csv` | `ts_umaren_260426.csv` | ☐ |
 
 **★祝日月曜が出てきたらここに足す**（前開催ボタンに出た日はすべて取る）:
 
-| # | 日付 | ファイル名 | 済 |
-|---|---|---|---|
-| + | 2026-07-20(月・海の日?) | `ts_all_260720.csv` | ☐ |
-| + | 2026-05-04(月・みどりの日?) | `ts_all_260504.csv` | ☐ |
+| # | 日付 | 枠連 | 馬連 | 済 |
+|---|---|---|---|---|
+| + | 2026-07-20(月・海の日?) | `ts_waku_260720.csv` | `ts_umaren_260720.csv` | ☐ |
+| + | 2026-05-04(月・みどりの日?) | `ts_waku_260504.csv` | `ts_umaren_260504.csv` | ☐ |

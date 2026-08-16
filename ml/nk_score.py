@@ -13,6 +13,7 @@ tidy形式（raceid, kind, combo, payout）には対応していない。こち�
 import csv
 import glob
 import json
+import os
 import sys
 
 
@@ -37,6 +38,24 @@ def main():
     files = sorted(glob.glob(pat))
     if not files:
         sys.exit(f"{pat} に推奨JSONがありません")
+    # ★★同じ開催日に複数の推奨ファイルがあれば**最後の1つだけ**使う（2026-08-16）。
+    #   例: 朝の `reco_20260816.json` と取り直しの `reco_20260816_pm.json`。
+    #   ⚠**両方数えると同じ日が二重計上される**（実際にそうなっていた）。
+    #   ★**「最後」＝ファイル名の辞書順で最後**＝取り直したほうが残る（判定が確定に近い側）。
+    by_day, dropped = {}, []
+    for f in files:
+        import re as _re
+        m = _re.search(r"(\d{8})", os.path.basename(f))
+        k = m.group(1) if m else f
+        if k in by_day:
+            dropped.append(by_day[k])
+        by_day[k] = f
+    files = [by_day[k] for k in sorted(by_day)]
+    if dropped:
+        print("⚠同じ開催日に複数の推奨ファイルがあったので**新しいほうだけ**使う（二重計上の防止）:")
+        for f in dropped:
+            print(f"　　除外 {os.path.basename(f)}")
+        print()
     pays = load_pays()
     print(f"払戻: {len(pays)}レース読込\n")
 
@@ -147,6 +166,23 @@ def main():
         print("\n★甘い軸の三連複: 買うと判定したレースはまだ無い"
               "（年間60レース程度なので、出ない週が正常）")
 
+        # ★★開催日ごとの一覧（**どの設定で出した推奨か**が後から分かるように・2026-08-16）
+    print("\n■ ★推奨の記録（**推奨レースを全部買った場合**。実際に買った分ではない）")
+    print(f"{'開催日':>10}{'紐':>4}{'除外率':>7}{'判定時刻':>18}{'R数':>6}{'枠連の購入':>11}")
+    for f in files:
+        try:
+            d = json.load(open(f, encoding="utf-8"))
+        except Exception:
+            continue
+        rs = [r for r in d.get("races", []) if not r.get("excluded")]
+        pt = d.get("partners")
+        if pt is None:      # 古いファイルは買い目の点数から推定する
+            pt = max((len(r.get("wakuren") or []) for r in rs), default=0)
+        print(f"{str(d.get('date','?')):>10}{pt:>4}{str(d.get('excl_pct') or '-'):>7}"
+              f"{str(d.get('odds_at') or '-'):>18}{len(rs):>6}{sum(len(r.get('wakuren') or []) for r in rs)*100:>10,}円")
+    print("⚠**紐が1と2で混ざっている**（2026-08-16に紐1へ変更）。**購入額が倍違うので合計は割り引いて読む**。")
+    print("⚠**この記録は「推奨どおり全部買った場合」**であって、**実際に買った分ではない**。")
+    print("　★**(112)の標本として使うのはこちらが正しい**（買う/買わないの判断が入らないので）。\n")
     print("\n※1日の結果に意味は無い（枠連の的中率は30%、三連複BOX4は20%）。"
           "長期の目安は両方とも84.5%。数十レース積んでから読むこと。")
 

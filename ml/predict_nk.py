@@ -330,7 +330,12 @@ def main():
         # ★キー名は `waku_score_p20` のままにしない。(117)で除外率を40%にしたので、
         # 　中身が40%の閾値なのに名前がp20だと必ず取り違える。**実際の水準も一緒に書く**。
         json.dump({"date": str(today.date()), "excl_pct": args.excl,
-                   "waku_score_th": th, "races": out_races},
+                   "waku_score_th": th,
+                   # ★★後から「どの設定で出した推奨か」を復元できるように残す（2026-08-16）
+                   #   紐の数は(155)で1に変えた。判定時刻はオッズの取得時刻（朝/取り直し）。
+                   "partners": args.partners,
+                   "odds_at": max((r.get("odds_at") or "") for r in out_races) or None,
+                   "races": out_races},
                   open(args.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         print(f"保存: {args.out}")
 

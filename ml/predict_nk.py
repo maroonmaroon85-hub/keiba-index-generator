@@ -96,6 +96,8 @@ def main():
     ap.add_argument("--excl", type=int, default=40,
                     help="枠連スコア下位N%%を除外（既定40。(117)で20→40に変更）")
     ap.add_argument("--no-exclude", action="store_true")
+    ap.add_argument("--partners", type=int, default=1,
+                    help="紐の数。★既定1＝本命((80)期待損失/(155)ROIの両方で紐1が上)。2にすると旧来の紐2")
     ap.add_argument("--dual", action="store_true",
                     help="高容量モデル(ml/model_prod_l5)の買い目も併記し、JSONにも記録する。"
                          "★(83)より差は未確定なので**比較用**。作るには "
@@ -218,7 +220,17 @@ def main():
         n = len(rc["horses"])
         wk = {h["umaban"]: h["waku"] for h in rc["horses"]}
         info = {h["umaban"]: h for h in rc["horses"]}
-        pairs = sorted({tuple(sorted((wk[nums[0]], wk[h]))) for h in nums[1:3]})
+        # ★★紐の数は既定1（本命）。(80)は期待損失、(155)はROIでも紐1が上と実測。
+        #   (155): 8つの除外水準のうち7つで紐1のROIが上（40%除外で 86.9% vs 86.1%）、
+        #   期待損失は半分（13.1円 vs 26.5円）。→ **2026-08-16に既定を紐2→紐1に変えた**。
+        #   ⚠それまで紐2で出していたので、口頭で「上位1点だけ買って」と補っていた。
+        pairs = sorted({tuple(sorted((wk[nums[0]], wk[h])))
+                        for h in nums[1:1 + args.partners]})
+        # ⚠⚠★**除外の判定は必ず紐2で作る**。`train_prod.py:113` が `wakuren_buy(nums,n,2)`
+        #   でスコアの分位を作っているので、**買い目の紐数を変えると閾値の土台がずれる**
+        #   （2026-08-16に紐1へ変えた瞬間、スコアが半減して**30/30レース全除外**になった）。
+        #   ★**判定基準34そのもの**——**閾値は「較正した時点・条件」と揃える**。
+        pairs_for_score = sorted({tuple(sorted((wk[nums[0]], wk[h]))) for h in nums[1:3]})
         # ★併記は除外レースでも記録する（後で「除外の判定自体が正しかったか」を見るため）
         alt = None
         if sub2 is not None:
@@ -236,7 +248,7 @@ def main():
         bp = {}
         for u, pv in zip(nums, q):
             bp[wk[u]] = bp.get(wk[u], 0.0) + float(pv)
-        sc = waku_score(pairs, bp)
+        sc = waku_score(pairs_for_score, bp)   # ★除外の判定は紐2固定（上のコメント参照）
         skip = (not args.no_exclude) and sc < th
         ax = info[nums[0]]
         print(f"{'×除外' if skip else '○   '}{head}  軸 {nums[0]}番{ax['name'][:9]}"

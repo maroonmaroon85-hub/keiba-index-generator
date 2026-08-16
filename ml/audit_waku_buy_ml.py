@@ -150,7 +150,9 @@ def main():
         PL.append(v / len(W))
 
     z = zq(0.01)
-    print(f"　突き合わせ {len(Aml):,}レース\n")
+    print(f"　突き合わせ {len(Aml):,}レース")
+    print("★経路: A_ml = **MLモデル** / A_mkt = **単勝オッズ** / "
+          "B = **馬連の板→枠（厳密）** / C = **枠連の板そのもの**\n")
     print(f"{'買い方':>18}{'R数':>9}{'ROI':>9}{'1R期待損失':>10}{'99%CI':>16}"
           f"  差（A_ml との対応のある差）")
     pa = summarize("★A_ml 現行の本命", Aml, z)

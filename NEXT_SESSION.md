@@ -996,10 +996,26 @@ nohup caffeinate -ims bash -c 'while :; do python3 ml/nk_odds_bulk.py --type N; 
 　⚠皮肉だが**緩めたほうが数字は信用できる**（149Rで CI も狭い）。大きさと確からしさが逆を向いている。
 
 ### 手順
+⚠★★**どこで動くかを間違えないこと（2026-08-16に2日続けて踏んだ）**
+　**`predict_nk.py` は numpy/pandas/lightgbm を使う。Macには入っていない**。
+　→ ★**Macでは動かない**。**朝は `nk_fetch.py entries` までやってプッシュし、
+　　 `predict_nk.py` はクラウド側で回す**。
+
+| コマンド | どこで | 依存 |
+|---|---|---|
+| `nk_fetch.py entries / results` | **Mac**（ネットが要る。クラウドはnetkeibaに出られない＝403） | 標準ライブラリ |
+| ★`predict_nk.py` | ★**クラウド** | **numpy/pandas/lightgbm** |
+| `reco_table.py` / `nk_race.py` / `nk_link.py` / `nk_score.py` | どちらでも | 標準ライブラリ |
+
+⚠**第1引数に entries のパスが要る**: `predict_nk.py data/nk/entriesYYYYMMDD.json --date ...`
+　（`--date` だけ渡すと `error: the following arguments are required: entries` で落ちる）
+
 ```bash
-# ① 朝（Mac→クラウド）候補を把握する
+# ① 朝（Mac）候補の元データを取ってプッシュする
 python3 ml/nk_fetch.py entries 20260809
-python3 ml/predict_nk.py --date 20260809 --out data/reco/reco_20260809.json
+git add data/nk && git commit -m "出馬表" && git push -u origin claude/handoff-env-check-2kexpo
+# ①' クラウド側で
+python3 ml/predict_nk.py data/nk/entries20260809.json --date 20260809 --out data/reco/reco_20260809.json
 python3 ml/reco_table.py --text data/reco/reco_20260809.json
 
 # ② 直前（発走30分前〜10分前）買うレースだけ取り直す

@@ -65,14 +65,14 @@ git push -u origin claude/handoff-env-check-2kexpo
 
 | # | 日付 | 枠連 | 馬連 | 済 |
 |---|---|---|---|---|
-| 1 | 2026-07-19(日) | `ts_waku_260719.csv` | `ts_umaren_260719.csv` | ☐ |
-| 2 | 2026-07-18(土) | `ts_waku_260718.csv` | `ts_umaren_260718.csv` | ☐ |
-| 3 | 2026-07-12(日) | `ts_waku_260712.csv` | `ts_umaren_260712.csv` | ☐ |
-| 4 | 2026-07-11(土) | `ts_waku_260711.csv` | `ts_umaren_260711.csv` | ☐ |
-| 5 | 2026-07-05(日) | `ts_waku_260705.csv` | `ts_umaren_260705.csv` | ☐ |
-| 6 | 2026-07-04(土) | `ts_waku_260704.csv` | `ts_umaren_260704.csv` | ☐ |
-| 7 | 2026-06-28(日) | `ts_waku_260628.csv` | `ts_umaren_260628.csv` | ☐ |
-| 8 | 2026-06-27(土) | `ts_waku_260627.csv` | `ts_umaren_260627.csv` | ☐ |
+| 1 | 2026-07-19(日) | `ts_waku_260719.csv` | `ts_umaren_260719.csv` | ✅**取得済** |
+| 2 | 2026-07-18(土) | `ts_waku_260718.csv` | `ts_umaren_260718.csv` | ✅**取得済** |
+| 3 | 2026-07-12(日) | `ts_waku_260712.csv` | `ts_umaren_260712.csv` | ✅**取得済** |
+| 4 | 2026-07-11(土) | `ts_waku_260711.csv` | `ts_umaren_260711.csv` | ✅**取得済** |
+| 5 | 2026-07-05(日) | `ts_waku_260705.csv` | `ts_umaren_260705.csv` | ✅**取得済** |
+| 6 | 2026-07-04(土) | `ts_waku_260704.csv` | `ts_umaren_260704.csv` | ✅**取得済** |
+| 7 | 2026-06-28(日) | `ts_waku_260628.csv` | `ts_umaren_260628.csv` | ✅**取得済** |
+| 8 | 2026-06-27(土) | `ts_waku_260627.csv` | `ts_umaren_260627.csv` | ✅**取得済** |
 | 9 | 2026-06-21(日) | `ts_waku_260621.csv` | `ts_umaren_260621.csv` | ☐ |
 | 10 | 2026-06-20(土) | `ts_waku_260620.csv` | `ts_umaren_260620.csv` | ☐ |
 | 11 | 2026-06-14(日) | `ts_waku_260614.csv` | `ts_umaren_260614.csv` | ☐ |

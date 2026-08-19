@@ -57,7 +57,7 @@ from audit_crosspool2 import realized
 from audit_overlay_all import load_board
 from waku_umatan import waku_of
 
-R = {"馬単": 0.775, "三連複": 0.750, "馬連": 0.775, "枠連": 0.775}
+R = {"馬単": 0.750, "三連複": 0.750, "馬連": 0.775, "枠連": 0.775}   # ★馬単は(162)で訂正
 PAYKEY = {"馬単": "馬単", "三連複": "三連複", "馬連": "馬連", "枠連": "枠連(人気順)"}
 THS = [1.00, 1.10, None, 1.50, 2.00]      # None は 1/払戻率（主閾値）
 NCMP = 5
@@ -162,6 +162,10 @@ def table(name, rows, rate):
 def controls(name, rows, rate):
     """(160)の対照4つ。①はゲート、②が本命。"""
     print(f"\n── ★(160)の対照: {name} ──")
+    ors = np.array([float((1.0 / r[2]).sum()) for r in rows])
+    print(f"　板のオーバーラウンド Σ1/odds 中央値 **{np.median(ors):.4f}**"
+          f"（理論 1/{rate:.3f} = {1/rate:.4f}）"
+          f"　四分位[{np.quantile(ors, .25):.4f}, {np.quantile(ors, .75):.4f}]")
     prop = roi(rows, lambda rat, o: np.ones_like(rat, dtype=bool),
                stake_fn=lambda o: 100.0 / o)
     flat = roi(rows, lambda rat, o: np.ones_like(rat, dtype=bool))
@@ -302,10 +306,12 @@ def main():
             bd = boards[kind].get(rid)
             if not bd:
                 continue
-            if kind in ("馬単", "三連複"):     # 板のキーが文字列なのでタプル→文字列に直す
+            # ⚠**枠連だけ load_boards() がタプルキー。他は文字列キー**——
+            # 　**(161)第1版はここで馬連を変換し忘れ、「突き合わせできたレースが無い」になった**
+            if kind != "枠連":
                 bd = {tuple(int(k[i:i + 2]) for i in range(0, len(k), 2)): o
                       for k, o in bd.items()}
-                if kind == "三連複":
+                if kind in ("三連複", "馬連"):      # 順不同の券種はキーを揃える
                     bd = {tuple(sorted(k)): o for k, o in bd.items()}
             v = payoff(r, PAYKEY[kind], list(real[kind]))
             if not v or v <= 0:
@@ -351,9 +357,12 @@ def main():
         mains[kind] = table(f"三連単→{kind}（厳密）", rows[kind], R[kind])
 
     print("\n" + "=" * 96)
-    print("■ ★★本命 A（三連単→馬単）に(160)の対照を当てる")
-    if rows["馬単"]:
-        controls("三連単→馬単", rows["馬単"], R["馬単"])
+    print("■ ★★(160)の対照を**4プール全部**に当てる")
+    print("　⚠**第1版は本命の馬単にしか当てていなかった**——"
+          "**100%を超えた枠連にこそ要る**（判定基準29）")
+    for kind in ("馬単", "枠連", "馬連", "三連複"):
+        if rows.get(kind):
+            controls(f"三連単→{kind}", rows[kind], R[kind])
 
     print("\n" + "=" * 96)
     print("★★事前登録した予測との突き合わせ（**当たっても外れても消さない**）")

@@ -27,14 +27,35 @@ netkeibaは独自の `horse_id`（`2024108137`）で、**同じ馬が別IDにな
 実行: python3 ml/nk_link.py [対象glob(既定 data/nk/DSnk*.CSV)]
 """
 import csv
+import os
 import glob
 import sys
 
 
-def build_map(pattern="*.CSV"):
-    """(馬名, 性別, 生年) → 血統登録番号。アーカイブ全体から作る。"""
+# ★netkeiba由来の成績も名寄せ表に入れる（2026-08-29のバグ修正）。
+#   これが無いと「初出走がDSnkにしかない馬」は永久に繋がらない（下記）。
+NK_PATTERN = "data/nk/DSnk*.CSV"
+
+
+def build_map(pattern="*.CSV", extra=(NK_PATTERN,)):
+    """(馬名, 性別, 生年) → 馬の一意キー。**アーカイブを先に読み、次に netkeiba 由来を読む**。
+
+    ⚠★**2026-08-29に見つかったバグ**: 以前は `*.CSV`（アーカイブ）しか読んでいなかった。
+    　**アーカイブに一度も出たことが無い馬**（＝2026-08以降に中央デビューした馬）は
+    　**DSnkに戦績があるのに `mp.get()` が None を返し、「過去走なし」として扱われていた**。
+    　実例（2026-08-29の推奨レース）: 中京1R マンナット(単勝4.4倍・前走8/23)、
+    　札幌2R タプティ、札幌3R マシュマロデイズ、札幌2R セールデュクール(**8/01と8/23の2走**)。
+    　→ **連闘馬5頭のうち4頭が、先週走っているのに「過去走なし」だった**。
+    ★**なぜアーカイブ側は動いていたか**: DSnkの col37 は、nk_link が名寄せできた馬には
+    　**8桁の血統登録番号**、できなかった馬には**10桁のnetkeiba ID**が入る。
+    　`d["horse"]` は同じ col37 を見るので、**10桁のままでも履歴側とは一致する**。
+    　**足りなかったのは「名前→10桁ID」の対応表のほうだけ**だった。
+    ⚠**アーカイブを先に読み `setdefault` で保持する**ので、既存の登録番号が上書きされることはない。
+    """
     mp = {}
     files = sorted(glob.glob(pattern))
+    for g in extra:
+        files += [q for q in sorted(glob.glob(g)) if os.path.getsize(q) > 0]
     for i, p in enumerate(files, 1):
         with open(p, encoding="shift_jis", errors="replace", newline="") as fh:
             for r in csv.reader(fh):
@@ -57,7 +78,12 @@ def main():
     if not files:
         sys.exit(f"{pat} に対象がありません")
     print("アーカイブを読み込み中（30秒〜1分）…")
-    mp = build_map()
+    # ⚠★ここは **extra=() でアーカイブ限定**にする（2026-08-29）。
+    #   既定の build_map は DSnk も読むので、そのまま使うと**自分自身を参照して
+    #   「名寄せ率100%」と誤報する**（10桁IDが10桁IDに写るだけ）。**診断値が死ぬ**。
+    #   ★予測側(`predict_nk.py`)は既定（DSnk込み）でよい。**目的が違う**——
+    #   　こちらは「アーカイブに繋がったか」、あちらは「履歴を引けるか」。
+    mp = build_map(extra=())
     print(f"名寄せ表: {len(mp):,}頭\n")
     for p in files:
         with open(p, encoding="shift_jis", errors="replace", newline="") as fh:

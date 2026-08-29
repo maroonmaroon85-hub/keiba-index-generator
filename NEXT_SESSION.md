@@ -432,6 +432,11 @@ python3 ml/nk_link.py && python3 ml/nk_score.py
 ```
 `★買う` が出た3頭だけ三連複1点。出なければ見送り（**年間60レースなので出ない週が正常**）。
 ⚠**開催日は収集を止める**（`pkill -f nk_odds_bulk; pkill caffeinate`）。当日の取得と衝突する。
+⚠⚠★**`nk_fetch.py` と `nk_link.py` は Mac 専用**（2026-08-29に事故った）。
+　★**`nk_link.py` は `data/nk/DSnk*.CSV` をその場で上書きする**ので、
+　**クラウド側でも回すと同じファイルを両方が書き換えて、必ず git の衝突になる**。
+　→ **クラウドは `predict_nk.py` / `nk_score.py` / 監査スクリプトだけ**。
+　→ 衝突したら **`git checkout --ours data/nk/DSnk*.CSV` でMac側を採る**（内容は実質同じ）。
 ⚠**まだ走っていない日に results を当てると0バイトのCSVができる**。消してから取り直すこと。
 
 ### 分析器はもう書いてある（データが届いたら回すだけ）

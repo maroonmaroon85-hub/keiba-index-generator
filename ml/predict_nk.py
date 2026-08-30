@@ -335,6 +335,16 @@ def main():
                    #   紐の数は(155)で1に変えた。判定時刻はオッズの取得時刻（朝/取り直し）。
                    "partners": args.partners,
                    "odds_at": max((r.get("odds_at") or "") for r in out_races) or None,
+                   # ★★`p` が何の確率かを必ず書き残す（2026-08-30・ユーザー要望）。
+                   #   ⚠**(168)で「枠連は上位2頭で決まるのに top3 で学習している」という
+                   #   　ずれが見つかった**（測ったが差は出ず、目標は top3 のまま置いた）。
+                   #   ★**もし将来この目標を変えるなら、`p` の意味が黙って変わり、
+                   #   　過去の推奨ファイルまで解釈できなくなる**。だから毎回書く。
+                   #   ★★**運用上の約束**: **目標を何に変えても、複勝圏内(finish<=3)の確率は
+                   #   　数値として必ず残す**——**全馬を見比べるときの物差しになっているため**。
+                   #   　目標を変える場合は `p` とは別に `p_fuku` を足すこと。**消さない**。
+                   "p_meaning": meta.get("target", "top3 (finish<=3)"),
+                   "model_dir": MODEL_DIR,
                    "races": out_races},
                   open(args.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         print(f"保存: {args.out}")

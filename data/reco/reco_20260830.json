@@ -4,6 +4,8 @@
  "waku_score_th": 0.18048641300023058,
  "partners": 1,
  "odds_at": "2026-08-30 09:28:28",
+ "p_meaning": "top3 (finish<=3)",
+ "model_dir": "ml/model_prod",
  "races": [
   {
    "raceid": "01262401",

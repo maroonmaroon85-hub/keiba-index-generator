@@ -125,7 +125,7 @@ def main():
         cp = np.array([m[k][4] for k in common])[sel]
         roi = 100.0 * (pw.sum() + cw.sum()) / cw.sum()
         se = pw.std(ddof=1) / math.sqrt(len(pw)) * len(pw) / cw.sum() * 100.0
-        res[name] = dict(sel=sel, pw=pw, cw=cw, roi=roi, se=se,
+        res[name] = dict(sel=sel, selfull=sel, pw=pw, cw=cw, roi=roi, se=se,
                          roip=100.0 * (pp.sum() + cp.sum()) / cp.sum())
         print(f"{name:<16}{int(sel.sum()):>8,}{roi:>9.1f}%"
               f"{f'[{roi-z*se:.1f},{roi+z*se:.1f}]':>19}{pw.mean():>+9.1f}円"
@@ -139,15 +139,33 @@ def main():
         print("⚠⚠**落ちた。以下を読まない**。")
         return
 
-    print("\n■ ★対応のある差（**同じレース・全アームが買うレースだけ**・判定基準35）")
+    # ⚠★**第1版はここが不十分だった（ユーザーの指摘で判明・2026-08-30）**——
+    #   「両方が買うレースだけ」で測っていたが、**除外されるのは選択が食い違うレース**で、
+    #   **Bが得をするとすればまさにそこ**。→ ★**選択込みの対応差を主判定にする**。
+    print("\n■ ★★対応のある差【主判定】— **全レース。買わない日は損益0として数える**")
+    print("　★これが運用の実態: **買うか買わないかまで含めた1レースあたりの差**")
+    print(f"{'比較':<24}{'1R損益差':>11}{'99%CI(Bonf)':>21}{'判定':>16}")
+    allA = np.array([out["A top3（現行）"][k][1] for k in common])
+    for name, _ in ARMS[1:]:
+        allB = np.array([out[name][k][1] for k in common])
+        a = np.where(base["selfull"], allA, 0.0)
+        b = np.where(res[name]["selfull"], allB, 0.0)
+        dd = b - a
+        md, sd = dd.mean(), dd.std(ddof=1) / math.sqrt(len(dd))
+        v = "★差がある" if abs(md) > z * sd else "⚠差は検出できない"
+        print(f"{name+' − A':<24}{md:>+10.1f}円"
+              f"{f'[{md-z*sd:+.1f},{md+z*sd:+.1f}]':>21}{v:>16}"
+              f"  （n={len(dd):,}）")
+
+    print("\n■ （参考）両方が買うレースだけ — **選択の差を落としているので過小評価**")
     print(f"{'比較':<24}{'1R損益差':>11}{'99%CI(Bonf)':>21}{'判定':>16}")
     for name, _ in ARMS[1:]:
-        both = base["sel"] & res[name]["sel"]
-        A = np.array([out["A top3（現行）"][k][1] for k in common])[both]
+        both = base["selfull"] & res[name]["selfull"]
+        A = allA[both]
         B = np.array([out[name][k][1] for k in common])[both]
         dd = (B - A)
         md, sd = dd.mean(), dd.std(ddof=1) / math.sqrt(len(dd))
-        v = "⚠差がある" if abs(md) > z * sd else "★差は検出できない"
+        v = "★差がある" if abs(md) > z * sd else "⚠差は検出できない"
         print(f"{name+' − A':<24}{md:>+10.1f}円"
               f"{f'[{md-z*sd:+.1f},{md+z*sd:+.1f}]':>21}{v:>16}"
               f"  （n={len(dd):,}）")

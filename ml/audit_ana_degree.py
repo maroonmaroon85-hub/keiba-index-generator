@@ -1,0 +1,270 @@
+"""(180) ★★★**穴の「程度」をスイープする** — どの程度の穴馬を買うべきか
+
+★★問い（ユーザー・2026-09-05）——
+　「**どの馬を穴馬としている？そこからだと思う。どの程度の穴馬を買うべきかの検証が必要**」
+
+★★★**指摘は正しい。穴馬の定義を一度も「程度」で固定していなかった**:
+| 測定 | 穴馬の定義 | **実際に選ばれた馬** |
+|---|---|---|
+| **(174)** | オッズ帯の中で gap 上位10%（帯ごとに別の馬） | 帯別に **2.7 / 5.0 / 10.4 / 24.0 / 81.6倍** |
+| **(177)** | オッズ細ビンの中で ratio 十分位 | 第10十分位＝**平均69.4倍**・人気中央7番 |
+| **(178)** | **レース内で ratio が最大の1頭** | ⚠**平均133.9倍** |
+| **(179) 穴A** | 全帯で帯内パーセンタイル最大 | ⚠**平均69.7倍** |
+| **(179) 穴B** | 3-15倍に限定して同上 | **平均8.3倍** |
+★**共通しているのは「あるスコアが最も極端な馬」を取っていること**——
+　**スコアの裾がどこに住んでいるかで、選ばれる馬が 8倍にも 134倍にもなる**。
+⚠★**(179)の3点は程度によって答えが真逆だった**（**8.3倍 +1.0pt / 69.7倍 −0.6pt / 133.9倍 +7.5pt**）。
+　**3点しかなく定義もバラバラなので曲線として読めない**。→ ★**本件で程度を固定してスイープする**。
+
+────────────────────────────────────────────────────────────
+★★★ 事前登録（2026-09-05・**結果を見る前にコミットする**）
+────────────────────────────────────────────────────────────
+
+■ ★経路（判定基準25）: 穴の選定に MLモデルの p ／ 程度の固定は単勝オッズ。⚠**弱い経路**。
+　⚠**標本は(174)〜(179)と同一**＝**独立な検証ではない**（判定基準35）。
+
+■ ★★★設計の核 —— **同じレースの、同じオッズ帯にいる2頭を比べる**
+```
+各レース × 各オッズ帯 について
+  穴 = その帯にいる馬のうち gap = share − mk が最大の1頭
+  乱 = その帯にいる別の1頭（無作為）
+  両方の複勝を100円ずつ買い、対応差を取る
+```
+★**同じレース・同じ帯なので、オッズも展開も条件も揃う**＝**(178)(179)の「乱」を帯ごとに当てる形**。
+⚠**帯に2頭以上いるレースだけが、その帯の標本になる**（**帯ごとに標本が違う**）。
+
+■ ★穴の「程度」＝ 単勝オッズ帯（**9段。これ以外に増やさない**）
+　**1.5-3 / 3-5 / 5-8 / 8-12 / 12-20 / 20-35 / 35-60 / 60-120 / 120倍〜**
+　⚠**1.5倍未満は外す**——**穴ではないし、複勝の100円の床が支配する**（(26)(106)(110)）。
+
+■ 券種 —— ★**複勝1点のみ**
+　★**(174)の実測で単勝の検出限界は±11〜38pt**＝**単勝には検出力が無い**（`ANA_TRACK.md` 4.）。
+
+■ ★★ゲート2（判定基準42）——**仮説が偽なら何を返すか**
+　★**主判定 = 各帯での「穴の複勝払戻」−「乱の複勝払戻」の対応差（円）**。
+　★**仮説が偽（モデルの gap が帯の中で何も持たない）なら、穴と乱は同じレースの同じ帯からの
+　　交換可能な2頭になり、対応差の期待値は 0 を返す**。
+　・**買う頭数もコストも券種も完全に同一**（**各1頭・100円**）＝**(170)の形にならない**。
+　・**帯に2頭以上いるレースは、穴側も乱側も同じだけ使う**＝**(168)の形にならない**。
+
+■ ⚠ゲート1（判定基準32）: (88)③④を別パーサで再現（±3pt）。落ちたら読まない。
+
+■ ★★主判定（**9比較・Bonferroni α=0.01/9・z=3.283**）
+　★**各帯の対応差**。★★**出力は2本の曲線**——
+　　**(a) 水準**（穴を買ったときの複勝ROI）と **(b) 無作為との差**。
+　★**「どの程度の穴を買うべきか」の答えは、この2本を並べて初めて出る**——
+　　**(a)が高くても(b)が0なら、それは帯を選んだだけでモデルは効いていない**。
+　　**(b)が大きくても(a)が低いなら、差はあっても張れない**（**(179)の133.9倍がこれ**）。
+
+■ ★採用条件（判定基準39/40/41）
+　1. **主判定がBonferroniを通る帯が2つ以上**（**1帯だけ跳ねるのは(172)で崩れた形**）
+　2. ★**隣接する帯で同じ向き**（**単調でなくてよいが、孤立した1帯は採らない**）
+　3. **裾の検算で符号が反転しない**（上位3本・前後半・年別）
+　4. ★**その帯の水準(a)が複勝の払戻率80.0%を超える**（**超えない帯の差は「張れない」と書く**）
+　5. ★**ROI>100% でなければ「機構は在るが張れない」**
+
+■ ⚠**最良の帯を選んで結論にしない**（**(178)でプラセボが109.9%を出した**）
+　★**9帯すべての(a)(b)を出すが、主判定は対応差だけ**。**「最良の帯」を答えにしない**。
+
+■ ★★事前に分かっている逆風（**判定基準として書く**）
+　**(88)③④**: **1.3-1.4倍 88.9% / 10-30倍 82.3% / 100-200倍 54.9% / 200倍超 37.1%**。
+　→ ★**(a)は程度が上がるほど単調に落ちるはず**。**それは既知で、新しくない**。
+　→ ★★**新しいのは(b)だけ**。**(b)がどの程度に住んでいるかが、この測定の全部**。
+
+■ 予想
+　⚠**(179)の3点からは「(b)は超人気薄に集中」に見える**が、**3点・定義バラバラなので当てにしない**
+　（判定基準39: **3点で法則を書くな**）。★**(b)が平坦でも驚かない**。
+
+実行: python3 ml/audit_ana_degree.py    自己テスト: python3 ml/audit_ana_degree.py --selftest
+"""
+import math
+import sys
+
+import numpy as np
+
+sys.path.insert(0, "ml")
+import features as F
+from audit_crosspool import load_races, payoff, zq
+from audit_ana_odds import COST, MIN_HORSES, gate1, roi_of
+from train_prod import CAPACITY, add_odds_features, fit_seeds
+
+# ★穴の「程度」＝ 単勝オッズ帯（9段）
+DEG = [("1.5-3倍", 1.5, 3.0), ("3-5倍", 3.0, 5.0), ("5-8倍", 5.0, 8.0),
+       ("8-12倍", 8.0, 12.0), ("12-20倍", 12.0, 20.0), ("20-35倍", 20.0, 35.0),
+       ("35-60倍", 35.0, 60.0), ("60-120倍", 60.0, 120.0), ("120倍〜", 120.0, 1e9)]
+NCMP = len(DEG)
+ALPHA = 0.01
+SEED = 20260905
+FUKU_LINE = 80.0
+
+
+def selftest():
+    ok = True
+    # 帯は重ならず、隙間なく並ぶ
+    for a, b in zip(DEG, DEG[1:]):
+        assert abs(a[2] - b[1]) < 1e-9, (a, b)
+    print(f"★帯の自己テスト: {len(DEG)}段が隙間なく連続　★OK")
+    # ★ゲート2: 同じ分布から引いた2頭の対応差は0
+    rng = np.random.default_rng(0)
+    n = 150_000
+    pay = rng.choice([0.0, 250.0, 900.0], size=n, p=[0.72, 0.20, 0.08])
+    ds = [float((pay[rng.permutation(n)] - pay[rng.permutation(n)]).mean())
+          for _ in range(200)]
+    m = float(np.mean(ds))
+    print(f"★ゲート2の自己テスト: 交換可能な2頭の対応差200回の平均 {m:+.3f}円"
+          f" → **仮説が偽なら0を返す**: {'★OK' if abs(m) < 2 else '⚠NG'}")
+    ok &= abs(m) < 2
+    print(f"★比較数 {NCMP} → z = {zq(ALPHA/NCMP):.3f}")
+    print(f"★採用条件4: 水準が複勝の払戻率 {FUKU_LINE}% を超える帯だけ「張れる」と書く")
+    print("★自己テスト: " + ("全部OK" if ok else "⚠NG"))
+    return 0 if ok else 1
+
+
+def main():
+    z = zq(ALPHA / NCMP)
+    print("(180) ★★★**穴の「程度」をスイープする** — どの程度の穴馬を買うべきか")
+    print("★設計: **同じレースの、同じオッズ帯にいる2頭を比べる**")
+    print("　　穴 = その帯で gap が最大の1頭 ／ 乱 = その帯の別の1頭（無作為）")
+    print("★経路: 穴の選定に MLモデルの p / 程度の固定は単勝オッズ。⚠**弱い経路**")
+    print("⚠**標本は(174)〜(179)と同一＝独立な検証ではない**（判定基準35）")
+    print("⚠★**最良の帯を選んで結論にしない**（(178)でプラセボが109.9%を出した）\n")
+
+    races = {r["rid"]: r for r in load_races()}
+    rows, bad = gate1(list(races.values()))
+    print("⚠**ゲート1**: (88)③④を別パーサで再現・許容±3pt")
+    for nm, n, roi, known, dd, ok in rows:
+        print(f"　{nm:<12}{roi:>7.1f}% vs {known:>5.1f}%　差 {dd:+.1f}pt"
+              f"　{'★立った' if ok else '⚠落ちた'}")
+    if bad:
+        print("\n⚠⚠**ゲート1が落ちた。読まない**。")
+        return
+
+    MODEL_DIR, PAR = CAPACITY["l2"]
+    d = F.to_model(F.load_files())
+    f = F.build_features(d)
+    keep = (f["n_prior"] >= 1) & d["odds"].notna() & (d["odds"] > 0)
+    d, f = d[keep].reset_index(drop=True), f[keep].reset_index(drop=True)
+    y = (d["finish"] <= 3).astype(int).to_numpy()
+    fx, _ = F.encode_categoricals(f)
+    fx = add_odds_features(fx, d["odds"].to_numpy(float), d["raceid"].to_numpy())
+    cut = d["date"].quantile(0.3)
+    tr, te = (d["date"] < cut).to_numpy(), (d["date"] >= cut).to_numpy()
+    print(f"\n学習 {tr.sum():,} / 検証 {te.sum():,}・分割 {cut.date()}（3シード平均）")
+    ms = fit_seeds(fx[tr], y[tr], 3, PAR)
+    p = np.mean([m.predict_proba(fx[te])[:, 1] for m in ms], axis=0)
+    sub = d.loc[te, ["raceid", "umaban", "odds", "date"]].copy()
+    sub["p"] = p
+
+    rng = np.random.default_rng(SEED)
+    acc = {i: {"a": [], "r": [], "ao": [], "ro": [], "t1": [], "dt": []}
+           for i in range(len(DEG))}
+    nrace = 0
+    for rid, g in sub.groupby("raceid"):
+        r = races.get(str(rid))
+        if r is None:
+            continue
+        nums = {u for u, _, _ in r["horses"]}
+        if len(nums) < MIN_HORSES:
+            continue
+        gg = g[g["umaban"].astype(int).isin(nums)]
+        if len(gg) < MIN_HORSES:
+            continue
+        od = gg["odds"].to_numpy(float)
+        pv = gg["p"].to_numpy(float)
+        ub = gg["umaban"].astype(int).to_numpy()
+        if not np.isfinite(od).all() or (od <= 0).any() or pv.sum() <= 0:
+            continue
+        share = pv / pv.sum()
+        mk = (1.0 / od) / (1.0 / od).sum()
+        gap = share - mk
+        top1 = int(np.argmax(pv))
+        used = False
+        for i, (nm, lo, hi) in enumerate(DEG):
+            idx = np.where((od >= lo) & (od < hi))[0]
+            if len(idx) < 2:                      # ★穴と乱の2頭が要る
+                continue
+            a = int(idx[int(np.argmax(gap[idx]))])
+            others = [int(k) for k in idx if k != a]
+            b = int(rng.choice(others))
+            pa = payoff(r, "複勝", [int(ub[a])])
+            pb = payoff(r, "複勝", [int(ub[b])])
+            if pa is None or pb is None:
+                continue
+            acc[i]["a"].append(pa); acc[i]["r"].append(pb)
+            acc[i]["ao"].append(float(od[a])); acc[i]["ro"].append(float(od[b]))
+            acc[i]["t1"].append(a == top1)
+            acc[i]["dt"].append(gg["date"].iloc[0])
+            used = True
+        nrace += used
+    print(f"★突き合わせ {nrace:,}レース　⚠**(174)〜(179)と同一標本**")
+
+    print(f"\n{'='*104}")
+    print("■ ★★★答えの本体: **2本の曲線**"
+          "　★**(a)水準が高くても(b)差が0なら、帯を選んだだけでモデルは効いていない**")
+    print(f"{'穴の程度':<10}{'標本R':>9}{'穴の平均':>9}{'乱の平均':>9}"
+          f"{'(a)水準':>10}{'乱の水準':>10}{'★(b)差':>10}{'99%CI(Bonf)':>22}{'判定':>14}")
+    hits, res = [], {}
+    for i, (nm, lo, hi) in enumerate(DEG):
+        A = np.asarray(acc[i]["a"], float)
+        R = np.asarray(acc[i]["r"], float)
+        if len(A) < 300:
+            print(f"{nm:<10}{len(A):>9,}　⚠標本不足（<300）")
+            continue
+        dd = A - R
+        mu, se = dd.mean(), dd.std(ddof=1) / math.sqrt(len(dd))
+        sig = abs(mu) > z * se
+        lvl, rlvl = roi_of(A), roi_of(R)
+        res[nm] = (lvl, mu, sig, len(A))
+        if sig and mu > 0:
+            hits.append(i)
+        print(f"{nm:<10}{len(A):>9,}{np.mean(acc[i]['ao']):>8.1f}倍"
+              f"{np.mean(acc[i]['ro']):>8.1f}倍{lvl:>9.1f}%{rlvl:>9.1f}%"
+              f"{mu:>+9.1f}円{f'[{mu-z*se:+.1f},{mu+z*se:+.1f}]':>22}"
+              f"{'★差がある' if sig else '⚠検出できない':>14}")
+
+    print(f"\n■ 記述: **選ばれた穴はどんな馬か**")
+    print(f"{'穴の程度':<10}{'買うレース割合':>14}{'モデル1位率':>12}")
+    for i, (nm, lo, hi) in enumerate(DEG):
+        if len(acc[i]["a"]) < 300:
+            continue
+        print(f"{nm:<10}{100*len(acc[i]['a'])/max(nrace,1):>13.1f}%"
+              f"{100*np.mean(acc[i]['t1']):>11.1f}%")
+
+    print(f"\n■ ★採用条件（判定基準39/40/41）")
+    print(f"　1. Bonferroniを通る帯が2つ以上 … **{len(hits)}帯**"
+          f" → {'★満たす' if len(hits) >= 2 else '⚠満たさない'}")
+    adj = any(b - a == 1 for a, b in zip(hits, hits[1:])) if len(hits) >= 2 else False
+    print(f"　2. 隣接する帯で同じ向き … {'★満たす' if adj else '⚠満たさない（孤立した帯は採らない）'}")
+    over = [nm for nm, (lvl, mu, sig, n) in res.items() if sig and mu > 0 and lvl > FUKU_LINE]
+    print(f"　4. 差がある帯のうち水準が払戻率{FUKU_LINE}%超 … "
+          f"**{len(over)}帯**{'（' + ' / '.join(over) + '）' if over else ''}")
+
+    if len(hits) < 2 or not adj:
+        print("\n★★**結論: 採用条件1〜2を満たさない＝陰性**。")
+        print("★**「どの程度の穴を買うべきか」に、モデルは答えを持っていない**——")
+        print("　**どの程度でも、同じ帯の無作為な馬に対して安定した差が出ない**。")
+        print("⚠**経路は弱いので「閉じた」とは書けない**（判定基準25）。")
+        return
+
+    print(f"\n■ ★裾の検算（**主判定を通った帯**・(77)）")
+    for i in hits:
+        nm = DEG[i][0]
+        A = np.asarray(acc[i]["a"], float)
+        dt = np.array(acc[i]["dt"], dtype="datetime64[D]").astype(int)
+        yr = np.array(acc[i]["dt"], dtype="datetime64[Y]").astype(int) + 1970
+        med = np.median(dt)
+        ys = sorted(set(yr))
+        ov = sum(1 for u in ys if roi_of(A[yr == u]) > 100.0)
+        print(f"　{nm}: ROI {roi_of(A):.1f}% / **上位3本が全払戻の "
+              f"{100*np.sort(A)[-3:].sum()/max(A.sum(),1e-9):.1f}%** / "
+              f"前半 {roi_of(A[dt<=med]):.1f}%・後半 {roi_of(A[dt>med]):.1f}% / "
+              f"**100%超の年 {ov}/{len(ys)}**")
+    print(f"\n★★**「どの程度の穴を買うべきか」への答え**: "
+          f"**差がある帯 = {' / '.join(DEG[i][0] for i in hits)}**")
+    if not over:
+        print("⚠★**ただしどの帯も水準が払戻率に届かない＝「機構は在るが張れない」**（事前登録）。")
+    print("⚠**枠連の運用には触れない**。**設定変更は提案しない**。")
+
+
+if __name__ == "__main__":
+    sys.exit(selftest() if "--selftest" in sys.argv else (main() or 0))

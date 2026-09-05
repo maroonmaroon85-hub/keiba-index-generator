@@ -536,11 +536,22 @@ python3 ml/train_prod.py                                # ★実運用モデル�
   ⚠⚠★**2026-09-05: この `npm install` が新環境のセットアップを失敗させる**——
   　**スクリプトは `/home/user` で走るが `package.json` は `/home/user/keiba-index-generator/` にある**ので
   　**ENOENT で非ゼロ終了(254)**。**pip 側は全部成功している**（表示の `Successfully installed ...` が証拠）。
-  ★**直し方**: **`npm install`** にするか、★**npm 行を消す**。
+  ★**直し方**: **`cd /home/user/keiba-index-generator && npm install || true`** にするか、★**npm 行を消す**。
   　**推奨は消すほう**——**毎週の運用フローも監査もPythonだけで完結**しており、
   　**TS側コマンド(`npm run exotic`/`generate`/`backtest`)は現在どこでも使っていない**。
   ⚠**スクリプト本体はリポジトリに無い**（`.claude/` も `setup*.sh` も無い）。
   　**claude.ai/code の環境設定側にある**ので、**画面から直す必要がある**。
+  ★**画面の場所（公式ドキュメント docs/en/cloud-environments で確認）**——
+  　⚠**設定ページも直リンクURLも無い**（"There's no settings page or direct URL for the selector"）。
+  　1. claude.ai/code を開く
+  　2. **メッセージ入力欄の1つ上の行**にある**環境名つきの雲アイコン**を押す
+  　3. **Cloud** セクションの `keiba` の行に**ホバーすると右端に歯車が出る**ので押す（★ホバーしないと出ない）
+  　4. **Update cloud environment** ダイアログ最下部の **Setup script** 欄を書き換えて保存
+  ★**保存すると環境キャッシュが作り直され、次に始めるセッションでスクリプトが再実行される**。
+  　（実行中のセッションには影響しない。resume でも再実行されない。）
+  ⚠**公式の制約3つ**: ①**exit 0 でないとセッションが起動しない**（今回の 254 がこれ）
+  　②**5分以内に終わること** ③installにはネットワーク到達が要る（Trusted なら PyPI/npm は許可済み）。
+  　→ **重要でない行には `|| true` を付ける**のが公式の推奨。
   ⚠**`npm init -y` で `/home/user` に package.json を作るのは誤り**——
   　**リポジトリ外に空の定義ができるだけで依存は入らない**。**問題を隠す**。
 - ⚠**`ml/model_prod/` `ml/model/` はどちらも .gitignore なので新環境では空**。

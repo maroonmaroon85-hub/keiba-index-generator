@@ -533,6 +533,16 @@ python3 ml/train_prod.py                                # ★実運用モデル�
 ## 実行環境（2026-07-28 セットアップ済み）
 - **Claude Code on the web のクラウド環境 `keiba`** を使用（Mac/VMwareは不要）。リポ=keiba-index-generator / ブランチ=claude/new-session-h4ydgl。
 - セットアップスクリプト: `pip install lightgbm scikit-learn pandas numpy joblib` ＋ `npm install`。
+  ⚠⚠★**2026-09-05: この `npm install` が新環境のセットアップを失敗させる**——
+  　**スクリプトは `/home/user` で走るが `package.json` は `/home/user/keiba-index-generator/` にある**ので
+  　**ENOENT で非ゼロ終了(254)**。**pip 側は全部成功している**（表示の `Successfully installed ...` が証拠）。
+  ★**直し方**: **`npm install`** にするか、★**npm 行を消す**。
+  　**推奨は消すほう**——**毎週の運用フローも監査もPythonだけで完結**しており、
+  　**TS側コマンド(`npm run exotic`/`generate`/`backtest`)は現在どこでも使っていない**。
+  ⚠**スクリプト本体はリポジトリに無い**（`.claude/` も `setup*.sh` も無い）。
+  　**claude.ai/code の環境設定側にある**ので、**画面から直す必要がある**。
+  ⚠**`npm init -y` で `/home/user` に package.json を作るのは誤り**——
+  　**リポジトリ外に空の定義ができるだけで依存は入らない**。**問題を隠す**。
 - ⚠**`ml/model_prod/` `ml/model/` はどちらも .gitignore なので新環境では空**。
   最初に **`python3 ml/train_prod.py`（約2分）**を1回走らせること。これを忘れると `ml/predict.py` が動かない。
   （`ml/train.py` が作る `ml/model/` は旧構成で、predict.py は**読まない**。走らせる必要は無い。）

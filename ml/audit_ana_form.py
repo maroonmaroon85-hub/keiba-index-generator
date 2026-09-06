@@ -58,6 +58,20 @@
 　**腕Aが(203)の帯[0.15,∞) を再現する**——**複勝ROI 97.3% ±0.5pt かつ レース数 3,631 ±20**。
 　⚠**腕Aは現行と同じコードで学習し直すので、厳密に一致するはず**。
 
+■ ★★★**事前登録の修正（2026-09-06・★家族A/Bの判定を一度も見る前に）**
+　⚠**第1版は内部対照が落ちた**——**ROIは 97.1% vs 97.3%（差0.2pt）で通ったが、
+　　レース数が 3,677 vs 3,631 と46レース多かった**。
+　★**原因は母集団**（判定基準25）: **(203)は「三連単の紐2頭とその乱3頭が引ける」
+　　レースだけを記録していた**。**(204)は複勝しか要らないので条件が緩い**。
+　⚠**私の内部対照の設計ミス（3回目）**——**条件の違う母集団に厳しい件数許容を置いた**。
+　★★**修正: (203)と完全に同じ条件（紐2頭＋三連単の乱3頭＋複勝の乱）を課した
+　　対照腕を1本足し、そこでROIと件数の両方を照合する**。
+　★**本編の解析は緩い条件のまま**（**そのほうが標本が多い**）。**件数差は記述で明示する**。
+　★**この修正はゲートを見て入れたもので、家族A/Bの判定は一度も見ていない**（判定基準38）。
+　⚠**ただし「各腕のgap上位10%の閾値」（A 0.067 / B 0.107 / E0.5 0.098 / E1.0 0.109 /
+　　E2.0 0.155）は目に入った**。★**これは分布の記述であって判定量ではないが、
+　　見たことは記録しておく**（**λ=2が大きなズレを作れているのは事実として確認された**）。
+
 ■ ★★★探索を守る（**10比較・Bonferroni α=0.01/10**）
 　⚠**標本300レース未満の腕は判定しない**（判定基準5）。
 　★**採用条件に「λについて単調」**——**孤立した1点は採らない**。
@@ -233,6 +247,7 @@ def main():
     K = {(a, b): {"fa": [], "fr": [], "gap": [], "od": []}
          for a in ARMS for b in GBANDS}
     TOP = {a: {"fa": [], "fr": [], "gap": []} for a in ARMS}
+    CTRL203 = []          # ★(203)と完全に同じ条件の対照腕
     GALL = {a: [] for a in ARMS}
     Rs, box4, nall = [], [], 0
     STORE = []
@@ -298,7 +313,53 @@ def main():
             out.append(int(g2.choice(pl)))
         return out
 
+    def draw3(rid, trio, ub, od, pos):
+        """★(203)と同じ: 軸・紐1・紐2 を それぞれオッズ±20%の無作為な馬に置き換える"""
+        out = []
+        for sd in range(NRAND):
+            g2 = np.random.default_rng([SEED + sd, crc32(rid.encode())])
+            o3 = []
+            for u in trio:
+                k0 = pos[u]
+                pl = [int(ub[q]) for q in range(len(ub))
+                      if int(ub[q]) not in o3
+                      and od[k0] / FINE <= od[q] <= od[k0] * FINE]
+                if not pl:
+                    return None
+                o3.append(int(g2.choice(pl)))
+            out.append(o3)
+        return out
+
     for (r, rid, ub, od, bi, qp, pns) in STORE:
+        # ── ★★内部対照: (203)と完全に同じ条件で 腕A・帯[0.15,∞) ──
+        pnA = pns["A 現行"]
+        gapA = pnA - qp
+        lo0, hi0 = GBANDS[-1]
+        cA = np.where((pnA >= PN_FLOOR) & (gapA >= lo0) & (gapA < hi0))[0]
+        if len(cA):
+            ai0 = int(cA[int(np.argmax(pnA[cA]))])
+            ax0 = int(ub[ai0])
+            pos0 = {int(u): q for q, u in enumerate(ub)}
+            ordp = [int(u) for u in ub[np.argsort(-pnA, kind="mergesort")]]
+            himo0 = [u for u in ordp if u != ax0]
+            if len(himo0) >= 2:
+                fa0 = payoff(r, "複勝", [ax0])
+                ta0 = [payoff(r, "三連単", [ax0, himo0[0], himo0[1]]),
+                       payoff(r, "三連単", [ax0, himo0[1], himo0[0]])]
+                lst3 = draw3(rid, [ax0, himo0[0], himo0[1]], ub, od, pos0)
+                pk0 = draw_fuku(rid, ai0, ub, bi)
+                if (fa0 is not None and not any(v is None for v in ta0)
+                        and lst3 is not None and pk0 is not None):
+                    okc3 = True
+                    for t3 in lst3:
+                        vv = [payoff(r, "三連単", [t3[0], t3[1], t3[2]]),
+                              payoff(r, "三連単", [t3[0], t3[2], t3[1]])]
+                        if any(v is None for v in vv):
+                            okc3 = False
+                            break
+                    vf3 = [payoff(r, "複勝", [u]) for u in pk0]
+                    if okc3 and not any(v is None for v in vf3):
+                        CTRL203.append(fa0)
         for a in ARMS:
             pn = pns[a]
             gap = pn - qp
@@ -332,12 +393,16 @@ def main():
             TOP[a]["fa"].append(fa); TOP[a]["fr"].append(float(np.mean(vr)))
             TOP[a]["gap"].append(float(gap[ai]))
 
-    ca = K[("A 現行", GBANDS[-1])]
-    av = np.asarray(ca["fa"], float)
-    okc = abs(roi_of(av) - KNOWN_ROI) <= ROI_TOL and abs(len(av) - KNOWN_N) <= N_TOL
-    print(f"\n■ ★★★内部対照（決定的）: 腕A・帯[0.15,∞) → **{roi_of(av):.1f}%**"
-          f"（{len(av):,}R） vs (203) {KNOWN_ROI}%（{KNOWN_N:,}R）"
+    cv3 = np.asarray(CTRL203, float)
+    okc = (abs(roi_of(cv3) - KNOWN_ROI) <= ROI_TOL
+           and abs(len(cv3) - KNOWN_N) <= N_TOL)
+    print(f"\n■ ★★★内部対照（決定的・**(203)と完全に同じ条件**）: 腕A・帯[0.15,∞) → "
+          f"**{roi_of(cv3):.1f}%**（{len(cv3):,}R） vs (203) {KNOWN_ROI}%（{KNOWN_N:,}R）"
           f" → **{'★再現' if okc else '⚠⚠ズレた'}**")
+    av = np.asarray(K[("A 現行", GBANDS[-1])]["fa"], float)
+    print(f"　★**本編の緩い条件**（複勝だけ要求）: **{roi_of(av):.1f}%**（{len(av):,}R）"
+          f"　⚠**件数差 {len(av)-len(cv3):+,}R で {roi_of(av)-roi_of(cv3):+.1f}pt**"
+          f"（判定基準25）")
     if not (okR and okb and okc):
         print("\n⚠⚠**ゲートが落ちた。読まない**（判定基準32）。")
         return

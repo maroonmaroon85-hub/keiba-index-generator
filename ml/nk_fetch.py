@@ -10,6 +10,8 @@ netkeiba からの取得（**手元のMacで実行する**。クラウド環境�
 使い方:
   # ① ある開催日の成績を取る → 学習データ(DS互換CSV)と払戻を作る
   python3 ml/nk_fetch.py results 20260801
+  # ①' ★レース数が足りないとき（開催途中に取った一覧がキャッシュに残っている）
+  python3 ml/nk_fetch.py results 20260801 --refresh
 
   # ② 当日の出馬表＋オッズを取る → 予想用(DG相当)を作る
   python3 ml/nk_fetch.py entries 20260801
@@ -71,8 +73,14 @@ def get(url, key, referer=None, wait=WAIT, retries=3):
     return b""
 
 
-def race_ids_of_day(ymd):
+def race_ids_of_day(ymd, refresh=False):
     """その日のJRAのrace_id一覧。
+
+    ⚠★`refresh=True` で一覧のキャッシュを捨ててから取り直す（2026-09-06に必要になった）。
+    　**開催の途中で取ると一覧が全レースを載せていないことがある**。それがキャッシュに残ると
+    　**後から `results` を当て直しても同じ欠けたレース数のままになる**
+    　（実例: 2026-08-09 が 13/36 レースのまま直らなかった）。
+    　★レース個別のHTMLは消さない——**取れている分は正しいので再取得しない**。
 
     ★2つの落とし穴に対応している:
       ・`db.netkeiba.com/race/list/` は**結果データベース**なので、まだ走っていない日は空になる。
@@ -81,6 +89,12 @@ def race_ids_of_day(ymd):
         場コードは JRA が 01〜10 なので、それ以外を落とす。落とさないと地方の行が学習データに入る。
     """
     import re
+    if refresh:
+        for k in (f"rlist_{ymd}.html", f"list_{ymd}.html"):
+            try:
+                os.remove(os.path.join(CACHE, k))
+            except OSError:
+                pass
     b = get(f"https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={ymd}",
             f"rlist_{ymd}.html")
     ids = set(re.findall(r"race_id=(\d{12})", b.decode("utf-8", "replace")))
@@ -105,9 +119,9 @@ def names_cache(update=None):
     return d
 
 
-def cmd_results(ymd):
+def cmd_results(ymd, refresh=False):
     import csv
-    ids = race_ids_of_day(ymd)
+    ids = race_ids_of_day(ymd, refresh)
     print(f"{ymd}: {len(ids)}レース")
     if not ids:
         print("  レース一覧が取れなかった。URLの形式が変わっている可能性がある。")
@@ -249,11 +263,13 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         return
-    cmd = sys.argv[1]
+    args = [a for a in sys.argv[1:] if a != "--refresh"]
+    refresh = "--refresh" in sys.argv
+    cmd = args[0]
     if cmd == "results":
-        cmd_results(sys.argv[2])
+        cmd_results(args[1], refresh)
     elif cmd == "entries":
-        cmd_entries(sys.argv[2])
+        cmd_entries(args[1])
     elif cmd == "pedigree":
         cmd_pedigree()
     else:

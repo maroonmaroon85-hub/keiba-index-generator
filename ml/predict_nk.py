@@ -288,9 +288,11 @@ def main():
                       f" ／ 三連複BOX {' '.join(alt['sanrenpuku_box'])}"
                       f"  軸 {alt['axis']}番{info[alt['axis']]['name'][:9]}")
             print(ST.header("      "))
+            pop = ST.pop_ranks({u: info[u]["odds"] for u in nums})
             for i, u in enumerate(nums):
                 print(ST.row(i + 1, u, info[u]["name"], wk[u], pmap[u],
-                             float(q[i]), mk[u] / msum, info[u]["odds"], indent="      "))
+                             float(q[i]), mk[u] / msum, info[u]["odds"], pop[u],
+                             indent="      "))
             # ★買った枠の中身。枠連はその枠から**どれか1頭**が来れば当たるので、
             #   同じ枠に複数いるならそれだけ当たりやすい。馬連等に読み替えるときの材料にもなる。
             rank = {u: i + 1 for i, u in enumerate(nums)}

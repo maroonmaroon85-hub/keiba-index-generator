@@ -48,8 +48,19 @@
 　★**採用条件に「隣接と同じ向き」**——**孤立した1マスは採らない**。
 　⚠**(194)で分かった通り紐の順序はほとんど効かない**。**ここで振るのは閾値だけ**。
 
+■ ★★★**事前登録の修正（2026-09-06・★家族Bの結果を一度も見る前に）**
+　⚠**第1版は内部対照が落ちた**: **主腕は完全再現(103.7/115.0/88.0%)なのに乱だけ 82.5 → 99.0%**。
+　★**原因は私の設計ミス**——**乱を1回しか引いていなかった**。**20種で測ると乱のROIは
+　　幅 82.9〜97.4% / 標準偏差 3.8pt（マスによっては 8.2pt）で揺れる**。
+　　⚠**そこに ±3円 の許容を事前登録したのが誤り**（判定基準37・(184)に続く3度目）。
+　★★**修正**: **乱を{NSEED}種引いて平均する**（**揺れが約1/3に減る**）。
+　★★**内部対照も測り直した値に置き換える**: **絶対閾値の20種平均は 前半 +23.6円 / 後半 −0.8円**。
+　　⚠**(194)で書いた「後半 +4.6円」は1回の引きの値で、★平均は −0.8円（10/20種でしか正でない）**。
+　★**この修正はゲート（内部対照）を見て入れたもので、家族Bの判定は一度も見ていない**
+　　（**判定基準38・(184)と同じ形**）。
+
 ■ ★採用条件
-　1. **★後半の「ズレ順−乱」対応差が、絶対閾値版の +4.6円 を明確に上回る**
+　1. **★後半の「ズレ順−乱」対応差が、絶対閾値版の −0.8円 を明確に上回り、かつ有意**
 　2. **それが複数マスで起き、隣接と同じ向き**
 　3. **前半も壊れていない**（**前半だけ良くして後半を捨てた形になっていない**）
 　4. **家族Aで分布の縮小が実際に見えている**（**機構の裏づけ**）
@@ -64,6 +75,7 @@
 """
 import math
 import sys
+from zlib import crc32
 from itertools import combinations
 
 import numpy as np
@@ -80,7 +92,8 @@ QG = [98.0, 95.0, 90.0]        # ★軸のズレ: 上位2 / 5 / 10%
 QP = [90.0, 80.0]              # ★軸の推奨度: 上位10 / 20%
 QC = [90.0, 80.0]              # ★紐の床: ズレ上位10 / 20%
 ABS_FILT, ABS_C = (0.20, 0.06), 0.04       # ★内部対照（(194)と同じ絶対閾値）
-KNOWN_H1, KNOWN_H2, KTOL = 33.2, 4.6, 3.0
+NSEED = 10                     # ★★乱を何種引いて平均するか（1回だと3.8〜8.2pt揺れる）
+KNOWN_H1, KNOWN_H2, KTOL = 23.6, -0.8, 3.0     # ★20種平均で測り直した値
 SPLIT = 2021                   # ★後半の定義（(194)と同じ）
 MINCELL = 300
 NCMP = len(QG) * len(QP) * len(QC) * 2     # 12マス × (全期間 / 後半)
@@ -109,8 +122,9 @@ def selftest():
     print(f"★先読み防止: 2017の閾値 = **{thr:.1f}**（2017の値100は入っていない）: "
           f"{'★OK' if thr < 50 else '⚠NG'}")
     ok &= thr < 50
-    print(f"★★内部対照: **絶対閾値{ABS_FILT}・床{ABS_C} が (194)の "
-          f"前半+{KNOWN_H1}円 / 後半+{KNOWN_H2}円 を ±{KTOL}円 で再現すること**")
+    print(f"★★乱は**{NSEED}種の平均**（1回だと 3.8〜8.2pt 揺れる・判定基準37）")
+    print(f"★★内部対照: **絶対閾値{ABS_FILT}・床{ABS_C} が 20種平均の "
+          f"前半{KNOWN_H1:+.1f}円 / 後半{KNOWN_H2:+.1f}円 を ±{KTOL}円 で再現すること**")
     print("★★家族Aの読み方: **分布が縮んでいれば仮説は生きる。横ばいなら仮説は死ぬ**")
     print("★自己テスト: " + ("全部OK" if ok else "⚠NG"))
     return 0 if ok else 1
@@ -180,7 +194,7 @@ def main():
               for c in combinations(sorted(int(u) for u in ub[np.argsort(-pv)[:4]]), 3)]
         if not any(x is None for x in bx):
             box4.append(sum(bx) - 400.0)
-        R.append({"r": r, "yr": int(gg["date"].iloc[0].year), "ub": ub, "od": od,
+        R.append({"r": r, "rid": rid, "yr": int(gg["date"].iloc[0].year), "ub": ub, "od": od,
                   "pn": pn, "gap": pn - qp,
                   "bi": np.array([band_of(float(o), BANDS) for o in od])})
     print(f"\n★対象 **{len(R):,}レース**")
@@ -218,7 +232,6 @@ def main():
               f"{(os_[hit].mean() if hit.any() else float('nan')):>13.1f}倍")
 
     # ── 第2周: 賭ける ──
-    rng = np.random.default_rng(SEED)
     CELLS = [(a, b, c) for a in QG for b in QP for c in QC]
     K = {k: {"z": [], "r": [], "yr": []} for k in CELLS}
     K["ABS"] = {"z": [], "r": [], "yr": []}
@@ -247,23 +260,33 @@ def main():
             hg = [int(ub[k]) for k in order_g if int(ub[k]) != axu and gap[k] >= cth]
             if len(hg) < 2:
                 continue
-            hr, ok = [], True
-            for uu in hg[:2]:
-                b = bi[list(ub).index(uu)]
-                pl = [int(ub[k]) for k in range(len(ub))
-                      if bi[k] == b and int(ub[k]) != axu and int(ub[k]) not in hr]
-                if not pl:
+            vz = [payoff(x["r"], "馬連", [axu, w]) for w in hg[:2]]
+            if any(v is None for v in vz):
+                continue
+            # ★★乱を NSEED 種引いて平均する（★種は race に紐づけ、ループ順に依存させない）
+            outs, ok = [], True
+            for sd in range(NSEED):
+                g2 = np.random.default_rng([SEED + sd, crc32(str(x["rid"]).encode())])
+                hr = []
+                for uu in hg[:2]:
+                    b = bi[list(ub).index(uu)]
+                    pl = [int(ub[k]) for k in range(len(ub))
+                          if bi[k] == b and int(ub[k]) != axu and int(ub[k]) not in hr]
+                    if not pl:
+                        ok = False
+                        break
+                    hr.append(int(g2.choice(pl)))
+                if not ok:
+                    break
+                vr = [payoff(x["r"], "馬連", [axu, w]) for w in hr]
+                if any(v is None for v in vr):
                     ok = False
                     break
-                hr.append(int(rng.choice(pl)))
+                outs.append(sum(vr) / 2.0)
             if not ok:
                 continue
-            vz = [payoff(x["r"], "馬連", [axu, w]) for w in hg[:2]]
-            vr = [payoff(x["r"], "馬連", [axu, w]) for w in hr]
-            if any(v is None for v in vz + vr):
-                continue
             K[key]["z"].append(sum(vz) / 2.0)
-            K[key]["r"].append(sum(vr) / 2.0)
+            K[key]["r"].append(float(np.mean(outs)))
             K[key]["yr"].append(u)
 
     def halves(k):
@@ -277,7 +300,7 @@ def main():
     d1, d2 = (z_[h] - r_[h]).mean(), (z_[~h] - r_[~h]).mean()
     ok1 = abs(d1 - KNOWN_H1) <= KTOL and abs(d2 - KNOWN_H2) <= KTOL
     print(f"\n■ ★★内部対照（**絶対閾値 {ABS_FILT}・床{ABS_C}**・{len(z_):,}R）")
-    print(f"　前半 {d1:+.1f}円 vs (194) +{KNOWN_H1}円　／　後半 {d2:+.1f}円 vs +{KNOWN_H2}円"
+    print(f"　前半 {d1:+.1f}円 vs 20種平均 {KNOWN_H1:+.1f}円　／　後半 {d2:+.1f}円 vs {KNOWN_H2:+.1f}円"
           f"　→ **{'★再現' if ok1 else '⚠⚠ズレた'}**")
     print(f"　ROI: 全期間 {roi_of(z_):.1f}% / 前半 {roi_of(z_[h]):.1f}% / "
           f"後半 {roi_of(z_[~h]):.1f}%　（乱 {roi_of(r_):.1f}%）")
@@ -288,7 +311,7 @@ def main():
     print(f"\n{'='*112}")
     print(f"■ ★★★家族B: **相対閾値（その年までの分布の上位◯%）**")
     print(f"　★主判定は「ズレ順 − 乱」の対応差。**★本命は後半({SPLIT}〜)**"
-          f"（**絶対閾値版は +{KNOWN_H2}円**）")
+          f"（**絶対閾値版は {KNOWN_H2:+.1f}円**）")
     print(f"\n{'軸ズレ':>8}{'軸推奨':>8}{'紐床':>7}{'R数':>8}{'ROI':>8}"
           f"{'前半ROI':>9}{'後半ROI':>9}{'★全差':>9}{'99%CI':>19}"
           f"{'★★後半差':>11}{'99%CI':>19}{'判定':>13}")

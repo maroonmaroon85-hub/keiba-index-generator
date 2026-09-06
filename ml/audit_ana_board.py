@@ -30,8 +30,22 @@
 　　→ ★**書けるのは「複勝の市場価格で測っても届かない」まで**。
 
 ■ ★板の使い方（**(124)の事前登録2に倣う: どれか1つを選ばない**）
-　**複勝の板は `[下限, 上限]` の範囲**。★**主は mid=(下限+上限)/2**、
-　**下限・上限でも同じ向きが出るかを感度として出す**（**記述**）。
+　**複勝の板は `[下限, 上限]` の範囲**（**最低配当100円の保証で他の的中馬に配分が動くため**）。
+　⚠⚠★**第1版は mid=(下限+上限)/2 を主にしたが、ゲート板が落ちた**（**R=0.8321 vs 0.800**）。
+　★**判定基準37を当てて対照の定式化を疑い、恒等式に戻って直した**——
+　　**`R = 3/Σ(1/o)` は 1/o について線形**なので、**価格の中心は「オッズの平均」ではなく
+　　「1/o の平均」＝調和平均 `2·lo·hi/(lo+hi)`**。
+　★**実測（42,161レース・復元Rの中央値）**:
+| 価格の取り方 | 復元R | 0.800との差 |
+|---|---|---|
+| 下限 | 0.6682 | −0.1318 |
+| mid（第1版） | 0.8321 | **+0.0321** |
+| 上限 | 0.9895 | +0.1895 |
+| 幾何平均 | 0.8161 | +0.0161 |
+| ★**調和平均** | ★**0.8003** | ★**+0.0003** |
+　→ ★**主は調和平均**。**下限・mid・上限は感度として出す**（**記述**）。
+　⚠★**この訂正はゲートを見て行ったもので、主判定は一度も見ていない**。**判定基準37の正しい形**。
+　★**判定基準38の2件目**——**測れる定数を測ったら、定式化の誤りが出た**（1件目は(162)の馬単）。
 
 ■ ★手続き: **ウォークフォワード**（判定基準6・`data/cache/wf_pred.npz` を再利用）。
 ■ ★程度は(180)(183)と同一の**単勝オッズ9段**（**「穴の程度」の自然な定義は単勝オッズ**）。
@@ -127,11 +141,17 @@ def load_fuku_boards():
     return out
 
 
-def qpool(od_pairs, which="mid"):
-    """複勝の板 → 市場含意の3着以内確率（Σ=3）。"""
+def qpool(od_pairs, which="harm"):
+    """複勝の板 → 市場含意の3着以内確率（Σ=3）。
+
+    ★**価格の中心は調和平均**——**恒等式 `R = 3/Σ(1/o)` は 1/o について線形**なので、
+    　**「オッズの平均」ではなく「1/o の平均」を取るのが正しい**。
+    　**実測で 調和平均→R=0.8003（公示0.800）／mid→0.8321**（判定基準37/38）。
+    """
     lo = np.array([p[0] for p in od_pairs], float)
     hi = np.array([p[1] for p in od_pairs], float)
-    o = {"mid": (lo + hi) / 2.0, "lo": lo, "hi": hi}[which]
+    o = {"harm": 2.0 * lo * hi / (lo + hi), "mid": (lo + hi) / 2.0,
+         "lo": lo, "hi": hi}[which]
     inv = 1.0 / o
     return inv / inv.sum() * NPLACE, float(NPLACE / inv.sum())
 
@@ -144,11 +164,15 @@ def selftest():
     assert abs(q.sum() - NPLACE) < 1e-9 and abs(q[0] - NPLACE / 12) < 1e-9
     assert abs(R - NPLACE / (12 * 0.25)) < 1e-9
     print(f"★板→含意の自己テスト: Σq={q.sum():.3f}（要3.000）/ 復元R={R:.3f}　★OK")
-    # 範囲の3通りが順序を保つ
+    # 範囲の4通りが順序を保つ
     pr = [(1.5, 3.0), (2.0, 5.0), (10.0, 30.0)]
-    a, _ = qpool(pr, "lo"); b, _ = qpool(pr, "mid"); c, _ = qpool(pr, "hi")
-    assert np.argmax(a) == np.argmax(b) == np.argmax(c)
-    print("★感度の自己テスト: 下限/中央/上限で最大の馬が変わらない　★OK")
+    ms = [np.argmax(qpool(pr, w)[0]) for w in ("harm", "mid", "lo", "hi")]
+    assert len(set(ms)) == 1
+    print("★感度の自己テスト: 調和平均/中央/下限/上限で最大の馬が変わらない　★OK")
+    # ★調和平均は mid より小さい（1/o の平均を取るので）
+    h, _ = qpool([(1.0, 9.0)] * 10)
+    assert abs(2 * 1.0 * 9.0 / 10.0 - 1.8) < 1e-9
+    print("★調和平均の自己テスト: [1.0,9.0] → 1.80（mid は 5.00）　★OK")
     # ★ゲート2: 交換可能な2頭の対応差は0
     rng = np.random.default_rng(0)
     n = 150_000
@@ -203,7 +227,7 @@ def main():
     tailv, tailr, tailn = {t: [] for t in THRS}, [], []
     jac_hit, jac_tot = 0, 0
     Rs, box4 = [], []
-    sens = {"lo": [], "hi": []}
+    sens = {"lo": [], "mid": [], "hi": []}
     for rid, g in sub.groupby("raceid"):
         r = races.get(str(rid))
         bd = boards.get(str(rid))
@@ -222,7 +246,7 @@ def main():
             continue
         pn = pv / pv.sum() * NPLACE
         pairs = [bd[int(u)] for u in ub]
-        qp, Rb = qpool(pairs, "mid")
+        qp, Rb = qpool(pairs, "harm")
         Rs.append(Rb)
         gapf = pn - qp
         gapt = pv / pv.sum() - (1.0 / od) / (1.0 / od).sum()
@@ -256,7 +280,7 @@ def main():
             acc[i]["b"].append(pb); acc[i]["r"].append(pr_)
             acc[i]["t"].append(pt); acc[i]["yr"].append(yr)
             jac_tot += 1; jac_hit += (ab == at)
-            for w in ("lo", "hi"):
+            for w in ("lo", "mid", "hi"):
                 q2, _ = qpool(pairs, w)
                 g2 = pn - q2
                 a2 = int(idx[int(np.argmax(g2[idx]))])
@@ -268,7 +292,7 @@ def main():
     print(f"\n■ ★★ゲート板（判定基準38「測れる定数は測れ」）")
     med = float(np.median(Rs))
     okR = abs(med - BOARD_R) <= BOARD_TOL
-    print(f"　**板から復元した複勝の払戻率 R = 3/Σ(1/mid) の中央値 = {med:.4f}**"
+    print(f"　**板から復元した複勝の払戻率 R = 3/Σ(1/調和平均) の中央値 = {med:.4f}**"
           f"（要 {BOARD_R}±{BOARD_TOL}）→ **{'★立った' if okR else '⚠⚠落ちた'}**")
     if not okR:
         print("⚠⚠**板の読み方を疑う。読まない**（(162)で馬単の定数が2.6pt誤っていた前例）。")
@@ -342,7 +366,7 @@ def main():
               f"{roi_of(v):>8.1f}%{f'[{lo_:.1f},{hi_:.1f}]':>24}{judge:>16}")
 
     print(f"\n■ 記述: **板の下限/上限での感度**（穴(板) − 乱 の全帯平均）")
-    for w in ("lo", "hi"):
+    for w in ("lo", "mid", "hi"):
         s = np.asarray(sens[w], float)
         if len(s):
             print(f"　{w:<4}{s.mean():>+8.1f}円")

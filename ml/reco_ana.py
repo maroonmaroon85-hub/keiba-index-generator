@@ -19,8 +19,12 @@
 ■ ⚠**キャッシュを分ける**: **行数が変わると `wf_predict` のキャッシュが無効化され、
 　`data/cache/wf_pred.npz` を★上書きしてしまう**。**それを使っている(174)〜(206)の
 　内部対照が全部ズレるので、★このスクリプト専用のキャッシュに逃がす**。
-■ ⚠**2026-08-09 は結果データ自体が欠けている**（36レース中13レース・別セッションの報告）。
-　★**「その日は推奨が少なかった」と読まないこと**——**データの欠け**。
+■ ★**2026-08-09 の欠けは別セッションで解消済み**（13/36 → 36/36・`--refresh` を追加）。
+　★**7/19〜9/6 の14開催日504レースすべてに複勝の板がある**。**欠けはゼロ**。
+■ ★★**払戻の出どころが2つある**（**日付で使い分ける**）
+　★**`data/payout/a.csv`**（`audit_crosspool.load_races`）——**2026-07-26 まで**。
+　★**`data/nk/pay*.csv`**（`nk_score.load_pays`）——**8月以降はこちら**。
+　⚠**推奨を出すだけなら払戻は要らない**ので、**`--check` のときだけ要求する**。
 
 実行:
 　python3 ml/reco_ana.py [YYYY-MM-DD]        ★推奨だけ（結果を見ない）
@@ -38,6 +42,7 @@ sys.path.insert(0, "ml")
 import features as F
 from audit_crosspool import load_races, payoff
 from audit_ana_odds import MIN_HORSES
+from nk_score import load_pays
 import audit_ana_marg as _M
 # ★★このスクリプトは DSnk を足して行数が変わるので、共有キャッシュを上書きしない
 _M.CACHE = "data/cache/wf_pred_reco.npz"
@@ -54,7 +59,21 @@ def main():
     check = "--check" in sys.argv
     print("(207) ★**穴馬の線の推奨**" + ("　★★【答え合わせ】" if check else "　★推奨のみ（結果は見ない）"))
     races = {r["rid"]: r for r in load_races()}
+    pays = load_pays()
+    ORD = {"馬単", "三連単"}
+
+    def pay_of(rid, kind, sel):
+        """★払戻。a.csv にあればそれ、無ければ pay*.csv。★どちらにも無ければ None"""
+        if rid in races:
+            return payoff(races[rid], kind, list(sel))
+        m = pays.get(rid)
+        if m is None:
+            return None
+        key = tuple(sel) if kind in ORD else tuple(sorted(sel))
+        return float(m.get(kind, {}).get(key, 0.0))
+
     boards = load_fuku_boards()
+    print(f"★払戻: a.csv **{len(races):,}レース** ＋ pay*.csv **{len(pays):,}レース**")
     ds = [p for p in sorted(glob.glob("data/nk/DSnk*.CSV")) if os.path.getsize(p) > 0]
     print(f"★過去走: ルート直下の *.CSV ＋ **data/nk/DSnk*.CSV {len(ds)}本**")
     frames = [F.load_files()] + [
@@ -93,16 +112,20 @@ def main():
 
     out = []
     for rid, g in tgt.groupby("raceid"):
-        r = races.get(str(rid))
-        bd = boards.get(str(rid))
-        if r is None or bd is None:
+        rid = str(rid)
+        bd = boards.get(rid)
+        if bd is None:
             continue
-        nums = {u for u, _, _ in r["horses"]}
-        if len(nums) < MIN_HORSES:
-            continue
-        gg = g[g["umaban"].astype(int).isin(nums)]
+        r = races.get(rid)
+        if r is not None:
+            nums = {u for u, _, _ in r["horses"]}
+            gg = g[g["umaban"].astype(int).isin(nums)]
+        else:
+            gg = g
         ub = gg["umaban"].astype(int).to_numpy()
         if len(gg) < MIN_HORSES or not all(int(u) in bd for u in ub):
+            continue
+        if check and rid not in races and rid not in pays:
             continue
         od = gg["odds"].to_numpy(float)
         pv = gg["p"].to_numpy(float)
@@ -118,7 +141,7 @@ def main():
         fin = ({int(u): int(x) for u, x in zip(gg["umaban"].astype(int),
                                                gg["finish"].astype(int))}
                if check else {})
-        rec = {"rid": str(rid), "A": None, "B": None}
+        rec = {"rid": rid, "A": None, "B": None}
         cA = np.where((pn >= PN_FLOOR) & (gap >= GAP_A))[0]
         if len(cA):
             i = int(cA[int(np.argmax(pn[cA]))])
@@ -151,7 +174,7 @@ def main():
         line = (f"{x['rid']:<14}{a['u']:>4}{x['nm'].get(a['u'],''):<16}"
                 f"{a['od']:>7.1f}倍{a['pn']:>8.3f}{a['gap']:>8.3f}")
         if check:
-            v = payoff(races[x["rid"]], "複勝", [a["u"]])
+            v = pay_of(x["rid"], "複勝", [a["u"]])
             tA[0] += 100.0; tA[1] += (v or 0.0); tA[2] += 1
             line += f"{x['fin'].get(a['u'],0):>6}{(f'{int(v):,}円' if v else '−'):>10}"
         print(line)
@@ -170,14 +193,13 @@ def main():
         line = (f"{x['rid']:<14}{b['u']:>4}{x['nm'].get(b['u'],''):<16}"
                 f"{b['od']:>7.1f}倍{b['gap']:>8.3f}{b['h'][0]:>5}{b['h'][1]:>5}")
         if check:
-            r = races[x["rid"]]
-            vs = [payoff(r, "三連単", [b["u"], b["h"][0], b["h"][1]]),
-                  payoff(r, "三連単", [b["u"], b["h"][1], b["h"][0]])]
+            vs = [pay_of(x["rid"], "三連単", [b["u"], b["h"][0], b["h"][1]]),
+                  pay_of(x["rid"], "三連単", [b["u"], b["h"][1], b["h"][0]])]
             v = sum(v for v in vs if v)
             tB[0] += 200.0; tB[1] += v; tB[2] += 1
-            vu = payoff(r, "馬連", [b["u"], b["h"][0]]) or 0.0
+            vu = pay_of(x["rid"], "馬連", [b["u"], b["h"][0]]) or 0.0
             tU[0] += 100.0; tU[1] += vu; tU[2] += 1
-            vs3 = payoff(r, "三連複", sorted([b["u"], b["h"][0], b["h"][1]])) or 0.0
+            vs3 = pay_of(x["rid"], "三連複", sorted([b["u"], b["h"][0], b["h"][1]])) or 0.0
             tS[0] += 100.0; tS[1] += vs3; tS[2] += 1
             line += (f"{x['fin'].get(b['u'],0):>6}{x['fin'].get(b['h'][0],0):>6}"
                      f"{x['fin'].get(b['h'][1],0):>6}"

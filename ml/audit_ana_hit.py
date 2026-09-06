@@ -69,6 +69,15 @@
 　★**採用条件に「梯子が単調」**——**馬連 → 馬単 → 三連単 で比が保たれるか、落ちるか**。
 　⚠**(178)でプラセボが109.9%を出した**。**最良のマスを見出しにしない**。
 
+■ ★★★**事前登録の修正（2026-09-06・★家族Aの結果を一度も見る前に）**
+　⚠**第1版は内部対照が落ちた**（**三連単 66.3% vs (190) 103.1%**）。
+　★**原因: 私が紐を「ズレ順(gap降順)」で組んでいたが、(190)の103.1%は「モデル上位順(p降順)」**。
+　　**(190)は(191)より前の測定で、当時の紐は常に p降順だった**（判定基準25: **母集団が違う**）。
+　★★**この落ち方自体が情報**: **同じ三連単で紐をズレ順にすると 103.1% → 66.3%**。
+　　**(191)の「三連単だけ −35.9円 と大暴落」と一致する**。
+　★★**修正: 主判定の紐を p降順（＝(190)と同じ）にし、ズレ順は記述として併記する**。
+　★**この修正はゲートを見て入れたもので、家族Aの判定は一度も見ていない**（判定基準38）。
+
 ■ ★採用条件
 　1. **的中率の差が有意に正**（**3券種とも**）
 　2. ★**三連単の的中率比が 1.38倍を超える**（**＝ROIで100%を超えることを意味する**）
@@ -178,7 +187,8 @@ def main():
     sub = d.loc[msk, ["raceid", "umaban", "odds", "date"]].copy()
     sub["p"] = pred[msk]
 
-    K = {(fl, k): {a: {"pay": [], "hit": []} for a in ("本", "乱全", "乱紐")}
+    ARMS = ("本", "乱全", "乱紐", "ズレ順", "ズレ乱全")
+    K = {(fl, k): {a: {"pay": [], "hit": []} for a in ARMS}
          for fl in FILT for k in KINDS}
     Rs, box4, nall = [], [], 0
     for rid, g in sub.groupby("raceid"):
@@ -215,15 +225,18 @@ def main():
                 continue
             ai = int(cand[int(np.argmax(gap[cand]))])
             axu = int(ub[ai])
-            hg = [int(ub[k]) for k in order_g if int(ub[k]) != axu]
-            if len(hg) < 2:
+            hg_p = [int(u) for u in ub[np.argsort(-pv, kind="mergesort")]
+                    if int(u) != axu]
+            hg_g = [int(ub[k]) for k in order_g if int(ub[k]) != axu]
+            if len(hg_p) < 2 or len(hg_g) < 2:
                 continue
-            trio = [axu, hg[0], hg[1]]
+            TRIOS = {"本": [axu, hg_p[0], hg_p[1]],        # ★(190)と同じ p降順
+                     "ズレ順": [axu, hg_g[0], hg_g[1]]}
             # ★乱: それぞれ同じオッズ帯の無作為な馬に置き換える
-            def draw(rngen, which):
+            def draw(rngen, which, trio):
                 out = []
                 for j, u in enumerate(trio):
-                    if which == "乱紐" and j == 0:
+                    if which.endswith("乱紐") and j == 0:
                         out.append(u)
                         continue
                     b = bi[pos[u]]
@@ -233,13 +246,13 @@ def main():
                         return None
                     out.append(int(rngen.choice(pl)))
                 return out
-            sets = {"本": [trio]}
+            sets = {"本": [TRIOS["本"]], "ズレ順": [TRIOS["ズレ順"]]}
             okall = True
-            for which in ("乱全", "乱紐"):
+            for which, base in (("乱全", "本"), ("乱紐", "本"), ("ズレ乱全", "ズレ順")):
                 lst = []
                 for sd in range(NSEED):
                     g2 = np.random.default_rng([SEED + sd, crc32(str(rid).encode())])
-                    t = draw(g2, which)
+                    t = draw(g2, which, TRIOS[base])
                     if t is None:
                         okall = False
                         break
@@ -269,7 +282,7 @@ def main():
             if not okall:
                 continue
             for kind in KINDS:
-                for which in ("本", "乱全", "乱紐"):
+                for which in ARMS:
                     pay, hit = vals[(kind, which)]
                     c = K[(fl, kind)][which]
                     c["pay"].append(pay); c["hit"].append(hit)
@@ -322,7 +335,8 @@ def main():
     for fl in FILT:
         print(f"\n★絞り{fl}")
         print(f"{'券種':<8}{'★本ROI':>10}{'乱全ROI':>10}{'払戻率':>8}"
-              f"{'乱紐ROI':>10}{'★1回配当(本)':>14}{'(乱全)':>12}{'配当比':>8}")
+              f"{'乱紐ROI':>10}{'★1回配当(本)':>14}{'(乱全)':>12}{'配当比':>8}"
+              f"{'★ズレ順ROI':>12}{'その的中率':>12}{'ズレ乱全':>10}")
         for kind in KINDS:
             c = K[(fl, kind)]
             cost = 100.0 * NPT[kind]
@@ -330,15 +344,29 @@ def main():
             rv = np.asarray(c["乱全"]["pay"], float)
             rh = np.asarray(c["乱全"]["hit"], float)
             hv = np.asarray(c["乱紐"]["pay"], float)
+            zv = np.asarray(c["ズレ順"]["pay"], float)
+            zh = np.asarray(c["ズレ順"]["hit"], float)
+            zr = np.asarray(c["ズレ乱全"]["pay"], float)
             if len(a) < MINCELL:
                 continue
             pa = a.sum() / max(ah.sum(), 1e-9)
             pr = rv.sum() / max(rh.sum(), 1e-9)
             print(f"{kind:<8}{100*a.mean()/cost:>9.1f}%{100*rv.mean()/cost:>9.1f}%"
                   f"{100*LINE[kind]:>7.1f}%{100*hv.mean()/cost:>9.1f}%"
-                  f"{pa:>13,.0f}円{pr:>11,.0f}円{pa/max(pr,1e-9):>7.2f}倍")
+                  f"{pa:>13,.0f}円{pr:>11,.0f}円{pa/max(pr,1e-9):>7.2f}倍"
+                  f"{100*zv.mean()/cost:>11.1f}%{100*zh.mean():>11.3f}%"
+                  f"{100*zr.mean()/cost:>9.1f}%")
 
-    print("\n■ ★採用条件: **1.差が有意 / 2.三連単の比が1.38倍超 / "
+    print("\n■ ★★★**事前登録の修正（2026-09-06・★家族Aの結果を一度も見る前に）**
+　⚠**第1版は内部対照が落ちた**（**三連単 66.3% vs (190) 103.1%**）。
+　★**原因: 私が紐を「ズレ順(gap降順)」で組んでいたが、(190)の103.1%は「モデル上位順(p降順)」**。
+　　**(190)は(191)より前の測定で、当時の紐は常に p降順だった**（判定基準25: **母集団が違う**）。
+　★★**この落ち方自体が情報**: **同じ三連単で紐をズレ順にすると 103.1% → 66.3%**。
+　　**(191)の「三連単だけ −35.9円 と大暴落」と一致する**。
+　★★**修正: 主判定の紐を p降順（＝(190)と同じ）にし、ズレ順は記述として併記する**。
+　★**この修正はゲートを見て入れたもので、家族Aの判定は一度も見ていない**（判定基準38）。
+
+■ ★採用条件: **1.差が有意 / 2.三連単の比が1.38倍超 / "
           "3.配当が揃う / 4.乱全が払戻率を返す**")
     print("⚠**経路は弱いので「閉じた」とは書けない**（判定基準25）。")
     print("\n⚠**枠連の運用には触れない**。**設定変更は提案しない**。")

@@ -12,10 +12,22 @@
 
 ⚠**どちらも100%を挟む/下回る**。★**「勝てる」とは測れていない**。
 
+■ ★★**過去走の読み込み**（**別セッションからの指摘・2026-09-06**）
+　⚠**`F.load_files()` はルート直下の *.CSV しか読まない**ので、**7/26 までしか見えなかった**。
+　★**`data/nk/DSnk*.CSV`（8/1〜9/6 の14ファイル）を足すと 9/6 まで見える**
+　（**`predict_nk.py:128-129` と同じ読み方**）。⚠**0バイトのDSnkは飛ばす**（8/09で実際に踏んだ）。
+■ ⚠**キャッシュを分ける**: **行数が変わると `wf_predict` のキャッシュが無効化され、
+　`data/cache/wf_pred.npz` を★上書きしてしまう**。**それを使っている(174)〜(206)の
+　内部対照が全部ズレるので、★このスクリプト専用のキャッシュに逃がす**。
+■ ⚠**2026-08-09 は結果データ自体が欠けている**（36レース中13レース・別セッションの報告）。
+　★**「その日は推奨が少なかった」と読まないこと**——**データの欠け**。
+
 実行:
 　python3 ml/reco_ana.py [YYYY-MM-DD]        ★推奨だけ（結果を見ない）
 　python3 ml/reco_ana.py [YYYY-MM-DD] --check  ★答え合わせ
 """
+import glob
+import os
 import sys
 from itertools import combinations
 
@@ -26,6 +38,9 @@ sys.path.insert(0, "ml")
 import features as F
 from audit_crosspool import load_races, payoff
 from audit_ana_odds import MIN_HORSES
+import audit_ana_marg as _M
+# ★★このスクリプトは DSnk を足して行数が変わるので、共有キャッシュを上書きしない
+_M.CACHE = "data/cache/wf_pred_reco.npz"
 from audit_ana_marg import wf_predict
 from audit_ana_board import NPLACE, load_fuku_boards, qpool
 from audit_ana_band import PN_FLOOR
@@ -40,7 +55,16 @@ def main():
     print("(207) ★**穴馬の線の推奨**" + ("　★★【答え合わせ】" if check else "　★推奨のみ（結果は見ない）"))
     races = {r["rid"]: r for r in load_races()}
     boards = load_fuku_boards()
-    d = F.to_model(F.load_files())
+    ds = [p for p in sorted(glob.glob("data/nk/DSnk*.CSV")) if os.path.getsize(p) > 0]
+    print(f"★過去走: ルート直下の *.CSV ＋ **data/nk/DSnk*.CSV {len(ds)}本**")
+    frames = [F.load_files()] + [
+        pd.read_csv(p, header=None, encoding="shift_jis", encoding_errors="replace",
+                    dtype=str, keep_default_na=False) for p in ds]
+    d = F.to_model(pd.concat(frames, ignore_index=True))
+    n0 = len(d)
+    d = d.drop_duplicates(subset=["raceid", "umaban"], keep="first").reset_index(drop=True)
+    print(f"　**{n0:,}行 → 重複を落として {len(d):,}行**"
+          f"　（最終日 **{d['date'].max().date()}**）")
     f = F.build_features(d)
     keep = (f["n_prior"] >= 1) & d["odds"].notna() & (d["odds"] > 0)
     d, f = d[keep].reset_index(drop=True), f[keep].reset_index(drop=True)

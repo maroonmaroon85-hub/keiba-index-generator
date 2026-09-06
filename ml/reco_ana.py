@@ -21,6 +21,12 @@
 　内部対照が全部ズレるので、★このスクリプト専用のキャッシュに逃がす**。
 ■ ★**2026-08-09 の欠けは別セッションで解消済み**（13/36 → 36/36・`--refresh` を追加）。
 　★**7/19〜9/6 の14開催日504レースすべてに複勝の板がある**。**欠けはゼロ**。
+■ ⚠⚠**馬IDの表記が2通りある**（**2026-09-06 に実測**）
+　★**ルートの *.CSV は全部8桁**（669,951行）。⚠**DSnk には10桁のIDが混じる**
+　（**通常のファイルで約15%、`--refresh` で取り直した 8/9・9/6 は★100%が10桁**）。
+　★**10桁は「20」＋8桁**なので、**先頭の "20" を落とせばルートと一致する**
+　（**9/6 の489頭: そのままだと一致0頭 → ★"20"を落とすと431頭一致**。残りは新馬とみられる）。
+　⚠**直さないと `n_prior=0` になり、その馬は丸ごと落ちる**（**9/6 は 489行 → 55行になっていた**）。
 ■ ★★**払戻の出どころが2つある**（**日付で使い分ける**）
 　★**`data/payout/a.csv`**（`audit_crosspool.load_races`）——**2026-07-26 まで**。
 　★**`data/nk/pay*.csv`**（`nk_score.load_pays`）——**8月以降はこちら**。
@@ -80,6 +86,11 @@ def main():
         pd.read_csv(p, header=None, encoding="shift_jis", encoding_errors="replace",
                     dtype=str, keep_default_na=False) for p in ds]
     d = F.to_model(pd.concat(frames, ignore_index=True))
+    # ★★馬IDの表記ゆれを直す（10桁「20」＋8桁 → 8桁）。直さないと過去走がリンクしない
+    h0 = d["horse"].astype(str)
+    d["horse"] = h0.map(lambda x: x[2:] if len(x) == 10 and x.startswith("20") else x)
+    nfix = int((h0 != d["horse"]).sum())
+    print(f"★馬IDの表記を統一: **{nfix:,}行**（10桁「20」＋8桁 → 8桁）")
     n0 = len(d)
     d = d.drop_duplicates(subset=["raceid", "umaban"], keep="first").reset_index(drop=True)
     print(f"　**{n0:,}行 → 重複を落として {len(d):,}行**"

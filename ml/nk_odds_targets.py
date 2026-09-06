@@ -19,6 +19,16 @@
     python3 ml/nk_odds_targets.py            # 2%裾（既定・E≤86円）
     python3 ml/nk_odds_targets.py --tier 5   # 5%裾（E≤90円）
     python3 ml/nk_odds_targets.py --from 2015
+    python3 ml/nk_odds_targets.py --all      # 全レース → targets_all.txt
+
+★★`--all` は `data/payout/a.csv`（TARGET出力）と `data/nk/pay*.csv`（netkeiba経由）の**両方**を読む。
+　⚠**なぜ両方要るか（2026-09-06）**——**a.csv は TARGET を Windows で回さないと増えない**。
+　　2026-07-26 で止まっていたため、**一覧もそこで止まり、板の収集も止まって見えた**。
+　　⚠**収集器は正常だった。対象一覧が古かっただけ**。
+　★**毎週の運用は netkeiba 経由（`nk_fetch.py results`）で回っている**ので、
+　　**`data/nk/pay*.csv` には最新の開催が入っている**。そこから race_id を足せば
+　　**TARGET を回さなくても一覧を最新にできる**。
+　★**pay 由来の分は末尾に足す**（先頭の2%裾の並びを壊さないため）。
 """
 import os
 import sys
@@ -67,6 +77,20 @@ def main():
     if "--all" in a:
         races = load_races()
         ids = sorted({rid for r in races if (rid := to_nk_raceid(r["rid"]))})
+        # ★netkeiba経由の開催（a.csv より新しい分）を足す。**標準ライブラリだけで読める**
+        import csv as _csv
+        import glob as _glob
+        nk = set()
+        for pth in sorted(_glob.glob("data/nk/pay*.csv")):
+            with open(pth, encoding="utf-8", newline="") as fh:
+                for row in _csv.DictReader(fh):
+                    if (rid := to_nk_raceid((row.get("raceid") or "").strip())):
+                        nk.add(rid)
+        extra = sorted(nk - set(ids))
+        if extra:
+            print(f"★netkeiba経由(data/nk/pay*.csv)から {len(extra)} レースを追加"
+                  f"（a.csv に無い分。TARGET を回さなくても一覧が最新になる）")
+        ids = ids + extra
         tail_path = f"{OUT}/targets_2pct.txt"
         head = []
         if os.path.exists(tail_path):

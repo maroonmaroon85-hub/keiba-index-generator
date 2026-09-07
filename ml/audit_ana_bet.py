@@ -82,6 +82,20 @@
 　　★**QはPに近いが少し下と見る**（**Pの平均2.3番人気に対しQは2.0番人気**）。
 　　⚠**もしQがPと同じかそれ以上なら、★C3・C4の根拠は消える**。
 
+■ ★★★★**(218) 追記（2026-09-07・★利用者の指定「この穴馬軸の枠連ってどう？」）**
+　⚠★★**線引きを先に書く**: **別セッションの枠連の運用には触れない**。
+　　**紐1・除外40%・枠連という設定に提案もしない。あちらの数字と比べもしない**。
+　　★**ここでやるのは「この穴馬軸（軸①）に枠連という券種を足し、同じ対照で測る」だけ**。
+　★**買い方: 軸の枠 × 紐の枠**。**同じ枠なら1点にまとめる（ゾロ目も1点）**。**k ∈ {1,2,3}**。
+　⚠**枠連は8頭未満だと発売されないので、そのレースは落とす**。
+　★★★**枠連はこの線で唯一「軸が当たらなくても当たりうる」券種**
+　　——**軸と同じ枠の別の馬が2着以内に来れば的中する**。⚠**そこが他の全券種と構造的に違う**。
+　★**だから予測が立てにくい**: **軸の情報が薄まる（悪化要因）が、的中率は上がる（改善要因）**。
+　■ 予想（⚠**当てにしない**・★**私は6回外した**）
+　　★**紐Qの枠連が、複勝と馬単の中間くらいの位置に来ると見る**。
+　　⚠**軸の情報が枠で薄まるので、対応差はどの紐でも小さくなると見る**。
+　⚠**マスは 160 → 169 になる**。**選ぶ基準は一切変えない**。
+
 ■ ★**券種 14通り**（**1点=100円。点数ぶん賭ける**）
 | 券種 | k | 点数 | 払戻率 | ★**必要な優位比 1/払戻率** |
 |---|---|---|---|---|
@@ -332,6 +346,7 @@ import numpy as np
 sys.path.insert(0, "ml")
 import features as F
 from audit_crosspool import LINE, load_races, payoff, zq
+from waku_umatan import waku_of
 from audit_ana_odds import BANDS, MIN_HORSES, band_of, gate1, roi_of
 from audit_ana_marg import WF_BOX4, WF_TOL, wf_predict
 from audit_ana_board import BOARD_R, BOARD_TOL, NPLACE, load_fuku_boards, qpool
@@ -355,12 +370,21 @@ UT_N = [1, 2, 3, 4, 5]   # ★乱が紐を5頭までしか引かないので5点
 #   ★**軸と紐1頭を1着-2着で入れ替え、3着は次の紐へ流す** → **2m点**（m=3着候補の数）
 #   ★**AとBを同じ相手で対にした形**＝**(213d)でGの軸2着が良かった理由をそのまま形にしたもの**
 F_N = [2, 4, 6, 8]
+# ★★★(218) 枠連を券種として足す（利用者の指定「この穴馬軸の枠連ってどう？」）
+#   ⚠★**別セッションの枠連の運用には触れない。設定変更の提案もしない**。
+#   　★**ここでやるのは「この穴馬軸に枠連という券種を足して、同じ対照で測る」だけ**。
+#   ★**買い方: 軸の枠 × 紐の枠**（**同じ枠なら1点にまとめる＝ゾロ目**）。**k ∈ {1,2,3}**。
+#   ★★**枠連はこの線で唯一「軸が当たらなくても当たりうる」券種**
+#   　——**軸と同じ枠の別の馬が来ても的中する**。⚠**そこが他の券種と構造的に違う**。
+WAKU_K = [1, 2, 3]
+_NH = [0]   # ★そのレースの頭数（waku_of に要る）。**tickets() の引数を増やさないための入れ物**
 BETS = BETS209 \
     + [(f"馬単{ap}", n) for ap in ("A", "B", "M") for n in UT_N
        if not (ap == "M" and n % 2)] \
     + [(f"三連単{ap}", n) for ap in ("A", "B", "C", "M") for n in TAN3_N
        if not (ap == "M" and n % 3)] \
-    + [("三連単F", n) for n in F_N]
+    + [("三連単F", n) for n in F_N] \
+    + [("枠連", k) for k in WAKU_K]
 
 
 def tan3_pairs():
@@ -370,6 +394,8 @@ def tan3_pairs():
 
 
 def rate(kind):
+    if kind == "枠連":
+        return LINE["枠連(人気順)"]
     return LINE["三連単" if kind.startswith("三連単")
                 else ("馬単" if kind.startswith("馬単") else kind)]
 # ★★★(216) 紐Q＝市場順（人気順・単勝オッズ昇順）を足す。⚠**これは腕ではなく★対照**。
@@ -386,6 +412,21 @@ ALPHA = 0.01
 
 def need_himo(kind, k):
     """★その買い目に必要な紐の頭数"""
+    if kind == "枠連":
+        return k
+    if kind == "枠連":
+        hs = himo[:k]
+        if len(hs) < k or _NH[0] < 8:
+            return None          # ⚠**枠連は8頭未満だと発売されない**
+        wa = waku_of(ax, _NH[0])
+        seen, out = set(), []
+        for h in hs:
+            key = tuple(sorted((wa, waku_of(h, _NH[0]))))
+            if key in seen:
+                continue         # ★同じ枠の組は1点にまとめる
+            seen.add(key)
+            out.append(("枠連(人気順)", list(key)))
+        return out or None
     if kind == "三連単F":
         return 1 + k // 2
     if kind.startswith("三連単") and len(kind) > 3:
@@ -411,6 +452,19 @@ def tickets(kind, k, ax, himo):
         if ap == "B":
             return [("馬単", [h, ax]) for h in hs]
         return [t for h in hs for t in (("馬単", [ax, h]), ("馬単", [h, ax]))]
+    if kind == "枠連":
+        hs = himo[:k]
+        if len(hs) < k or _NH[0] < 8:
+            return None          # ⚠**枠連は8頭未満だと発売されない**
+        wa = waku_of(ax, _NH[0])
+        seen, out = set(), []
+        for h in hs:
+            key = tuple(sorted((wa, waku_of(h, _NH[0]))))
+            if key in seen:
+                continue         # ★同じ枠の組は1点にまとめる（ゾロ目も1点）
+            seen.add(key)
+            out.append(("枠連(人気順)", list(key)))
+        return out or None
     if kind == "三連単F":
         # ★1・2着折り返し: 軸と紐1が1-2着を入れ替え、3着は紐2以降へ流す
         m = k // 2
@@ -470,6 +524,7 @@ def selftest():
     print(f"★マス数 **{len(cs)}**（券種{len(BETS)} × 紐{len(HIMO)} − 複勝の重複1）"
           f"　{'★OK' if len(cs) == 3 * len(BETS) - 2 else '⚠NG'}")
     ok &= len(cs) == 3 * len(BETS) - 2
+    _NH[0] = 18
     hm = [2, 3, 4, 5, 6]
     print("★★(213d) ★**軸の着順を1着固定から解放する**（利用者の指定）")
     print("　★**A=軸1着 / B=軸2着 / C=軸3着 / M=マルチ**　⚠**馬連は着順が無いので対象外**")
@@ -520,6 +575,7 @@ def selftest():
     print(f"\n{'券種':<8}{'k':>3}{'点数':>5}{'払戻率':>8}{'★必要な優位比':>14}{'★複勝比':>10}")
     for kind, k in BETS:
         t = tickets(kind, k, 1, [2, 3, 4, 5, 6, 7])
+        _NH[0] = 12
         need = 1.0 / rate(kind)
         print(f"{kind:<10}{k:>3}{len(t) if t else 0:>5}{100*rate(kind):>7.1f}%"
               f"{need:>14.3f}{need/(1.0/LINE['複勝']):>9.1%}")
@@ -623,6 +679,7 @@ def main():
         rank = np.argsort(np.argsort(od)) + 1
         yrs.add(int(gg["date"].iloc[0].year))
 
+        _NH[0] = len(ub)
         cand = np.where((pn >= PN_FLOOR) & (gap >= GAP) & (od >= LFIX))[0]
         if not len(cand):
             continue
@@ -747,6 +804,7 @@ def main():
         rv = np.asarray(K[c]["r"], float) * 100.0
         if len(a) < 100:
             continue
+        _NH[0] = 18
         pts = len(tickets(kind, k, 1, [2, 3, 4, 5, 6, 7]))
         roi = roi_of(a)
         dd = a - rv

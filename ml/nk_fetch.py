@@ -224,26 +224,50 @@ def cmd_entries(ymd):
 
 
 def cmd_pedigree():
-    """DS互換CSVで父/母父が空の馬を、馬ページから埋める。1頭1回だけ。"""
+    """DS互換CSVで父/母父が空の馬を、馬ページから埋める。1頭1回だけ。
+
+    ⚠★**2026-09-06に2つの不具合を直した。どちらも「良いデータを消す」向きだった**——
+    　**8/9 の父が 495 → 356、9/6 が 489 → 363 に減った**（実測）。
+    　1. **空の取得結果をキャッシュしていた**。`ped[hid] = parse_pedigree(b)` は
+    　　 **取れなかった場合も空で記録する**ので、**二度と取りに行かず、しかも
+    　　 書き戻しで既存の父を空で上書きしていた**。
+    　2. ★**8桁の血統登録番号まで取りに行っていた**。
+    　　 **馬ページのURLは netkeiba の10桁IDでしか引けない**ので**必ず空が返る**。
+    　　 → **`nk_link.py` で名寄せ済みの馬（8桁）が全部この経路に落ちていた**。
+    ★**直した方針**: **①10桁のIDだけを対象にする ②空は記録しない
+    　③書き戻すのは「値があり、かつ既存が空」のときだけ**（**上書きで消さない**）。
+    ⚠**過去に空でキャッシュされた分は `pedigree.json` に残る**ので、
+    　★**初回に空エントリを捨ててから走る**（下の `dropped`）。
+    """
     import csv
     import glob
     need = {}
     for p in sorted(glob.glob(f"{OUT}/DSnk*.CSV")):
         for r in csv.reader(open(p, encoding="shift_jis", errors="replace")):
-            if len(r) > 45 and r[37] and not r[43]:
+            # ★10桁のnetkeiba IDだけ。8桁の血統登録番号では馬ページを引けない
+            if len(r) > 45 and len(r[37]) == 10 and r[37].isdigit() and not r[43]:
                 need[r[37]] = True
-    print(f"父/母父が未取得の馬: {len(need)}頭")
+    print(f"父/母父が未取得の馬: {len(need)}頭（10桁IDのみ）")
     ped = {}
     pp = os.path.join(CACHE, "pedigree.json")
     if os.path.exists(pp):
         ped = json.load(open(pp, encoding="utf-8"))
+    # ⚠★空でキャッシュされた分を捨てる（上の不具合1の後始末）。次回に取り直せる
+    dropped = [k for k, v in ped.items() if not (v or {}).get("sire")]
+    for k in dropped:
+        del ped[k]
+    if dropped:
+        print(f"　⚠空でキャッシュされていた {len(dropped)}頭を捨てた（取り直す）")
     todo = [h for h in need if h not in ped]
     print(f"うち今回取りに行くのは {len(todo)}頭（キャッシュ済み {len(need)-len(todo)}頭）")
     for i, hid in enumerate(todo, 1):
         b = get(f"https://db.netkeiba.com/horse/ped/{hid}/", f"ped_{hid}.html")
         if not b:
             continue
-        ped[hid] = parse_pedigree(b)
+        v = parse_pedigree(b)
+        if not (v or {}).get("sire"):
+            continue                      # ★空は記録しない（次回に取り直せるように）
+        ped[hid] = v
         if i % 20 == 0:
             json.dump(ped, open(pp, "w", encoding="utf-8"), ensure_ascii=False)
             print(f"  {i}/{len(todo)}")
@@ -251,12 +275,18 @@ def cmd_pedigree():
     # CSVに書き戻す
     for p in sorted(glob.glob(f"{OUT}/DSnk*.CSV")):
         rows = list(csv.reader(open(p, encoding="shift_jis", errors="replace")))
+        n = 0
         for r in rows:
-            if len(r) > 45 and r[37] in ped:
-                r[43], r[45] = ped[r[37]]["sire"], ped[r[37]]["damsire"]
+            # ★埋めるのは「値があり、かつ既存が空」のときだけ。**上書きで消さない**
+            v = ped.get(r[37]) if len(r) > 45 else None
+            if v and v.get("sire") and not r[43]:
+                r[43], r[45] = v["sire"], v["damsire"]
+                n += 1
+        if not n:
+            continue                      # ★変わらないファイルは書き直さない
         with open(p, "w", encoding="shift_jis", errors="replace", newline="") as fh:
             csv.writer(fh).writerows(rows)
-        print(f"  更新: {p}")
+        print(f"  更新: {p}（{n}行）")
 
 
 def main():

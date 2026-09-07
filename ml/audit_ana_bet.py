@@ -66,6 +66,22 @@
 　★**利用者の方針（2026-09-07）: 「馬単・三連単で買う感じになりそう」**。
 　　→ ★**以後の材料は馬単・三連単を中心に出す**。⚠**選ぶ基準は一切変えない**。
 
+■ ★★★★**(216) 追記（2026-09-07・★利用者の問い「結局モデル順で紐選んでるんだっけ？」）**
+　★**答え: 候補によって違い、しかもどちらもモデルが要る**——**P = pv降順（純粋にモデル順）/
+　　G = pn−qp 降順（モデル−市場の差の順）**。⚠★**市場だけで作れる紐が1つも無かった**。
+　★★**そこで紐Q＝市場順（人気順・単勝オッズ昇順）を足す**。⚠**これは腕ではなく★対照**。
+　★★**Qが在れば「Pの136.5%はモデルのおかげか、単に人気馬を買っているからか」を切り分けられる**。
+　⚠**(194)は「紐の順序はほぼ無関係」と出したが、あれは人気側の母集団**——
+　　**(213)でPとGの最適着順が逆転した時点で、判定基準25により持ち込めないことが確定**。
+　★★★**Qは選ぶ基準の候補から外す**（**対照なので、探索の幅を増やさない**）。
+　⚠**マスは 98 → 160 になるが、増えた62は全部対照である**。
+　■ ★★ゲート2（判定基準42）——**この対照は何を返せば「Pに情報が無い」か**
+　　★**Pがただの人気順なら、Q の ROI・対応差・必要年数は P と一致する**。
+　　★**PとQの上位3頭の重なりも併記する**（**高いほど「Pはただの人気順」に近い**）。
+　■ 予想（⚠**当てにしない**・★**私は5回外した**）
+　　★**QはPに近いが少し下と見る**（**Pの平均2.3番人気に対しQは2.0番人気**）。
+　　⚠**もしQがPと同じかそれ以上なら、★C3・C4の根拠は消える**。
+
 ■ ★**券種 14通り**（**1点=100円。点数ぶん賭ける**）
 | 券種 | k | 点数 | 払戻率 | ★**必要な優位比 1/払戻率** |
 |---|---|---|---|---|
@@ -282,7 +298,13 @@ def tan3_pairs():
 def rate(kind):
     return LINE["三連単" if kind.startswith("三連単")
                 else ("馬単" if kind.startswith("馬単") else kind)]
-HIMO = ["P", "G"]
+# ★★★(216) 紐Q＝市場順（人気順・単勝オッズ昇順）を足す。⚠**これは腕ではなく★対照**。
+#   ★**利用者の問い「結局モデル順で紐選んでるんだっけ？」から**——
+#   **PもGもモデルが要る**（**P = pv降順 / G = pn−qp 降順**）。★**市場だけで作れる紐が無かった**。
+#   ★★**Qが在れば「Pの数字はモデルのおかげか、単に人気馬を買っているからか」を切り分けられる**。
+#   ⚠**(194)は「紐の順序はほぼ無関係」と出したが、あれは人気側の母集団**——
+#   　**(213)でPとGの最適着順が逆転した時点で、判定基準25により持ち込めないことが確定している**。
+HIMO = ["P", "G", "Q"]
 KNOWN_ROI, KNOWN_N, ROI_TOL, N_TOL = 102.1, 1356, 0.2, 5
 TAIL_WARN = 1.3
 ALPHA = 0.01
@@ -372,8 +394,8 @@ def selftest():
     z = zq(ALPHA)
     cs = cells()
     print(f"★マス数 **{len(cs)}**（券種{len(BETS)} × 紐{len(HIMO)} − 複勝の重複1）"
-          f"　{'★OK' if len(cs) == 2 * len(BETS) - 1 else '⚠NG'}")
-    ok &= len(cs) == 2 * len(BETS) - 1
+          f"　{'★OK' if len(cs) == 3 * len(BETS) - 2 else '⚠NG'}")
+    ok &= len(cs) == 3 * len(BETS) - 2
     hm = [2, 3, 4, 5, 6]
     print("★★(213d) ★**軸の着順を1着固定から解放する**（利用者の指定）")
     print("　★**A=軸1着 / B=軸2着 / C=軸3着 / M=マルチ**　⚠**馬連は着順が無いので対象外**")
@@ -489,7 +511,9 @@ def main():
     sub["p"] = pred[msk]
 
     K = {c: {"a": [], "r": [], "hit": []} for c in cs}
-    HD = {"P": {"od": [], "rk": []}, "G": {"od": [], "rk": []}, "ov": []}
+    HD = {h: {"od": [], "rk": []} for h in HIMO}
+    HD["ov"] = []
+    HD["pq"] = []
     fix, fix210, Rs, box4, yrs = [], [], [], [], set()
     axod, axrk = [], []
     for rid, g in sub.groupby("raceid"):
@@ -519,6 +543,7 @@ def main():
         if not any(x is None for x in bx):
             box4.append(sum(bx) - 400.0)
         order_g = [int(u) for u in ub[np.argsort(-gap, kind="mergesort")]]
+        order_q = [int(u) for u in ub[np.argsort(od, kind="mergesort")]]   # ★市場順
         bi = np.array([band_of(float(o), BANDS) for o in od])
         pos = {int(u): q for q, u in enumerate(ub)}
         rank = np.argsort(np.argsort(od)) + 1
@@ -545,13 +570,15 @@ def main():
         if ok210:
             fix210.append(v0)
         HM = {"P": [u for u in order_p if u != ax],
-              "G": [u for u in order_g if u != ax]}
+              "G": [u for u in order_g if u != ax],
+              "Q": [u for u in order_q if u != ax]}
         # ★(213) 紐の中身を記述する（**上位3頭**で見る）
-        for hkey in ("P", "G"):
+        for hkey in HIMO:
             for u in HM[hkey][:3]:
                 HD[hkey]["od"].append(float(od[pos[u]]))
                 HD[hkey]["rk"].append(int(rank[pos[u]]))
         HD["ov"].append(len(set(HM["P"][:3]) & set(HM["G"][:3])))
+        HD["pq"].append(len(set(HM["P"][:3]) & set(HM["Q"][:3])))
         # ★乱: 軸と紐を、それぞれオッズ±20%以内の無作為な馬に置き換える（10種平均）
         draws, okd = [], True
         for sd in range(NRAND):
@@ -661,7 +688,8 @@ def main():
         print(f"{h:<3}{kind:<7}{pts:>3}{len(a):>7}{roi:>7.1f}%{ratio:>8.3f}"
               f"{mu:>+9.1f}円{lo:>+10.1f}{100*np.mean(a>0):>7.1f}%{hm:>9,.0f}円"
               f"{tail:>7.2f}{('%.0f年' % yy) if yy else '★到達せず':>12}")
-        if lo > 0 and yy is not None and (best is None or yy < best[9]):
+        # ★★Qは「対照」なので、選ぶ候補からは外す（★探索の幅を増やさないため）
+        if h != "Q" and lo > 0 and yy is not None and (best is None or yy < best[9]):
             best = rowsout[-1]
 
     print(f"\n{'='*112}")
@@ -683,13 +711,16 @@ def main():
 
     print(f"\n■ ★★**紐の中身（上位3頭・PとGで何が違うか）**")
     print(f"{'紐':<4}{'平均オッズ':>12}{'中央オッズ':>12}{'平均人気':>10}{'中央人気':>10}")
-    for hkey in ("P", "G"):
+    for hkey in HIMO:
         o = np.array(HD[hkey]["od"]); rk = np.array(HD[hkey]["rk"])
         print(f"{hkey:<4}{o.mean():>11.1f}倍{np.median(o):>11.1f}倍"
               f"{rk.mean():>9.1f}番{np.median(rk):>9.0f}番")
     print(f"　★**PとGの上位3頭の重なり: 平均 {np.mean(HD['ov']):.2f}頭 / 3頭**"
           f"（**完全一致 {100*np.mean(np.array(HD['ov'])==3):.1f}%** / "
           f"**全く別 {100*np.mean(np.array(HD['ov'])==0):.1f}%**）")
+    print(f"　★★**PとQ（市場順）の上位3頭の重なり: 平均 {np.mean(HD['pq']):.2f}頭 / 3頭**"
+          f"（**完全一致 {100*np.mean(np.array(HD['pq'])==3):.1f}%**）"
+          f"　⚠**ここが高いほど「Pはただの人気順」に近い**")
     print(f"　★軸そのものは共通（**平均 {np.mean(axod):.1f}倍 / {np.mean(axrk):.1f}番人気**）")
 
     print(f"\n■ ★**増幅則との突き合わせ**（**(197)の実測は 1.062→1.101 ＝ +3.7%**）")

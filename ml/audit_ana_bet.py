@@ -164,24 +164,86 @@ from train_prod import add_odds_features
 
 # ★★(212) 馬単を足す。⚠**(209)で私が券種リストに書き忘れ、(211)がそれを引き継いだ**。
 # ★**根拠があって外したのではない**。**LINEにもpayoff()にもKEYMAPにも馬単はあり、42,181R全部で引ける**。
-BETS = BETS209 + [("馬単", 1), ("馬単", 2), ("馬単", 3),
-                  ("三連単", 3), ("三連単", 4), ("三連単", 5)]
+# ★★(213c) 点数の梯子。⚠**k頭指定だと 2→6→12→20点と飛ぶ**ので、**点数を直接刻む**。
+#   **三連単流 = 軸1着固定・紐の順位で並べた買い目を上から n 点**
+# ⚠★**(213d) 軸の着順を1着固定から解放する（利用者の指摘）**
+#   ★**軸は pn（＝3着以内の確率）で選んでいるのに、買い目は1着を要求していた**＝**選び方と買い方がずれている**。
+#   **A=軸1着固定 / B=軸2着固定 / C=軸3着固定 / D=着順不問（軸を1〜3着すべてに置く）**
+TAN3_N = [1, 2, 3, 4, 5, 6, 8, 10, 12]
+UT_N = [1, 2, 3, 4, 5]   # ★乱が紐を5頭までしか引かないので5点まで
+BETS = BETS209 \
+    + [(f"馬単{ap}", n) for ap in ("A", "B", "M") for n in UT_N
+       if not (ap == "M" and n % 2)] \
+    + [(f"三連単{ap}", n) for ap in ("A", "B", "C", "M") for n in TAN3_N
+       if not (ap == "M" and n % 3)]
+
+
+def tan3_pairs():
+    """★三連単の買い目の順序。**紐の順位の和が小さい順**（**(1,2)(2,1)(1,3)(3,1)…**）"""
+    return sorted([(i, j) for i in range(5) for j in range(5) if i != j],
+                  key=lambda t: (t[0] + t[1], t[0], t[1]))
+
+
+def rate(kind):
+    return LINE["三連単" if kind.startswith("三連単")
+                else ("馬単" if kind.startswith("馬単") else kind)]
 HIMO = ["P", "G"]
 KNOWN_ROI, KNOWN_N, ROI_TOL, N_TOL = 102.1, 1356, 0.2, 5
 TAIL_WARN = 1.3
 ALPHA = 0.01
 
 
+def need_himo(kind, k):
+    """★その買い目に必要な紐の頭数"""
+    if kind.startswith("三連単") and len(kind) > 3:
+        n = k // 3 if kind[-1] == "M" else k
+        return max(max(t) for t in tan3_pairs()[:max(n, 1)]) + 1
+    if kind.startswith("馬単") and len(kind) > 2:
+        return k // 2 if kind[-1] == "M" else k
+    if kind == "複勝":
+        return 0
+    return 2 if kind == "三連単" else k
+
+
 def tickets(kind, k, ax, himo):
-    """★買い目。**馬単・三連単はどちらも「軸を1着に固定して紐へ流す」**"""
+    """★買い目。**馬単・三連単流はどちらも「軸を1着に固定して紐へ流す」**"""
+    if kind.startswith("馬単") and len(kind) > 2:
+        ap = kind[-1]
+        m = k // 2 if ap == "M" else k
+        hs = himo[:m]
+        if len(hs) < m or m < 1:
+            return None
+        if ap == "A":
+            return [("馬単", [ax, h]) for h in hs]
+        if ap == "B":
+            return [("馬単", [h, ax]) for h in hs]
+        return [t for h in hs for t in (("馬単", [ax, h]), ("馬単", [h, ax]))]
+    if kind.startswith("三連単") and len(kind) > 3:
+        ap = kind[-1]
+        n = k // 3 if ap == "M" else k          # ★Mは1組が3通りになるので点数を揃える
+        if n < 1:
+            return None
+        pr = tan3_pairs()[:n]
+        if len(himo) < max(max(t) for t in pr) + 1:
+            return None
+        out = []
+        for i, j in pr:
+            a, b = himo[i], himo[j]
+            if ap == "A":
+                out.append(("三連単", [ax, a, b]))
+            elif ap == "B":
+                out.append(("三連単", [a, ax, b]))
+            elif ap == "C":
+                out.append(("三連単", [a, b, ax]))
+            else:
+                out += [("三連単", [ax, a, b]), ("三連単", [a, ax, b]),
+                        ("三連単", [a, b, ax])]
+        return out or None
     hs = himo[:k]
     if len(hs) < k:
         return None
     if kind == "馬単":
         return [("馬単", [ax, h]) for h in hs]
-    if kind == "三連単" and k > 2:
-        # ★(213) 紐を増やす: 軸1着固定・2-3着は紐kから順列 → k(k-1)点
-        return [("三連単", [ax, a, b]) for a in hs for b in hs if a != b]
     return tickets209(kind, k, ax, himo)
 
 
@@ -205,12 +267,43 @@ def selftest():
     z = zq(ALPHA)
     cs = cells()
     print(f"★マス数 **{len(cs)}**（券種{len(BETS)} × 紐{len(HIMO)} − 複勝の重複1）"
-          f"　{'★OK' if len(cs) == 27 else '⚠NG'}")
-    ok &= len(cs) == 27
-    t3 = tickets("三連単", 3, 1, [2, 3, 4, 5])
-    print(f"★★(213) 三連単の紐を増やす: k=3 → **{len(t3)}点**"
-          f"（軸1着固定・2-3着は紐から順列 k(k-1)）　{'★OK' if len(t3) == 6 else '⚠NG'}")
-    ok &= len(t3) == 6 and len(tickets("三連単", 4, 1, [2,3,4,5,6])) == 12
+          f"　{'★OK' if len(cs) == 2 * len(BETS) - 1 else '⚠NG'}")
+    ok &= len(cs) == 2 * len(BETS) - 1
+    hm = [2, 3, 4, 5, 6]
+    print("★★(213d) ★**軸の着順を1着固定から解放する**（利用者の指定）")
+    print("　★**A=軸1着 / B=軸2着 / C=軸3着 / M=マルチ**　⚠**馬連は着順が無いので対象外**")
+    print("　★★**軸は pn（3着以内の確率）で選んでいるのに、"
+          "これまで1着だけを買っていた**＝**選び方と買い方がずれていた**")
+    print(f"\n　■ **馬単**（{UT_N}点）")
+    for n in UT_N:
+        row = []
+        for ap in ("A", "B", "M"):
+            if ap == "M" and n % 2:
+                row.append("M:—")
+                continue
+            t = tickets(f"馬単{ap}", n, 1, hm)
+            row.append(f"{ap}:{len(t)}点")
+            ok &= t is not None and len(t) == n
+        print(f"　{n:>3}　" + " / ".join(row))
+    print(f"　★M・2点 = {[x[1] for x in tickets('馬単M', 2, 1, hm)]}（**同じ1頭の裏表**）")
+    ok &= tickets("馬単M", 2, 1, hm) == [("馬単", [1, 2]), ("馬単", [2, 1])]
+    print(f"\n　■ **三連単**（{TAN3_N}点）")
+    for n in TAN3_N:
+        row = []
+        for ap in ("A", "B", "C", "M"):
+            if ap == "M" and n % 3:
+                row.append("M:—")
+                continue
+            t = tickets(f"三連単{ap}", n, 1, hm)
+            row.append(f"{ap}:{len(t)}点")
+            ok &= t is not None and len(t) == n
+        print(f"　{n:>3}　" + " / ".join(row) + f"　必要な紐 {need_himo('三連単A', n)}頭")
+    okA = tickets("三連単A", 2, 1, hm) == [("三連単", [1, 2, 3]), ("三連単", [1, 3, 2])]
+    print(f"　★**A・2点は(211)の三連単k=2と厳密に同じ**　{'★OK' if okA else '⚠NG'}")
+    ok &= okA
+    tM = tickets("三連単M", 3, 1, hm)
+    print(f"　★M・3点 = {[x[1] for x in tM]}（**同じ3頭の軸1・2・3着**）")
+    ok &= tM == [("三連単", [1, 2, 3]), ("三連単", [2, 1, 3]), ("三連単", [2, 3, 1])]
     t = tickets("馬単", 2, 1, [2, 3, 4])
     print(f"★★(212) 馬単を追加: {t}　{'★OK（軸を1着に固定して流す）' if t == [('馬単', [1, 2]), ('馬単', [1, 3])] else '⚠NG'}")
     ok &= t == [("馬単", [1, 2]), ("馬単", [1, 3])]
@@ -218,8 +311,8 @@ def selftest():
     print(f"\n{'券種':<8}{'k':>3}{'点数':>5}{'払戻率':>8}{'★必要な優位比':>14}{'★複勝比':>10}")
     for kind, k in BETS:
         t = tickets(kind, k, 1, [2, 3, 4, 5, 6, 7])
-        need = 1.0 / LINE[kind]
-        print(f"{kind:<8}{k:>3}{len(t) if t else 0:>5}{100*LINE[kind]:>7.1f}%"
+        need = 1.0 / rate(kind)
+        print(f"{kind:<10}{k:>3}{len(t) if t else 0:>5}{100*rate(kind):>7.1f}%"
               f"{need:>14.3f}{need/(1.0/LINE['複勝']):>9.1%}")
         ok &= t is not None
     print("　★**(197)の実測増幅は 1.062→1.101 ＝ +3.7%**"
@@ -362,10 +455,23 @@ def main():
                 out.append(int(g2.choice(pl)))
             if not okd:
                 break
+            # ★(213b) 紐を5頭まで伸ばす。★最初の4頭は同じrng系列なので既存の値は動かない
+            for u in HM["P"][3:5]:
+                k0 = pos[u]
+                pl = [int(ub[q]) for q in range(len(ub))
+                      if int(ub[q]) not in out
+                      and od[k0] / FINE <= od[q] <= od[k0] * FINE]
+                if not pl:
+                    break
+                out.append(int(g2.choice(pl)))
             draws.append(out)
         if not okd:
             continue
+        # ★点数の多いマスは「乱が同じ数だけ引けた」ときだけ測る（★既存マスは不変）
+        nmin = min(len(t) - 1 for t in draws)
         for h, kind, k in cs:
+            if need_himo(kind, k) > nmin:
+                continue
             tk = tickets(kind, k, ax, HM[h])
             if tk is None:
                 continue
@@ -437,7 +543,7 @@ def main():
         tail = hm / hmd if hmd > 0 else float("nan")
         per_year = len(a) / ny
         yy, _ = need_years(a, per_year, z)
-        ratio = roi / 100.0 / LINE[kind]
+        ratio = roi / 100.0 / rate(kind)
         rowsout.append((c, len(a), roi, ratio, mu, lo, 100*np.mean(a > 0), hm, tail, yy, pts))
         print(f"{h:<3}{kind:<7}{pts:>3}{len(a):>7}{roi:>7.1f}%{ratio:>8.3f}"
               f"{mu:>+9.1f}円{lo:>+10.1f}{100*np.mean(a>0):>7.1f}%{hm:>9,.0f}円"
@@ -481,7 +587,7 @@ def main():
             (h, kind, k), *_ = r0
             ratio = r0[3]
             g = ratio / base[3]
-            nd = (1.0 / LINE[kind]) / (1.0 / LINE["複勝"])
+            nd = (1.0 / rate(kind)) / (1.0 / LINE["複勝"])
             print(f"{h:<3}{kind:<7}{k:>3}{ratio:>8.3f}{g:>9.1%}{nd:>9.1%}"
                   f"{'★上回る' if g >= nd else '⚠届かない':>10}")
 

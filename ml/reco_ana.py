@@ -143,8 +143,13 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
                 og = [int(u) for u in ub[np.argsort(-gpv, kind="mergesort")]]
                 HH = {"P": [u for u in order_p if u != ax2][:5],
                       "G": [u for u in og if u != ax2][:5]}
+                fin2 = {int(u): int(x) for u, x
+                        in zip(gg["umaban"].astype(int), gg["finish"].astype(int))}
                 row = {"rid": rid, "day": str(pd.Timestamp(day).date()), "ax": ax2,
-                       "od": float(od[i2]), "gap": float(gpv[i2]), "v": {}}
+                       "od": float(od[i2]), "gap": float(gpv[i2]), "v": {},
+                       "fx": fin2.get(ax2, 0), "hp": HH["P"][:3], "hg": HH["G"][:3],
+                       "fp": [fin2.get(u, 0) for u in HH["P"][:3]],
+                       "fg": [fin2.get(u, 0) for u in HH["G"][:3]]}
                 for lab, hk, kind, npt, _r, _y in CAND:
                     tk = bet_tickets(kind, npt, ax2, HH[hk])
                     if tk is None:
@@ -199,6 +204,24 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
                   f"{r0['gap']:>7.3f}"
                   + "".join(f"{(f'{int(r0[chr(118)][c[0]][0]):,}' if c[0] in r0['v'] and r0['v'][c[0]][0] else ('−' if c[0] in r0['v'] else '?')):>9}"
                             for c in CAND))
+        print(f"\n■ ★★**軸と紐が何着だったか**（★**軸2着・3着でも当たったか**を見る）")
+        print(f"{'日付':<12}{'レース':<11}{'軸':>4}{'★軸着':>7}"
+              f"{'紐P上位3の着順':>18}{'紐G上位3の着順':>18}")
+        nax = [0, 0, 0, 0]
+        for r0 in CDET:
+            f0 = r0["fx"]
+            nax[0] += 1
+            if f0 == 1:
+                nax[1] += 1
+            elif f0 == 2:
+                nax[2] += 1
+            elif f0 == 3:
+                nax[3] += 1
+            print(f"{r0['day']:<12}{r0['rid']:<11}{r0['ax']:>4}{f0:>6}着"
+                  f"{str(r0['fp']):>18}{str(r0['fg']):>18}")
+        print(f"　★**軸の着順: 1着 {nax[1]}本 / 2着 {nax[2]}本 / 3着 {nax[3]}本 / "
+              f"4着以下 {nax[0]-nax[1]-nax[2]-nax[3]}本**（**{nax[0]}本中**）")
+        print(f"　★**11年の実測: 複勝的中率23.4%**＝**3着以内は4本に1本弱**")
         print(f"\n{'買い方':<20}{'点':>4}{'本数':>6}{'的中':>6}{'買った額':>11}{'払戻':>11}"
               f"{'★収支':>11}{'★ROI':>9}{'11年':>9}{'必要年数':>10}")
         for lab, hk, kind, npt, roi11, yr11 in CAND:

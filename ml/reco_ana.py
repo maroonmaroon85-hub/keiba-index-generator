@@ -68,6 +68,16 @@ from audit_ana_band import PN_FLOOR
 from train_prod import add_odds_features
 
 GAP_A, GAP_B = 0.15, 0.02
+# ★★(215) (210)〜(214)で出した穴側の候補4つを、同じ画面に並べる
+#   ★軸 = pn≥0.15 かつ gap≥0.15 かつ ★単勝オッズ≥10.0倍 の中で pn最大（**(210)で固定**）
+#   ★紐 P = pn降順（人気馬・平均2.3番人気）／ G = gap降順（穴馬・平均6.6番人気）
+from audit_ana_bet import tickets as bet_tickets
+from audit_ana_fix import LFIX
+
+CAND = [("C1 G馬単M 4点", "G", "馬単M", 4, 139.2, 39),
+        ("C2 G馬単B 2点", "G", "馬単B", 2, 144.1, 48),
+        ("C3 P馬単A 2点", "P", "馬単A", 2, 136.5, 55),
+        ("C4 P三連単A 3点", "P", "三連単A", 3, 137.5, 68)]
 
 
 def picks_of_race(gg, ub, od, pv, bd, order_p):
@@ -263,7 +273,16 @@ def main():
         fin = ({int(u): int(x) for u, x in zip(gg["umaban"].astype(int),
                                                gg["finish"].astype(int))}
                if check else {})
-        rec = {"rid": rid, "A": None, "B": None}
+        order_g = [int(u) for u in ub[np.argsort(-gap, kind="mergesort")]]
+        rec = {"rid": rid, "A": None, "B": None, "C": None}
+        cC = np.where((pn >= PN_FLOOR) & (gap >= GAP_A) & (od >= LFIX))[0]
+        if len(cC):
+            i = int(cC[int(np.argmax(pn[cC]))])
+            ax = int(ub[i])
+            rec["C"] = {"u": ax, "od": float(od[i]), "pn": float(pn[i]),
+                        "gap": float(gap[i]),
+                        "P": [u for u in order_p if u != ax][:5],
+                        "G": [u for u in order_g if u != ax][:5]}
         cA = np.where((pn >= PN_FLOOR) & (gap >= GAP_A))[0]
         if len(cA):
             i = int(cA[int(np.argmax(pn[cA]))])
@@ -327,6 +346,55 @@ def main():
                      f"{x['fin'].get(b['h'][1],0):>6}"
                      f"{(f'{int(v):,}円' if v else '−'):>12}")
         print(line)
+
+    nC = sum(1 for x in out if x["C"])
+    print(f"\n{'='*104}")
+    print(f"■ ★★★★**推奨C: 穴側の候補4つ**（**(210)〜(214)**・"
+          f"**軸=pn≥{PN_FLOOR} かつ ズレ≥{GAP_A} かつ ★単勝≥{LFIX}倍 の中で pn最大**）")
+    print(f"★**この日の該当 {nC}本**　⚠**11年の数字は98マスから選んだもので、下端は全部0を割る**")
+    tC = {c[0]: [0.0, 0.0, 0, 0] for c in CAND}
+    for x in out:
+        if not x["C"]:
+            continue
+        c = x["C"]
+        print(f"\n　★**{x['rid']}**　軸 **{c['u']}番 {x['nm'].get(c['u'],'')}**"
+              f"　**{c['od']:.1f}倍**　推奨度 {c['pn']:.3f}　ズレ {c['gap']:.3f}"
+              + (f"　→ **{c and x['fin'].get(c['u'],0)}着**" if check else ""))
+        print(f"　　紐P（人気側）{c['P'][:4]}　/　紐G（穴側）{c['G'][:4]}")
+        for lab, hk, kind, npt, roi11, yr11 in CAND:
+            tk = bet_tickets(kind, npt, c["u"], c[hk])
+            if tk is None:
+                print(f"　　{lab:<18} ⚠**紐が足りず組めない**")
+                continue
+            line = f"　　{lab:<18} " + " / ".join("-".join(str(z) for z in sel)
+                                                 for _, sel in tk)
+            if check:
+                vs = [pay_of(x["rid"], k2, sel) for k2, sel in tk]
+                if any(v is None for v in vs):
+                    print(line + "　⚠**払戻が引けない**")
+                    continue
+                v = sum(vs)
+                t = tC[lab]
+                t[0] += 100.0 * len(tk); t[1] += v; t[2] += 1; t[3] += 1 if v else 0
+                line += f"　→ **{(f'{int(v):,}円' if v else '−')}**"
+            print(line)
+
+    if check:
+        print(f"\n{'='*104}")
+        print(f"■ ★★★★**推奨Cの答え合わせ**")
+        print(f"{'買い方':<20}{'点':>4}{'本数':>6}{'的中':>6}{'買った額':>11}{'払戻':>11}"
+              f"{'★収支':>11}{'★ROI':>9}{'11年':>9}{'必要年数':>10}")
+        for lab, hk, kind, npt, roi11, yr11 in CAND:
+            t = tC[lab]
+            if not t[2]:
+                print(f"{lab:<20}{npt:>4}{'—':>6}")
+                continue
+            print(f"{lab:<20}{npt:>4}{t[2]:>6}{t[3]:>6}{t[0]:>10,.0f}円{t[1]:>10,.0f}円"
+                  f"{t[1]-t[0]:>+10,.0f}円{100*t[1]/t[0]:>8.1f}%{roi11:>8.1f}%{yr11:>9}年")
+        print(f"⚠⚠**この表で「良かった／悪かった」を読まないこと**——"
+              f"**本数が少なすぎる**（**11年1,383本でも下端は0を割っている**）。")
+        print(f"⚠★**これは前向きの検定ではない**——"
+              f"**直近のレースは、98マスを選ぶのに使った11年の中に入っている**。")
 
     if check:
         print(f"\n{'='*96}")

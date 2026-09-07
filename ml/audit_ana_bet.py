@@ -31,7 +31,20 @@
 | **P** | **モデルの推奨度 pn の降順**（**(198)で三連単はこれでないと壊れると確認済み**） |
 | **G** | **ズレ gap の降順**（★**この線の優位はズレに宿っているという仮説**） |
 
-■ ★**券種 8通り**（**1点=100円。点数ぶん賭ける**）
+■ ★★★**(212) 追記（2026-09-07・★馬単を足す）**
+　★**利用者の指摘: 「馬単がないのってなんで？」**。→ ★**根拠があって外したのではなく、
+　　(209)で私が券種リストに書き忘れ、(211)がそれを引き継いだだけ**だった。
+　★**LINE(0.750)にも payoff() にも KEYMAP にも馬単はあり、42,181レース全部で引ける**。
+　⚠**「測って落とした」ではなく「測っていない」**＝**取りこぼしの修復である**。
+　★★**馬単はこの目的にとって最も効きそうな位置にいる**——
+　　**三連複と同じ払戻率0.750なのに、必要な馬が1頭少ない**。
+　　→ **配当は馬連より高く、的中率は三連複より高いはず**。
+　★**追加の設計コストはゼロ**: **(211)は「11年は選ぶために使い切り、検定は前向きに1回」**
+　　なので、★**選ぶ材料が増えても前向きの検定は汚れない**。
+　★**買い方は「軸を1着に固定して紐へ流す」**（**三連単Pと同じ向き**）。**k=1,2 × 紐2 = 4マス追加**。
+　⚠**マスは 15 → 19 になる**。**選ぶ基準は一切変えない**。
+
+■ ★**券種 10通り**（**1点=100円。点数ぶん賭ける**）
 | 券種 | k | 点数 | 払戻率 | ★**必要な優位比 1/払戻率** |
 |---|---|---|---|---|
 | **複勝** | — | 1 | 0.800 | **1.250** |
@@ -131,14 +144,26 @@ from audit_ana_marg import WF_BOX4, WF_TOL, wf_predict
 from audit_ana_board import BOARD_R, BOARD_TOL, NPLACE, load_fuku_boards, qpool
 from audit_ana_band import PN_FLOOR
 from audit_ana_ladder import FINE
-from audit_ana_hole import BETS, GAP, NRAND, SEED, tickets
+from audit_ana_hole import BETS as BETS209, GAP, NRAND, SEED
+from audit_ana_hole import tickets as tickets209
 from audit_ana_fix import LFIX
 from train_prod import add_odds_features
 
+# ★★(212) 馬単を足す。⚠**(209)で私が券種リストに書き忘れ、(211)がそれを引き継いだ**。
+# ★**根拠があって外したのではない**。**LINEにもpayoff()にもKEYMAPにも馬単はあり、42,181R全部で引ける**。
+BETS = BETS209 + [("馬単", 1), ("馬単", 2)]
 HIMO = ["P", "G"]
 KNOWN_ROI, KNOWN_N, ROI_TOL, N_TOL = 102.1, 1356, 0.2, 5
 TAIL_WARN = 1.3
 ALPHA = 0.01
+
+
+def tickets(kind, k, ax, himo):
+    """★買い目。★馬単は「軸を1着に固定して紐へ流す」（**三連単Pと同じ向き**）"""
+    if kind == "馬単":
+        hs = himo[:k]
+        return None if len(hs) < k else [("馬単", [ax, h]) for h in hs]
+    return tickets209(kind, k, ax, himo)
 
 
 def cells():
@@ -161,8 +186,11 @@ def selftest():
     z = zq(ALPHA)
     cs = cells()
     print(f"★マス数 **{len(cs)}**（券種{len(BETS)} × 紐{len(HIMO)} − 複勝の重複1）"
-          f"　{'★OK' if len(cs) == 15 else '⚠NG'}")
-    ok &= len(cs) == 15
+          f"　{'★OK' if len(cs) == 19 else '⚠NG'}")
+    ok &= len(cs) == 19
+    t = tickets("馬単", 2, 1, [2, 3, 4])
+    print(f"★★(212) 馬単を追加: {t}　{'★OK（軸を1着に固定して流す）' if t == [('馬単', [1, 2]), ('馬単', [1, 3])] else '⚠NG'}")
+    ok &= t == [("馬単", [1, 2]), ("馬単", [1, 3])]
     print(f"★軸は(210)で固定: pn≥{PN_FLOOR} かつ ズレ≥{GAP} かつ 単勝≥{LFIX}倍 の中で pn最大")
     print(f"\n{'券種':<8}{'k':>3}{'点数':>5}{'払戻率':>8}{'★必要な優位比':>14}{'★複勝比':>10}")
     for kind, k in BETS:

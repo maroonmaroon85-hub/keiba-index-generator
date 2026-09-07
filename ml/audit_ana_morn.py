@@ -1,0 +1,208 @@
+"""(219) ★★★★**朝のオッズだと、同じ馬が選ばれるのか** —— 物差しを「一致率」に替える
+
+★★**動機（2026-09-07・利用者の指定「朝時点のオッズだとどう？」）**:
+　★**(218)までの169マスは、全部★確定オッズで測った**（**CSVの単勝＝確定と実測確認済み・
+　　勝ち馬3,000件で ±0.05倍以内が100%・平均絶対差0.000倍・相関1.0000**）。
+　★**この軸はオッズに三重に依存する**: **①軸の条件（単勝≥10.0倍）②紐Q（人気順）
+　　③モデルの特徴量 log_odds**。→ ⚠**朝のオッズだと別の馬が選ばれうる**。
+
+■ ⚠★★**線引き（守る）**
+　★**data/odds_ts は別セッションが(148)で集めたもの。★読むだけ**。
+　　**書かない・集め方に触れない・枠連の運用にも触れない・設定変更の提案もしない**。
+
+■ ★★★**なぜ物差しを替えるか（判定基準26）**
+　⚠**複勝の板は1レース1枚（締切前後）しか無い**ので、★**朝版のROIは作れない**。
+　⚠**そのうえ対象は396レース**で、**この軸は1日0.6本＝該当は数本**しか出ない。
+　　→ ★**ROIでは何も測れない**（判定基準5）。
+　★★**だから「朝と確定で、選ばれる馬がどれだけ入れ替わるか」を一致率で測る**。
+　　★**396レース全部が使えて、分散が小さい**。
+
+────────────────────────────────────────────────────────────
+★★★ 事前登録（2026-09-07・**結果を見る前にコミットする**）
+────────────────────────────────────────────────────────────
+
+■ ★対象: **data/odds_ts の396レース**（**2026-06-20〜07-26 の11開催日・各36R**）。
+■ ★**朝の定義: その開催日の 09:00 直前の最後のスナップショット**（**第1レースの前**）。
+　★**参考に 前日21:00 と 締切直前（最後のスナップショット）も出す**。
+■ ★**確定の定義: ルートCSVの単勝オッズ**（**＝確定と実測確認済み**）。
+
+■ ★★★**測るもの（すべて一致率・ROIではない）**
+| # | 量 | ★**これが答える問い** |
+|---|---|---|
+| **1** | **単勝オッズの朝↔確定の相関・平均絶対変化率** | ★**そもそもどれだけ動くのか** |
+| **2** | ★**単勝10.0倍の線をまたぐ馬の割合** | ★**軸の候補集合が変わるか** |
+| **3** | ★**人気1〜2番（紐Qの中身）の一致率** | ★**紐Qが変わるか** |
+| **4** | ★**「10倍以上」の集合の一致率（Jaccard）** | ★**軸の候補が入れ替わる度合い** |
+
+■ ★★ゲート2（判定基準42）——**この測定は何を返せば「朝でも同じ」か**
+　★**オッズが一切動かないなら、相関1.000・またぎ0%・一致率100%を返す**。
+　★**逆に、完全に無関係なら相関0・一致率は偶然の水準**。**その偶然の水準も併記する**。
+■ ★★内部対照（**決定的**）: **締切直前のスナップショット vs 確定オッズ**は
+　★**ほぼ一致するはず**（**相関>0.99・またぎ<2%**）。⚠**ここが合わなければ、
+　　時系列とルートCSVの突き合わせが壊れている**。★**合わなければ読まない**。
+
+■ ⚠**この測定で答えられないこと（先に書く）**
+　★**朝版のROI・必要年数は出せない**（**板が1枚・該当が数本**）。
+　★**モデルの予測値（log_odds経由）の変化も直接は測らない**——
+　　**①②③のうち①②だけを見る**。⚠**③は同じ向きに動くはずだが、確認していない**。
+
+■ 予想（⚠**当てにしない**・★**私は7回外した**）
+　★**人気1〜2番の一致率は9割超と見る**（**上位人気は朝からほぼ決まっている**）。
+　⚠**10倍の線をまたぐ馬は1〜2割あると見る**——**10倍前後は最も票が動く帯**。
+　★**もしまたぎが多ければ、★朝イチ運用は「別の測定」になる**。
+
+実行: python3 ml/audit_ana_morn.py    自己テスト: python3 ml/audit_ana_morn.py --selftest
+"""
+import sys
+
+import numpy as np
+import pandas as pd
+
+sys.path.insert(0, "ml")
+import features as F
+from odds_ts import load_dir
+
+LFIX = 10.0
+MORN, EVE = 9, 21          # ★時（レース当日の何時か）
+CORR_MIN, CROSS_MAX = 0.99, 2.0
+
+
+def snap_at(rec, hour):
+    """★レース当日の hour 時までで最後のスナップショット（区分1）の行番号。無ければ None。
+
+    ⚠**前日夜の行は時刻文字列だけでは朝より大きく見える**ので、★**日付ごと比較する**。
+    """
+    lim = pd.Timestamp(rec["date"].date()) + pd.Timedelta(hours=hour)
+    ok = np.where((rec["times"] <= lim) & (rec["kubun"] == "1"))[0]
+    return int(ok[-1]) if len(ok) else None
+
+
+def last_win(rec):
+    """★最後の単勝スナップショット（＝締切直前）の行番号"""
+    ok = np.where(rec["kubun"] == "1")[0]
+    return int(ok[-1]) if len(ok) else None
+
+
+def jacc(a, b):
+    u = a | b
+    return 1.0 if not u else len(a & b) / len(u)
+
+
+def selftest():
+    ok = True
+    rec = {"date": pd.Timestamp("2026-07-26"),
+           "times": pd.DatetimeIndex(["2026-07-25 21:35", "2026-07-26 09:00",
+                                      "2026-07-26 14:00"]),
+           "kubun": np.array(["1", "1", "1"])}
+    print(f"★朝の定義: **レース当日 {MORN}時 までの最後のスナップショット**")
+    print(f"　⚠**前日夜の行は時刻の文字列だけでは朝より大きく見える**"
+          f"　→ ★**日付ごと比較する**")
+    for h, want, lab in ((MORN, 1, "09時"), (8, 0, "08時（★前日夜を拾う）"),
+                         (EVE, 2, "21時")):
+        got = snap_at(rec, h)
+        print(f"　{lab:<20} → 行 {got}（{rec['times'][got]}）"
+              f"　{'★OK' if got == want else '⚠NG'}")
+        ok &= got == want
+    rec0 = dict(rec, date=pd.Timestamp("2026-07-25"))
+    print(f"　★前日の朝なら無い → {snap_at(rec0, 5)}"
+          f"　{'★OK' if snap_at(rec0, 5) is None else '⚠NG'}")
+    ok &= snap_at(rec0, 5) is None
+    print(f"　★締切直前は最後の行 → {last_win(rec)}"
+          f"　{'★OK' if last_win(rec) == 2 else '⚠NG'}")
+    ok &= last_win(rec) == 2
+    print(f"★Jaccardの検算: 同じ集合 {jacc({1,2},{1,2}):.2f} / "
+          f"半分 {jacc({1,2},{2,3}):.2f} / 空 {jacc(set(),set()):.2f}")
+    ok &= jacc({1, 2}, {1, 2}) == 1.0 and abs(jacc({1, 2}, {2, 3}) - 1/3) < 1e-9
+    print(f"★★ゲート2: **オッズが動かなければ 相関1.000・またぎ0%・一致率100%**")
+    print(f"★★内部対照: **締切直前 vs 確定 が 相関>{CORR_MIN} かつ またぎ<{CROSS_MAX}%**"
+          f"　⚠**合わなければ読まない**")
+    print("★自己テスト: " + ("全部OK" if ok else "⚠NG"))
+    return 0 if ok else 1
+
+
+def main():
+    print("(219) ★★★★**朝のオッズだと、同じ馬が選ばれるのか**")
+    print("⚠**data/odds_ts は別セッションが(148)で集めたもの。★読むだけ**\n")
+    ts = load_dir()
+    print(f"★時系列オッズ: **{len(ts):,}レース**"
+          f"（★**ml/odds_ts.py の既存ローダーを使う**）")
+
+    d = F.to_model(F.load_files())
+    fin = {}
+    for rid, g in d.groupby("raceid"):
+        o = {int(u): float(x) for u, x in zip(g["umaban"], g["odds"]) if np.isfinite(x) and x > 0}
+        if o:
+            fin[str(rid)] = o
+
+    def cmp_snap(hour, label, last=False):
+        pa, pb, cross, jac, top1, top2, n = [], [], [], [], [], [], 0
+        for rid, rec in ts.items():
+            b = fin.get(rid)                    # ★raceid はそのまま突き合う
+            if b is None:
+                continue
+            i = last_win(rec) if last else snap_at(rec, hour)
+            if i is None:
+                continue
+            row = rec["odds"][i]
+            a = {u + 1: float(row[u]) for u in range(rec["n"])
+                 if np.isfinite(row[u]) and row[u] > 0}
+            sh = [u for u in a if u in b]
+            if len(sh) < 5:
+                continue
+            n += 1
+            va = np.array([a[u] for u in sh])
+            vb = np.array([b[u] for u in sh])
+            pa += list(va); pb += list(vb)
+            cross.append(np.mean((va >= LFIX) != (vb >= LFIX)))
+            jac.append(jacc({u for u in sh if a[u] >= LFIX},
+                            {u for u in sh if b[u] >= LFIX}))
+            oa = sorted(sh, key=lambda u: a[u])
+            ob = sorted(sh, key=lambda u: b[u])
+            top1.append(oa[0] == ob[0])
+            top2.append(len(set(oa[:2]) & set(ob[:2])) / 2.0)
+        if not n:
+            print(f"{label:<16} ⚠**突き合わせ0件**")
+            return None
+        pa, pb = np.array(pa), np.array(pb)
+        r = float(np.corrcoef(np.log(pa), np.log(pb))[0, 1])
+        chg = float(np.mean(np.abs(pa - pb) / pb))
+        print(f"{label:<16}{n:>6}R{r:>9.4f}{100*chg:>10.1f}%"
+              f"{100*np.mean(cross):>10.1f}%{100*np.mean(jac):>10.1f}%"
+              f"{100*np.mean(top1):>9.1f}%{100*np.mean(top2):>9.1f}%")
+        return dict(n=n, r=r, chg=chg, cross=float(np.mean(cross)),
+                    jac=float(np.mean(jac)), t1=float(np.mean(top1)),
+                    t2=float(np.mean(top2)))
+
+    print(f"\n{'時点':<16}{'R数':>7}{'★対数相関':>9}{'平均変化':>10}"
+          f"{'★10倍またぎ':>10}{'★10倍一致':>10}{'人気1一致':>9}{'人気1-2':>9}")
+    last = cmp_snap(None, "★締切直前(対照)", last=True)
+    morn = cmp_snap(MORN, "★★朝 09:00")
+    eve = cmp_snap(EVE, "前日 21:00")
+
+    if last is None:
+        print("\n⚠⚠**突き合わせができない。読まない**。")
+        return
+    okc = last["r"] > CORR_MIN and 100 * last["cross"] < CROSS_MAX
+    print(f"\n★★内部対照（締切直前 vs 確定）: 相関 {last['r']:.4f}（>{CORR_MIN}）・"
+          f"またぎ {100*last['cross']:.1f}%（<{CROSS_MAX}%）　"
+          f"{'★★立った' if okc else '⚠⚠落ちた'}")
+    if not okc:
+        print("⚠⚠**対照が落ちた。読まない**（判定基準32）。")
+        return
+
+    if morn:
+        print(f"\n■ ★★★**答え（朝09:00 vs 確定）**")
+        print(f"　★**単勝オッズは平均 {100*morn['chg']:.1f}% 動く**（対数相関 {morn['r']:.4f}）")
+        print(f"　★**10.0倍の線をまたぐ馬は {100*morn['cross']:.1f}%**"
+              f"　→ ★**軸の候補集合の一致は {100*morn['jac']:.1f}%**")
+        print(f"　★**人気1番の一致 {100*morn['t1']:.1f}% / 人気1-2番の一致 {100*morn['t2']:.1f}%**"
+              f"　→ ★**紐Qがどれだけ変わるか**")
+
+    print(f"\n■ ⚠**この測定で答えられないこと**")
+    print("　★**朝版のROI・必要年数は出せない**（**複勝の板が1レース1枚・該当が数本**）。")
+    print("　★**モデルの予測値（log_odds経由）の変化は直接は測っていない**。")
+    print("\n⚠**枠連の運用には触れない**。**(148)の集め方にも触れない**。**設定変更は提案しない**。")
+
+
+if __name__ == "__main__":
+    sys.exit(selftest() if "--selftest" in sys.argv else (main() or 0))

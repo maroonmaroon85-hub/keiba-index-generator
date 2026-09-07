@@ -27,6 +27,9 @@
 　★**10桁は「20」＋8桁**なので、**先頭の "20" を落とせばルートと一致する**
 　（**9/6 の489頭: そのままだと一致0頭 → ★"20"を落とすと431頭一致**。残りは新馬とみられる）。
 　⚠**直さないと `n_prior=0` になり、その馬は丸ごと落ちる**（**9/6 は 489行 → 55行になっていた**）。
+　★★**正規化したら必ず並べ直すこと**——**`to_model` の最後が `sort_values(["horse","date"])`
+　　なので、後から名前を変えると並びが壊れたままになる**。**`build_features` の `cumcount()` は
+　　★行順で数える**ので、**9/6の行が先頭に来て n_prior=0 になる**（**実際に踏んだ**）。
 ■ ★★**払戻の出どころが2つある**（**日付で使い分ける**）
 　★**`data/payout/a.csv`**（`audit_crosspool.load_races`）——**2026-07-26 まで**。
 　★**`data/nk/pay*.csv`**（`nk_score.load_pays`）——**8月以降はこちら**。
@@ -90,7 +93,12 @@ def main():
     h0 = d["horse"].astype(str)
     d["horse"] = h0.map(lambda x: x[2:] if len(x) == 10 and x.startswith("20") else x)
     nfix = int((h0 != d["horse"]).sum())
-    print(f"★馬IDの表記を統一: **{nfix:,}行**（10桁「20」＋8桁 → 8桁）")
+    # ★★★並べ直しが必須。`to_model` の最後は sort_values(["horse","date"]) なので、
+    # 　正規化を後から当てると「2021100478」と「21100478」が別グループとして並んだままになり、
+    # 　`build_features` の `cumcount()` が行順で数えるため n_prior=0 になる（実際に踏んだ）。
+    d = d.sort_values(["horse", "date"], kind="mergesort").reset_index(drop=True)
+    print(f"★馬IDの表記を統一: **{nfix:,}行**（10桁「20」＋8桁 → 8桁）"
+          f"　→ ★**(horse, date) で並べ直した**")
     n0 = len(d)
     d = d.drop_duplicates(subset=["raceid", "umaban"], keep="first").reset_index(drop=True)
     print(f"　**{n0:,}行 → 重複を落として {len(d):,}行**"

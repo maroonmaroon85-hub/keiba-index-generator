@@ -106,6 +106,8 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
           f"{'B本':>5}{'B的中':>6}{'B投資':>9}{'B払戻':>9}{'B ROI':>8}{'測定':>8}")
     TOT = {"a": [0.0, 0.0, 0, 0], "b": [0.0, 0.0, 0, 0]}
     NEW = {"a": [0.0, 0.0, 0, 0], "b": [0.0, 0.0, 0, 0]}
+    TC = {c[0]: [0.0, 0.0, 0, 0] for c in CAND}
+    CDET = []
     for day in days:
         tgt = sub[sub["date"] == day]
         ta = [0.0, 0.0, 0, 0]
@@ -130,6 +132,32 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
             nr += 1
             order_p = [int(u) for u in ub[np.argsort(-pv, kind="mergesort")]]
             A, B = picks_of_race(gg, ub, od, pv, bd, order_p)
+            # ★★(215) 推奨C: (210)で固定した軸 ＋ (212)〜(214)の候補4つ
+            pnv = pv / pv.sum() * NPLACE
+            qpv, _ = qpool([bd[int(u)] for u in ub], "harm")
+            gpv = pnv - qpv
+            cc = np.where((pnv >= PN_FLOOR) & (gpv >= GAP_A) & (od >= LFIX))[0]
+            if len(cc):
+                i2 = int(cc[int(np.argmax(pnv[cc]))])
+                ax2 = int(ub[i2])
+                og = [int(u) for u in ub[np.argsort(-gpv, kind="mergesort")]]
+                HH = {"P": [u for u in order_p if u != ax2][:5],
+                      "G": [u for u in og if u != ax2][:5]}
+                row = {"rid": rid, "day": str(pd.Timestamp(day).date()), "ax": ax2,
+                       "od": float(od[i2]), "gap": float(gpv[i2]), "v": {}}
+                for lab, hk, kind, npt, _r, _y in CAND:
+                    tk = bet_tickets(kind, npt, ax2, HH[hk])
+                    if tk is None:
+                        continue
+                    vs = [pay_of(rid, k2, sel) for k2, sel in tk]
+                    if any(v2 is None for v2 in vs):
+                        continue
+                    v2 = sum(vs)
+                    t2 = TC[lab]
+                    t2[0] += 100.0 * len(tk); t2[1] += v2
+                    t2[2] += 1; t2[3] += 1 if v2 else 0
+                    row["v"][lab] = (v2, len(tk))
+                CDET.append(row)
             if A is not None:
                 v = pay_of(rid, "複勝", [A]) or 0.0
                 ta[0] += 100.0; ta[1] += v; ta[2] += 1; ta[3] += 1 if v > 0 else 0
@@ -160,6 +188,31 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
               f"{T['a'][0]:,.0f}円→{T['a'][1]:,.0f}円 **{ra:.1f}%**"
               f"　／　三連単 {T['b'][2]}本 {T['b'][3]}的中 "
               f"{T['b'][0]:,.0f}円→{T['b'][1]:,.0f}円 **{rb:.1f}%**")
+    print(f"\n{'='*112}")
+    print(f"■ ★★★★**推奨C: 穴側の候補4つ**（**軸=pn≥{PN_FLOOR} かつ ズレ≥{GAP_A} かつ "
+          f"★単勝≥{LFIX}倍 の中で pn最大**）　★**該当 {len(CDET)}本**")
+    if CDET:
+        print(f"{'日付':<12}{'レース':<11}{'軸':>4}{'オッズ':>8}{'ズレ':>7}"
+              + "".join(f"{c[0].split()[0]:>9}" for c in CAND))
+        for r0 in CDET:
+            print(f"{r0['day']:<12}{r0['rid']:<11}{r0['ax']:>4}{r0['od']:>7.1f}倍"
+                  f"{r0['gap']:>7.3f}"
+                  + "".join(f"{(f'{int(r0[chr(118)][c[0]][0]):,}' if c[0] in r0['v'] and r0['v'][c[0]][0] else ('−' if c[0] in r0['v'] else '?')):>9}"
+                            for c in CAND))
+        print(f"\n{'買い方':<20}{'点':>4}{'本数':>6}{'的中':>6}{'買った額':>11}{'払戻':>11}"
+              f"{'★収支':>11}{'★ROI':>9}{'11年':>9}{'必要年数':>10}")
+        for lab, hk, kind, npt, roi11, yr11 in CAND:
+            t2 = TC[lab]
+            if not t2[2]:
+                print(f"{lab:<20}{npt:>4}{'—':>6}")
+                continue
+            print(f"{lab:<20}{npt:>4}{t2[2]:>6}{t2[3]:>6}{t2[0]:>10,.0f}円"
+                  f"{t2[1]:>10,.0f}円{t2[1]-t2[0]:>+10,.0f}円"
+                  f"{100*t2[1]/t2[0]:>8.1f}%{roi11:>8.1f}%{yr11:>9}年")
+        print(f"⚠★**これは前向きの検定ではない**——"
+              f"**直近のレースは、98マスを選ぶのに使った11年の中に入っている**。")
+        print(f"⚠⚠**本数が2桁では何も言えない**"
+              f"（**11年1,383本でも下端は0を割っている**）。")
     print(f"\n★11年の実測: **複勝 95.9% [91.6,100.2] / 三連単 103.1% [79.4,126.7]**")
     print(f"⚠⚠**この表で「良かった／悪かった」を読まないこと**"
           f"——**判定基準43を毎回やることになる**（別セッションからの指摘）。")

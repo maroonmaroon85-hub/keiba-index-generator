@@ -8,6 +8,8 @@ import glob
 import numpy as np
 import pandas as pd
 
+from nk_parse import norm_horse   # ★標準ライブラリ側に置いてある（nk_link がpandas無しで読むため）
+
 CAT_COLS = ["sex", "cond", "course", "sire", "damsire", "jockey", "trainer"]
 
 def _classcode(s):
@@ -29,25 +31,6 @@ def load_files(pattern="*.CSV"):
     for f in sorted(glob.glob(pattern)):
         frames.append(pd.read_csv(f, header=None, encoding="shift_jis", encoding_errors="replace", dtype=str, keep_default_na=False))
     return pd.concat(frames, ignore_index=True)
-
-def norm_horse(x):
-    """馬の一意キーを**血統登録番号8桁に揃える**。
-
-    ⚠★**なぜ要るか（2026-09-06に実測）**——**同じ馬が2つのIDで現れる**。
-    　**アーカイブ(ルートの `*.CSV`・TARGET出力)は 669,951行すべて8桁**だが、
-    　**`data/nk/DSnk*.CSV`（netkeiba由来）には10桁のnetkeiba IDが混じる**。
-    　★**10桁 = 生年4桁 + 連番6桁、8桁 = 生年下2桁 + 連番6桁**なので、
-    　　**先頭2文字を落とすと一致する**（実測: 913頭が名前まで一致・**不一致0件**）。
-    ⚠**本来は `nk_link.py` が DSnk の col37 を書き換えて揃えている**が、
-    　**手作業のMac側の1手順**なので**回し忘れると壊れる**。**2回踏んだ**——
-    　**(2026-08-29) 連闘馬5頭のうち4頭が「過去走なし」/ (2026-09-06) 8/9と9/6が10桁100%**。
-    　★**さらに `nk_fetch.py results --refresh` は名寄せ済みのファイルを作り直す**ので
-    　　**過去に揃えた分まで10桁に戻る**。→ ★**読む側で正規化して手順に依存させない**。
-    ⚠**これは推測ではなく恒等な変換**（同じ馬の同じ番号の表記違い）。**名寄せの当て推量ではない**。
-    """
-    x = str(x)
-    return x[2:] if len(x) == 10 and x[:2] in ("19", "20") and x.isdigit() else x
-
 
 def to_model(raw):
     """生CSV → 1行1(馬,レース) の整形テーブル（重複除去・派生列つき）。"""

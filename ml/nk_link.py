@@ -31,6 +31,9 @@ import os
 import glob
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from nk_parse import norm_horse   # ★標準ライブラリのみ（features は pandas を引くので読まない）
+
 
 # ★netkeiba由来の成績も名寄せ表に入れる（2026-08-29のバグ修正）。
 #   これが無いと「初出走がDSnkにしかない馬」は永久に繋がらない（下記）。
@@ -55,7 +58,6 @@ def build_map(pattern="*.CSV", extra=(NK_PATTERN,)):
     　**`to_model` 側を揃えたので、対応表だけ10桁のままだと今度はそちらが引けなくなる**
     　（**アーカイブに無い新馬**は DSnk 由来の10桁が入るため）。★**両側を同じ規則で揃える**。
     """
-    from features import norm_horse
     mp = {}
     files = sorted(glob.glob(pattern))
     for g in extra:

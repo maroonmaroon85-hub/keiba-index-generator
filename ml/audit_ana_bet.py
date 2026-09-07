@@ -44,7 +44,20 @@
 　★**買い方は「軸を1着に固定して紐へ流す」**（**三連単Pと同じ向き**）。**k=1,2 × 紐2 = 4マス追加**。
 　⚠**マスは 15 → 19 になる**。**選ぶ基準は一切変えない**。
 
-■ ★**券種 10通り**（**1点=100円。点数ぶん賭ける**）
+■ ★★★**(213) 追記（2026-09-07・★利用者の指定2件）**
+　★**① 紐のPとGの中身を出す**——**上位3頭の平均/中央オッズ・平均/中央人気・PとGの重なり**。
+　　⚠**これまで「紐の並べ方」としか書いておらず、中身を一度も見せていなかった**。
+　★**② 三連単の紐を増やす**——**利用者の読み筋: 「ROIが下がっても、的中率が上がって
+　　必要年数が下がる方が良い」**。★**これは必要年数の式 need∝s²/(ROI−100)² と整合する**
+　　——**点数を増やすと ROI は払戻率へ寄るが、s（分散）が大きく下がる**。
+　　**どちらが勝つかは測らないと分からない**。
+　★**買い方: 軸を1着に固定し、2-3着は紐 k 頭の順列 → k(k−1)点**。**k ∈ {3,4,5}**（6/12/20点）。
+　★**馬単も k=3 を足す**（**(212)でk=2が全マス中2番目に短い55年だったため、勾配を見る**）。
+　⚠**マスは 19 → 27 になる**。**選ぶ基準は一切変えない**。
+　⚠★**これは3回目の材料追加であり、11年はもう選択に使い切っている**。
+　　★**前向きの検定は1回きりで、そこは汚れない**（**(211)の設計**）。
+
+■ ★**券種 14通り**（**1点=100円。点数ぶん賭ける**）
 | 券種 | k | 点数 | 払戻率 | ★**必要な優位比 1/払戻率** |
 |---|---|---|---|---|
 | **複勝** | — | 1 | 0.800 | **1.250** |
@@ -151,7 +164,8 @@ from train_prod import add_odds_features
 
 # ★★(212) 馬単を足す。⚠**(209)で私が券種リストに書き忘れ、(211)がそれを引き継いだ**。
 # ★**根拠があって外したのではない**。**LINEにもpayoff()にもKEYMAPにも馬単はあり、42,181R全部で引ける**。
-BETS = BETS209 + [("馬単", 1), ("馬単", 2)]
+BETS = BETS209 + [("馬単", 1), ("馬単", 2), ("馬単", 3),
+                  ("三連単", 3), ("三連単", 4), ("三連単", 5)]
 HIMO = ["P", "G"]
 KNOWN_ROI, KNOWN_N, ROI_TOL, N_TOL = 102.1, 1356, 0.2, 5
 TAIL_WARN = 1.3
@@ -159,10 +173,15 @@ ALPHA = 0.01
 
 
 def tickets(kind, k, ax, himo):
-    """★買い目。★馬単は「軸を1着に固定して紐へ流す」（**三連単Pと同じ向き**）"""
+    """★買い目。**馬単・三連単はどちらも「軸を1着に固定して紐へ流す」**"""
+    hs = himo[:k]
+    if len(hs) < k:
+        return None
     if kind == "馬単":
-        hs = himo[:k]
-        return None if len(hs) < k else [("馬単", [ax, h]) for h in hs]
+        return [("馬単", [ax, h]) for h in hs]
+    if kind == "三連単" and k > 2:
+        # ★(213) 紐を増やす: 軸1着固定・2-3着は紐kから順列 → k(k-1)点
+        return [("三連単", [ax, a, b]) for a in hs for b in hs if a != b]
     return tickets209(kind, k, ax, himo)
 
 
@@ -186,15 +205,19 @@ def selftest():
     z = zq(ALPHA)
     cs = cells()
     print(f"★マス数 **{len(cs)}**（券種{len(BETS)} × 紐{len(HIMO)} − 複勝の重複1）"
-          f"　{'★OK' if len(cs) == 19 else '⚠NG'}")
-    ok &= len(cs) == 19
+          f"　{'★OK' if len(cs) == 27 else '⚠NG'}")
+    ok &= len(cs) == 27
+    t3 = tickets("三連単", 3, 1, [2, 3, 4, 5])
+    print(f"★★(213) 三連単の紐を増やす: k=3 → **{len(t3)}点**"
+          f"（軸1着固定・2-3着は紐から順列 k(k-1)）　{'★OK' if len(t3) == 6 else '⚠NG'}")
+    ok &= len(t3) == 6 and len(tickets("三連単", 4, 1, [2,3,4,5,6])) == 12
     t = tickets("馬単", 2, 1, [2, 3, 4])
     print(f"★★(212) 馬単を追加: {t}　{'★OK（軸を1着に固定して流す）' if t == [('馬単', [1, 2]), ('馬単', [1, 3])] else '⚠NG'}")
     ok &= t == [("馬単", [1, 2]), ("馬単", [1, 3])]
     print(f"★軸は(210)で固定: pn≥{PN_FLOOR} かつ ズレ≥{GAP} かつ 単勝≥{LFIX}倍 の中で pn最大")
     print(f"\n{'券種':<8}{'k':>3}{'点数':>5}{'払戻率':>8}{'★必要な優位比':>14}{'★複勝比':>10}")
     for kind, k in BETS:
-        t = tickets(kind, k, 1, [2, 3, 4])
+        t = tickets(kind, k, 1, [2, 3, 4, 5, 6, 7])
         need = 1.0 / LINE[kind]
         print(f"{kind:<8}{k:>3}{len(t) if t else 0:>5}{100*LINE[kind]:>7.1f}%"
               f"{need:>14.3f}{need/(1.0/LINE['複勝']):>9.1%}")
@@ -260,6 +283,7 @@ def main():
     sub["p"] = pred[msk]
 
     K = {c: {"a": [], "r": [], "hit": []} for c in cs}
+    HD = {"P": {"od": [], "rk": []}, "G": {"od": [], "rk": []}, "ov": []}
     fix, fix210, Rs, box4, yrs = [], [], [], [], set()
     axod, axrk = [], []
     for rid, g in sub.groupby("raceid"):
@@ -316,6 +340,12 @@ def main():
             fix210.append(v0)
         HM = {"P": [u for u in order_p if u != ax],
               "G": [u for u in order_g if u != ax]}
+        # ★(213) 紐の中身を記述する（**上位3頭**で見る）
+        for hkey in ("P", "G"):
+            for u in HM[hkey][:3]:
+                HD[hkey]["od"].append(float(od[pos[u]]))
+                HD[hkey]["rk"].append(int(rank[pos[u]]))
+        HD["ov"].append(len(set(HM["P"][:3]) & set(HM["G"][:3])))
         # ★乱: 軸と紐を、それぞれオッズ±20%以内の無作為な馬に置き換える（10種平均）
         draws, okd = [], True
         for sd in range(NRAND):
@@ -386,7 +416,7 @@ def main():
         return
 
     print(f"\n{'='*112}")
-    print("■ ★★**15マスの記述**（⚠**検定ではない。選ぶための材料**）")
+    print("■ ★★**全マスの記述**（⚠**検定ではない。選ぶための材料**）")
     print(f"{'紐':<3}{'券種':<7}{'点':>3}{'本数':>7}{'ROI':>8}{'優位比':>8}"
           f"{'★対応差':>10}{'99%CI下端':>11}{'的中率':>8}{'平均配当':>10}{'平÷中':>7}{'★必要年数':>12}")
     best, rowsout = None, []
@@ -396,7 +426,7 @@ def main():
         rv = np.asarray(K[c]["r"], float) * 100.0
         if len(a) < 100:
             continue
-        pts = len(tickets(kind, k, 1, [2, 3, 4]))
+        pts = len(tickets(kind, k, 1, [2, 3, 4, 5, 6, 7]))
         roi = roi_of(a)
         dd = a - rv
         mu = dd.mean()
@@ -431,6 +461,17 @@ def main():
     fy, _ = need_years(f2, fn / ny, z)
     print(f"　★**比較: 現行（複勝1点）は {fn:,}本・{fr:.1f}%・"
           f"必要年数 {(format(fy, ',.0f') + '年') if fy else '到達せず'}**")
+
+    print(f"\n■ ★★**紐の中身（上位3頭・PとGで何が違うか）**")
+    print(f"{'紐':<4}{'平均オッズ':>12}{'中央オッズ':>12}{'平均人気':>10}{'中央人気':>10}")
+    for hkey in ("P", "G"):
+        o = np.array(HD[hkey]["od"]); rk = np.array(HD[hkey]["rk"])
+        print(f"{hkey:<4}{o.mean():>11.1f}倍{np.median(o):>11.1f}倍"
+              f"{rk.mean():>9.1f}番{np.median(rk):>9.0f}番")
+    print(f"　★**PとGの上位3頭の重なり: 平均 {np.mean(HD['ov']):.2f}頭 / 3頭**"
+          f"（**完全一致 {100*np.mean(np.array(HD['ov'])==3):.1f}%** / "
+          f"**全く別 {100*np.mean(np.array(HD['ov'])==0):.1f}%**）")
+    print(f"　★軸そのものは共通（**平均 {np.mean(axod):.1f}倍 / {np.mean(axrk):.1f}番人気**）")
 
     print(f"\n■ ★**増幅則との突き合わせ**（**(197)の実測は 1.062→1.101 ＝ +3.7%**）")
     base = next((r for r in rowsout if r[0] == ("P", "複勝", 0)), None)

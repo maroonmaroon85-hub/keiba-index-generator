@@ -57,8 +57,14 @@
 
 ■ ⚠ゲート1: (88)③④を再現（±3pt）／ ★ゲート板: 復元R 0.800±0.020 ／
 　★陽性対照: 三連複BOX上位4 81.9%±1.5pt。
-■ ★★★内部対照（**決定的・乱を使わない**）: **L=10・複勝 が 102.1% ±0.2pt かつ 1,356本 ±5**
-　（**(210)と厳密に一致すること**）。★**ずれたら読まない**。
+■ ★★★内部対照: **L=10・複勝 が 102.1% ±0.2pt かつ 1,356本 ±5**（**(210)と厳密に一致**）。
+　⚠★**訂正（2026-09-07・結果を見る前）**: **初版はこれを1,398本で書いて落ちた**。
+　　★**(210)の1,356本は「同一オッズ帯の乱が引けたレースだけ」という条件つき**で、
+　　**私はその条件を落として全数と比べていた**＝**別の量を対照にした**（**判定基準37**）。
+　　★**(210)と同じ乱（同一帯・複勝のみ・10種）を(211)内で組み直して対照とする**。
+　⚠**同じ理由で陽性対照も誤っていた**——**box4は「払戻−400円」の純額なので roi_of では読めない**。
+　　**(210)と同じ 100×(Σ+400n)/(400n) に直した**。
+　★**どちらもマスの結果を1つも見ない段階で直している**（**判定基準32**）。
 
 ■ ★穴度も併記する（**利用者の目的は高配当**）:
 　**的中時の平均配当 / 中央配当 / 平均÷中央**（★**1.3倍を超えたら裾依存として警告する**）。
@@ -79,7 +85,7 @@ import numpy as np
 sys.path.insert(0, "ml")
 import features as F
 from audit_crosspool import LINE, load_races, payoff, zq
-from audit_ana_odds import MIN_HORSES, gate1, roi_of
+from audit_ana_odds import BANDS, MIN_HORSES, band_of, gate1, roi_of
 from audit_ana_marg import WF_BOX4, WF_TOL, wf_predict
 from audit_ana_board import BOARD_R, BOARD_TOL, NPLACE, load_fuku_boards, qpool
 from audit_ana_band import PN_FLOOR
@@ -185,7 +191,7 @@ def main():
     sub["p"] = pred[msk]
 
     K = {c: {"a": [], "r": [], "hit": []} for c in cs}
-    fix, Rs, box4, yrs = [], [], [], set()
+    fix, fix210, Rs, box4, yrs = [], [], [], [], set()
     axod, axrk = [], []
     for rid, g in sub.groupby("raceid"):
         rid = str(rid)
@@ -214,6 +220,7 @@ def main():
         if not any(x is None for x in bx):
             box4.append(sum(bx) - 400.0)
         order_g = [int(u) for u in ub[np.argsort(-gap, kind="mergesort")]]
+        bi = np.array([band_of(float(o), BANDS) for o in od])
         pos = {int(u): q for q, u in enumerate(ub)}
         rank = np.argsort(np.argsort(od)) + 1
         yrs.add(int(gg["date"].iloc[0].year))
@@ -228,6 +235,16 @@ def main():
             continue
         fix.append(v0)
         axod.append(float(od[i])); axrk.append(int(rank[i]))
+        # ★★★(210)と厳密に同じ内部対照: 乱は「同一オッズ帯」から10種・複勝のみ
+        ok210 = True
+        for sd in range(NRAND):
+            g3 = np.random.default_rng([SEED + sd, crc32(rid.encode())])
+            pl = [int(ub[q]) for q in range(len(ub)) if bi[q] == bi[i] and q != i]
+            if not pl or payoff(r, "複勝", [int(g3.choice(pl))]) is None:
+                ok210 = False
+                break
+        if ok210:
+            fix210.append(v0)
         HM = {"P": [u for u in order_p if u != ax],
               "G": [u for u in order_g if u != ax]}
         # ★乱: 軸と紐を、それぞれオッズ±20%以内の無作為な馬に置き換える（10種平均）
@@ -282,12 +299,16 @@ def main():
 
     Rm = float(np.mean(Rs))
     okb = abs(Rm - BOARD_R) <= BOARD_TOL
-    b4 = roi_of(np.array(box4)) if box4 else float("nan")
+    bx4 = np.asarray(box4, float)
+    b4 = (100.0 * (bx4.sum() + 400.0 * len(bx4)) / (400.0 * len(bx4))
+          if len(bx4) else float("nan"))
     okx = abs(b4 - WF_BOX4) <= WF_TOL
     print(f"★ゲート板: 復元R {Rm:.4f}（{BOARD_R}±{BOARD_TOL}）{'★OK' if okb else '⚠NG'}"
           f"　／ 陽性対照 三連複BOX4 {b4:.1f}%（{WF_BOX4}±{WF_TOL}）{'★OK' if okx else '⚠NG'}")
     fa = np.array(fix)
-    fr, fn = roi_of(fa), len(fa)
+    f2 = np.array(fix210)
+    fr, fn = roi_of(f2), len(f2)
+    print(f"　（参考: 乱の抽選を課さない全数は {roi_of(fa):.1f}% / {len(fa):,}本）")
     okc = abs(fr - KNOWN_ROI) <= ROI_TOL and abs(fn - KNOWN_N) <= N_TOL
     print(f"★★★内部対照: L=10・複勝 **{fr:.1f}%**（{KNOWN_ROI}±{ROI_TOL}）"
           f"・**{fn:,}本**（{KNOWN_N:,}±{N_TOL}）　{'★★再現' if okc else '⚠⚠落ちた'}")

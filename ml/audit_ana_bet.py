@@ -57,6 +57,15 @@
 　⚠★**これは3回目の材料追加であり、11年はもう選択に使い切っている**。
 　　★**前向きの検定は1回きりで、そこは汚れない**（**(211)の設計**）。
 
+■ ★★★**(214) 追記（2026-09-07・★利用者の指定「三連単1・2着折り返し」）**
+　★**三連単F = 軸と紐1頭を1着-2着で入れ替え、3着は次の紐へ流す** → **2m点**。
+　★★**これはAとBを同じ相手で対にした形**＝**(213d)でGの軸2着が良かった理由をそのまま形にしたもの**。
+　★**軸は pn（3着以内の確率）で選んでいる**ので、★**着順を1つに決め打たない買い方は、
+　　選び方と買い方のずれを埋める方向にある**。⚠**それでも当たるとは限らない。測る**。
+　★**n ∈ {2,4,6,8}**（**3着候補 1〜4頭**）。**紐P/G × 4点数 = 8マス追加**。⚠**マスは 90 → 98**。
+　★**利用者の方針（2026-09-07）: 「馬単・三連単で買う感じになりそう」**。
+　　→ ★**以後の材料は馬単・三連単を中心に出す**。⚠**選ぶ基準は一切変えない**。
+
 ■ ★**券種 14通り**（**1点=100円。点数ぶん賭ける**）
 | 券種 | k | 点数 | 払戻率 | ★**必要な優位比 1/払戻率** |
 |---|---|---|---|---|
@@ -217,11 +226,16 @@ from train_prod import add_odds_features
 #   **A=軸1着固定 / B=軸2着固定 / C=軸3着固定 / D=着順不問（軸を1〜3着すべてに置く）**
 TAN3_N = [1, 2, 3, 4, 5, 6, 8, 10, 12]
 UT_N = [1, 2, 3, 4, 5]   # ★乱が紐を5頭までしか引かないので5点まで
+# ★★(214) 三連単F = **1・2着折り返し**（利用者の指定）
+#   ★**軸と紐1頭を1着-2着で入れ替え、3着は次の紐へ流す** → **2m点**（m=3着候補の数）
+#   ★**AとBを同じ相手で対にした形**＝**(213d)でGの軸2着が良かった理由をそのまま形にしたもの**
+F_N = [2, 4, 6, 8]
 BETS = BETS209 \
     + [(f"馬単{ap}", n) for ap in ("A", "B", "M") for n in UT_N
        if not (ap == "M" and n % 2)] \
     + [(f"三連単{ap}", n) for ap in ("A", "B", "C", "M") for n in TAN3_N
-       if not (ap == "M" and n % 3)]
+       if not (ap == "M" and n % 3)] \
+    + [("三連単F", n) for n in F_N]
 
 
 def tan3_pairs():
@@ -241,6 +255,8 @@ ALPHA = 0.01
 
 def need_himo(kind, k):
     """★その買い目に必要な紐の頭数"""
+    if kind == "三連単F":
+        return 1 + k // 2
     if kind.startswith("三連単") and len(kind) > 3:
         n = k // 3 if kind[-1] == "M" else k
         return max(max(t) for t in tan3_pairs()[:max(n, 1)]) + 1
@@ -264,6 +280,14 @@ def tickets(kind, k, ax, himo):
         if ap == "B":
             return [("馬単", [h, ax]) for h in hs]
         return [t for h in hs for t in (("馬単", [ax, h]), ("馬単", [h, ax]))]
+    if kind == "三連単F":
+        # ★1・2着折り返し: 軸と紐1が1-2着を入れ替え、3着は紐2以降へ流す
+        m = k // 2
+        if m < 1 or len(himo) < 1 + m:
+            return None
+        h1, thirds = himo[0], himo[1:1 + m]
+        return [t for c in thirds
+                for t in (("三連単", [ax, h1, c]), ("三連単", [h1, ax, c]))]
     if kind.startswith("三連単") and len(kind) > 3:
         ap = kind[-1]
         n = k // 3 if ap == "M" else k          # ★Mは1組が3通りになるので点数を揃える
@@ -344,6 +368,14 @@ def selftest():
             row.append(f"{ap}:{len(t)}点")
             ok &= t is not None and len(t) == n
         print(f"　{n:>3}　" + " / ".join(row) + f"　必要な紐 {need_himo('三連単A', n)}頭")
+    print(f"\n　■ ★★**三連単F（1・2着折り返し）**（{F_N}点）")
+    for n in F_N:
+        t = tickets("三連単F", n, 1, hm)
+        print(f"　{n:>3}点　必要な紐 {need_himo('三連単F', n)}頭　{[x[1] for x in t]}"[:104])
+        ok &= t is not None and len(t) == n
+    okF = tickets("三連単F", 2, 1, hm) == [("三連単", [1, 2, 3]), ("三連単", [2, 1, 3])]
+    print(f"　★**2点 = 軸と紐1の1-2着入れ替え・3着は紐2**　{'★OK' if okF else '⚠NG'}")
+    ok &= okF
     okA = tickets("三連単A", 2, 1, hm) == [("三連単", [1, 2, 3]), ("三連単", [1, 3, 2])]
     print(f"　★**A・2点は(211)の三連単k=2と厳密に同じ**　{'★OK' if okA else '⚠NG'}")
     ok &= okA

@@ -35,9 +35,16 @@
 　★**`data/nk/pay*.csv`**（`nk_score.load_pays`）——**8月以降はこちら**。
 　⚠**推奨を出すだけなら払戻は要らない**ので、**`--check` のときだけ要求する**。
 
+■ ★**複数日をまとめて見る**: `--from YYYY-MM-DD`（**日別の集計だけ出す**）
+　⚠⚠**日別の数字を並べて「今週は良かった／悪かった」と読まないこと**——
+　**それは判定基準43（1標本のばらつきを結論と読む）を毎回やることになる**。
+　★**貯めるのは毎回・読むのは年1回・読む前に主判定を書く**（**別セッションからの指摘**）。
+　★**2026-08-01以降は(206)の測定に入っていない**＝**測定後のデータ**。**7/19・7/26は入っている**。
+
 実行:
 　python3 ml/reco_ana.py [YYYY-MM-DD]        ★推奨だけ（結果を見ない）
 　python3 ml/reco_ana.py [YYYY-MM-DD] --check  ★答え合わせ
+　python3 ml/reco_ana.py --from 2026-07-19 --check   ★日別の集計
 """
 import glob
 import os
@@ -61,6 +68,93 @@ from audit_ana_band import PN_FLOOR
 from train_prod import add_odds_features
 
 GAP_A, GAP_B = 0.15, 0.02
+
+
+def picks_of_race(gg, ub, od, pv, bd, order_p):
+    """★1レース分の推奨。無ければ None"""
+    pn = pv / pv.sum() * NPLACE
+    qp, _ = qpool([bd[int(u)] for u in ub], "harm")
+    gap = pn - qp
+    A = B = None
+    cA = np.where((pn >= PN_FLOOR) & (gap >= GAP_A))[0]
+    if len(cA):
+        i = int(cA[int(np.argmax(pn[cA]))])
+        A = int(ub[i])
+    cB = np.where((pn >= PN_FLOOR) & (gap >= GAP_B))[0]
+    if len(cB):
+        i = int(cB[int(np.argmax(gap[cB]))])
+        ax = int(ub[i])
+        himo = [u for u in order_p if u != ax][:2]
+        if len(himo) == 2:
+            B = (ax, himo)
+    return A, B
+
+
+def per_day(sub, days, races, pays, boards, pay_of, check):
+    """★日別の集計だけを出す（明細は出さない）"""
+    print(f"{'日付':<12}{'R数':>5}{'A本':>5}{'A的中':>6}{'A投資':>8}{'A払戻':>8}{'A ROI':>8}"
+          f"{'B本':>5}{'B的中':>6}{'B投資':>9}{'B払戻':>9}{'B ROI':>8}{'測定':>8}")
+    TOT = {"a": [0.0, 0.0, 0, 0], "b": [0.0, 0.0, 0, 0]}
+    NEW = {"a": [0.0, 0.0, 0, 0], "b": [0.0, 0.0, 0, 0]}
+    for day in days:
+        tgt = sub[sub["date"] == day]
+        ta = [0.0, 0.0, 0, 0]
+        tb = [0.0, 0.0, 0, 0]
+        nr = 0
+        for rid, g in tgt.groupby("raceid"):
+            rid = str(rid)
+            bd = boards.get(rid)
+            if bd is None:
+                continue
+            r = races.get(rid)
+            gg = g[g["umaban"].astype(int).isin({u for u, _, _ in r["horses"]})] if r else g
+            ub = gg["umaban"].astype(int).to_numpy()
+            if len(gg) < MIN_HORSES or not all(int(u) in bd for u in ub):
+                continue
+            od = gg["odds"].to_numpy(float)
+            pv = gg["p"].to_numpy(float)
+            if not np.isfinite(od).all() or (od <= 0).any() or pv.sum() <= 0:
+                continue
+            if rid not in races and rid not in pays:
+                continue
+            nr += 1
+            order_p = [int(u) for u in ub[np.argsort(-pv, kind="mergesort")]]
+            A, B = picks_of_race(gg, ub, od, pv, bd, order_p)
+            if A is not None:
+                v = pay_of(rid, "複勝", [A]) or 0.0
+                ta[0] += 100.0; ta[1] += v; ta[2] += 1; ta[3] += 1 if v > 0 else 0
+            if B is not None:
+                ax, h = B
+                vs = [pay_of(rid, "三連単", [ax, h[0], h[1]]),
+                      pay_of(rid, "三連単", [ax, h[1], h[0]])]
+                v = sum(x for x in vs if x)
+                tb[0] += 200.0; tb[1] += v; tb[2] += 1; tb[3] += 1 if v > 0 else 0
+        ts = pd.Timestamp(day)
+        new = ts >= pd.Timestamp("2026-08-01")
+        for k, t in (("a", ta), ("b", tb)):
+            for i in range(4):
+                TOT[k][i] += t[i]
+                if new:
+                    NEW[k][i] += t[i]
+        ra = 100.0 * ta[1] / ta[0] if ta[0] else float("nan")
+        rb = 100.0 * tb[1] / tb[0] if tb[0] else float("nan")
+        print(f"{str(ts.date()):<12}{nr:>5}{ta[2]:>5}{ta[3]:>6}{ta[0]:>7,.0f}円"
+              f"{ta[1]:>7,.0f}円{ra:>7.1f}%{tb[2]:>5}{tb[3]:>6}{tb[0]:>8,.0f}円"
+              f"{tb[1]:>8,.0f}円{rb:>7.1f}%"
+              f"{('★測定後' if new else '測定内'):>8}")
+    print()
+    for nm2, T in (("★全期間", TOT), ("★★2026-08-01以降（測定後）", NEW)):
+        ra = 100.0 * T["a"][1] / T["a"][0] if T["a"][0] else float("nan")
+        rb = 100.0 * T["b"][1] / T["b"][0] if T["b"][0] else float("nan")
+        print(f"{nm2}: ★複勝 {T['a'][2]}本 {T['a'][3]}的中 "
+              f"{T['a'][0]:,.0f}円→{T['a'][1]:,.0f}円 **{ra:.1f}%**"
+              f"　／　三連単 {T['b'][2]}本 {T['b'][3]}的中 "
+              f"{T['b'][0]:,.0f}円→{T['b'][1]:,.0f}円 **{rb:.1f}%**")
+    print(f"\n★11年の実測: **複勝 95.9% [91.6,100.2] / 三連単 103.1% [79.4,126.7]**")
+    print(f"⚠⚠**この表で「良かった／悪かった」を読まないこと**"
+          f"——**判定基準43を毎回やることになる**（別セッションからの指摘）。")
+    print(f"★**貯めるのは毎回・読むのは年1回・読む前に主判定を書く**。")
+    print("\n⚠**枠連の運用には触れない**。**設定変更は提案しない**。")
 
 
 def main():
@@ -118,6 +212,15 @@ def main():
     have = sorted({str(k) for k in boards})
     sub["rid"] = sub["raceid"].astype(str)
     sub = sub[sub["rid"].isin(have)]
+    frm = None
+    for i, a in enumerate(sys.argv):
+        if a == "--from" and i + 1 < len(sys.argv):
+            frm = pd.Timestamp(sys.argv[i + 1])
+    if frm is not None:
+        days = sorted(x for x in sub["date"].unique() if x >= frm.to_datetime64())
+        print(f"★**{len(days)}開催日**を日別に集計する"
+              f"（{pd.Timestamp(days[0]).date()}〜{pd.Timestamp(days[-1]).date()}）\n")
+        return per_day(sub, days, races, pays, boards, pay_of, check)
     if args:
         day = pd.Timestamp(args[0])
     else:

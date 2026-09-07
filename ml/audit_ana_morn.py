@@ -115,6 +115,37 @@
 　　→ ★**ここで出る一致率は「上限」である**。**実際はこれより低い**。
 　　⚠**だから「朝9時でも大丈夫」の証明には使えない。「朝9時だとここまでは崩れる」の下限**。
 
+■ ★★★★**(220) の結果（実測済み・2026-09-07）—— ★軸は変わらない。★消えるだけ**
+| | 結果 |
+|---|---|
+| **確定版で軸が立つ** | **9本** |
+| ⚠★**朝9時でも軸が立つ** | ⚠**6本（66.7%）**——★**3本は朝9時だと候補が消える** |
+| ★★**そのうち軸が同一** | ★**6本すべて（100.0%）** |
+　★**消えた3本は、確定では10倍以上だった馬が朝9時には10倍未満だった**
+　　＝★**取りこぼしであって誤爆ではない**。
+
+　★★**仮説どおり、紐で差が出た**:
+| 紐 | 上位2頭の一致率 | 買い目そのものの一致率 |
+|---|---|---|
+| ★**P**（モデル順） | ★**100.0%** | — |
+| ★**G**（ズレ順） | ★**100.0%** | ★**G馬単M4点 = 100.0%** |
+| ⚠**Q**（人気順） | ⚠**75.0%** | ⚠**Q三連単A4点 = 50.0%** |
+　★**理由は事前に立てた仮説どおり**——**Gは pn−qp（モデル−複勝板）で決まり単勝オッズを
+　　直接使わない。Qは単勝オッズそのもの**。
+
+■ ⚠★**この数字が弱い3つの理由（★先に書いたとおり）**
+　1. ★**pnを固定している**——**朝オッズだと log_odds が動き pn も動く**。**100%は上限**。
+　2. ⚠**6本しかない**。**100.0%といっても「6回とも一致した」だけ**。
+　3. ★**朝9時版のROIは依然として未知**。**一致率が高くても、取りこぼした3本の分だけ本数が減る**。
+
+■ ★**朝9時を選んだ場合に測定が示す形**（⚠**推奨ではない**）
+| | ★**朝9時での安定性** |
+|---|---|
+| ★**G馬単M4点**（紐=ズレ順） | ★**高い**（買い目一致100%・6/6） |
+| ⚠**Q三連単A4点**（紐=人気順） | ⚠**低い**（買い目一致50%） |
+| **P複勝1点**（紐なし） | ★**軸だけなので高いはず**（軸一致100%） |
+| **共通** | ⚠**買える本数が約2/3に減る**（**軸が立つのが 6/9**） |
+
 実行: python3 ml/audit_ana_morn.py    自己テスト: python3 ml/audit_ana_morn.py --selftest
 """
 import sys
@@ -127,6 +158,7 @@ import features as F
 from odds_ts import load_dir
 
 LFIX = 10.0
+GAP_F = 0.15
 # ★時点（レース当日の基準時刻からの時間。★負なら前日）
 #   ⚠**訂正(2026-09-07)**: **初版は EVE=21 を「当日21時」と解釈していた**。
 #   　**レースは16時に終わるので、それは締切直前と同じ行を拾っていた**（**数字が完全一致して発覚**）。
@@ -190,6 +222,103 @@ def selftest():
           f"　⚠**合わなければ読まない**")
     print("★自己テスト: " + ("全部OK" if ok else "⚠NG"))
     return 0 if ok else 1
+
+
+def axis_check(ts):
+    """★(220) 朝9時の単勝オッズで、★軸と紐がどれだけ変わるか（pn・qpは確定版で固定）"""
+    import audit_ana_bet as B
+    from audit_ana_board import NPLACE, load_fuku_boards, qpool
+    from audit_ana_band import PN_FLOOR
+    from audit_ana_fix import LFIX as L
+    from audit_ana_marg import wf_predict
+    from audit_crosspool import load_races
+    from train_prod import add_odds_features
+
+    print(f"\n{'='*104}")
+    print("■ ★★★★**(220) 朝9時だと、★軸馬は変わるのか**"
+          "（**pnとqpは確定版で固定＝この一致率は上限**）")
+    races = {r["rid"]: r for r in load_races()}
+    boards = load_fuku_boards()
+    d = F.to_model(F.load_files())
+    f = F.build_features(d)
+    keep = (f["n_prior"] >= 1) & d["odds"].notna() & (d["odds"] > 0)
+    d, f = d[keep].reset_index(drop=True), f[keep].reset_index(drop=True)
+    y = (d["finish"] <= 3).astype(int).to_numpy()
+    fx, _ = F.encode_categoricals(f)
+    fx = add_odds_features(fx, d["odds"].to_numpy(float), d["raceid"].to_numpy())
+    pred = wf_predict(d, fx, y, 3)
+    m = ~np.isnan(pred)
+    sub = d.loc[m, ["raceid", "umaban", "odds"]].copy()
+    sub["p"] = pred[m]
+
+    nax = [0, 0, 0]          # 確定で軸あり / 朝も軸あり / 軸が同一
+    hit = {h: [] for h in ("P", "G", "Q")}
+    bet = {"G馬単M4点": [], "Q三連単A4点": []}
+    for rid, g in sub.groupby("raceid"):
+        rid = str(rid)
+        rec, bd = ts.get(rid), boards.get(rid)
+        if rec is None or bd is None or rid not in races:
+            continue
+        i9 = snap_at(rec, MORN)
+        if i9 is None:
+            continue
+        ub = g["umaban"].astype(int).to_numpy()
+        if not all(int(u) in bd for u in ub):
+            continue
+        od = g["odds"].to_numpy(float)
+        pv = g["p"].to_numpy(float)
+        row = rec["odds"][i9]
+        om = np.array([row[u - 1] if u - 1 < len(row) else np.nan for u in ub], float)
+        if pv.sum() <= 0 or not np.isfinite(om).all() or (om <= 0).any():
+            continue
+        pn = pv / pv.sum() * NPLACE
+        qp, _ = qpool([bd[int(u)] for u in ub], "harm")
+        gap = pn - qp
+        base = (pn >= PN_FLOOR) & (gap >= GAP_F)
+        cf = np.where(base & (od >= L))[0]
+        if not len(cf):
+            continue
+        nax[0] += 1
+        cm = np.where(base & (om >= L))[0]
+        if not len(cm):
+            continue
+        nax[1] += 1
+        af = int(ub[int(cf[int(np.argmax(pn[cf]))])])
+        am = int(ub[int(cm[int(np.argmax(pn[cm]))])])
+        same = af == am
+        nax[2] += same
+        ordf = {"P": np.argsort(-pv), "G": np.argsort(-gap), "Q": np.argsort(od)}
+        ordm = {"P": np.argsort(-pv), "G": np.argsort(-gap), "Q": np.argsort(om)}
+        HF, HM2 = {}, {}
+        for h in ("P", "G", "Q"):
+            HF[h] = [int(ub[q]) for q in ordf[h] if int(ub[q]) != af]
+            HM2[h] = [int(ub[q]) for q in ordm[h] if int(ub[q]) != am]
+            hit[h].append(len(set(HF[h][:2]) & set(HM2[h][:2])) / 2.0)
+        for lab, h, kind, k in (("G馬単M4点", "G", "馬単M", 4),
+                                ("Q三連単A4点", "Q", "三連単A", 4)):
+            tf = B.tickets(kind, k, af, HF[h])
+            tm = B.tickets(kind, k, am, HM2[h])
+            if tf is None or tm is None:
+                continue
+            sf = {tuple(x[1]) for x in tf}
+            sm = {tuple(x[1]) for x in tm}
+            bet[lab].append(len(sf & sm) / len(sf | sm))
+
+    if not nax[0]:
+        print("　⚠**対象レースが0本**")
+        return
+    print(f"　★**確定版で軸が立つ {nax[0]}本**"
+          f"　→ **朝9時でも軸が立つ {nax[1]}本（{100*nax[1]/nax[0]:.1f}%）**")
+    print(f"　★★**そのうち軸が同一のレース: {nax[2]}本"
+          f"（{100*nax[2]/max(nax[1],1):.1f}%）**")
+    print(f"\n{'紐':<4}{'★上位2頭の一致率':>18}")
+    for h in ("P", "G", "Q"):
+        print(f"{h:<4}{100*np.mean(hit[h]):>17.1f}%")
+    print(f"\n{'買い目':<16}{'本数':>6}{'★買い目そのものの一致率':>24}")
+    for lab in bet:
+        if bet[lab]:
+            print(f"{lab:<16}{len(bet[lab]):>6}{100*np.mean(bet[lab]):>23.1f}%")
+    print(f"　⚠★**pnを固定しているので、これは上限**。**実際はこれより低い**。")
 
 
 def main():
@@ -269,6 +398,8 @@ def main():
               f"　→ ★**軸の候補集合の一致は {100*morn['jac']:.1f}%**")
         print(f"　★**人気1番の一致 {100*morn['t1']:.1f}% / 人気1-2番の一致 {100*morn['t2']:.1f}%**"
               f"　→ ★**紐Qがどれだけ変わるか**")
+
+    axis_check(ts)
 
     print(f"\n■ ⚠**この測定で答えられないこと**")
     print("　★**朝版のROI・必要年数は出せない**（**複勝の板が1レース1枚・該当が数本**）。")

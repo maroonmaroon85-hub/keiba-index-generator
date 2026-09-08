@@ -38,6 +38,18 @@
 　⚠**並べ替えは該当本数の構造を壊さないよう、★日ごとの該当本数は固定したまま
 　　「その日に当たったか」だけを入れ替える**（**NRAND=10種・SEEDは(209)と同じ**）。
 
+■ ⚠⚠★★★**訂正2（2026-09-08・★対照の書き方が間違っていた。判定基準37）**
+　★**素朴な並べ替え（対照1）は、★的中フラグを「該当0本の日」にも配ってしまう**。
+　⚠★**該当0本の日は、定義上ぜったいに当たらない**。**そこに的中を置ける対照は、
+　　的中を実際より均等にばらまく＝★外れの連を実際より短く見せる**。
+　　→ ★★**実測が対照より長く出るのは当たり前で、これは腕の手柄ではない**。
+　★★**正しい対照（対照2）: その日の該当本数 n_d を保ったまま、
+　　1本ごとに p=23.4% で独立に当たるとして引き直す**。
+　　★**これなら「0本の日は当たらない」という構造が対照にも入る**。
+　★**両方を出す**——⚠**対照1は「私が最初に書いた間違った対照」として残す**
+　　（**判定基準37を5回踏んだ記録がある。★6回目を隠さない**）。
+　■ ★**判定はどちらで行うか: ★対照2だけで行う**。**対照1は参考にしない**。
+
 ■ ★★内部対照（**⚠これが合わなければ経路が違う。結果を読まない**）
 　★**該当レースの総数が 1,383本**（**(218)の参考行・複勝1点の本数**）**±5**。
 　★**的中率が 23.4% ±0.5pt**。★**軸の中央オッズが 15.9倍 ±0.5**。
@@ -88,6 +100,12 @@ from audit_ana_marg import wf_predict
 from audit_ana_board import NPLACE, load_fuku_boards, qpool
 from audit_ana_band import PN_FLOOR
 from audit_ana_hole import GAP, NRAND, SEED
+
+# ★★(231b) 並べ替えの回数を 10 → 1,000 に増やす（★2026-09-08・日別の結果を見た後）
+#   ⚠**これは腕を変えていない。★事前登録した「実測の最大が対照より明確に長いか」を
+#     判定するには、対照の★ばらつきが要る**——**10種では平均しか出せなかった**。
+#   ★**対照を強くしただけで、実測の側は1つも動いていない**。
+NSHUF = 1000
 from audit_ana_fix import LFIX
 from train_prod import add_odds_features
 
@@ -236,15 +254,34 @@ def main():
           f"入れ替える**（**{NRAND}種**）")
     for nm, m in [("(a) 判定が走った日", ma), ("(b) 開催日ぜんぶ", mb)]:
         base = (nh > 0)[m]
-        med, p95, mx = [], [], []
-        for sd in range(NRAND):
-            g = np.random.default_rng([SEED + sd, crc32(nm.encode())])
-            r = runs_of_misses(g.permutation(base))
-            if r:
-                med.append(np.median(r)); p95.append(np.percentile(r, 95)); mx.append(max(r))
-        if med:
-            print(f"　{nm:<20}中央 {np.mean(med):>4.1f}日 / 95%点 {np.mean(p95):>4.1f}日 / "
-                  f"最大 {np.mean(mx):>4.1f}日　(★{NRAND}種の平均)")
+        cnt = nc[m]
+        obs = runs_of_misses(base)
+        omax = max(obs)
+        print(f"　{nm}")
+        print(f"　　★実測　　　　　　中央 {np.median(obs):>4.0f}日 / "
+              f"95%点 {np.percentile(obs, 95):>4.0f}日 / ★最大 {omax:>3.0f}日")
+        for lab, gen in (("⚠対照1(素朴)", "perm"), ("★対照2(正しい)", "binom")):
+            med, p95, mx = [], [], []
+            for sd in range(NSHUF):
+                g = np.random.default_rng([SEED + sd, crc32((nm + gen).encode())])
+                if gen == "perm":
+                    sim = g.permutation(base)
+                else:
+                    # ★その日の該当本数 cnt[d] を保ったまま、1本ごとに p で当たる
+                    sim = g.binomial(cnt, hr / 100.0) > 0
+                r = runs_of_misses(sim)
+                if r:
+                    med.append(np.median(r)); p95.append(np.percentile(r, 95))
+                    mx.append(max(r))
+            if not med:
+                continue
+            mx = np.array(mx, float)
+            pv = float((mx >= omax).mean())
+            print(f"　　{lab}({NSHUF}種) 中央 {np.mean(med):>4.1f}日 / "
+                  f"95%点 {np.mean(p95):>4.1f}日 / ★最大 {mx.mean():>4.1f}日"
+                  f"　[95%区間 {np.percentile(mx, 2.5):.0f}〜{np.percentile(mx, 97.5):.0f}日]")
+            star = "実測の方が長い" if pv < 0.05 else "★実測と区別がつかない"
+            print(f"　　　→ **対照が実測以上の連を出す割合 = {pv:.3f}**　→ **{star}**")
 
     print("\n★**読み方**: ★**実測の最大が対照の最大より明確に長ければ、"
           "当たりが日に固まっている**＝⚠**SNSの体感はこの数字より悪い**。")

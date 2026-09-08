@@ -490,23 +490,20 @@ def main():
               + (f" {nm}" if nm else "") + f"**　**{c['od']:.1f}倍**"
               + (f"　→ **{x['fin'].get(c['u'], 0)}着**" if check else ""))
         # ★★(231) 全馬の推奨度を表で出す（★軸と紐がどれかを役割欄で示す）
-        role = {c["u"]: "★軸(穴馬)"}
-        for i2, u2 in enumerate(c["P"][:2]):
-            role[u2] = f"★紐P{i2+1}"
-        for u2 in c["X"][:3]:
-            if u2 not in role:
-                role[u2] = "★紐X3"
-        for i2, u2 in enumerate(c["G"][:2]):
-            role[u2] = (role.get(u2, "") + f" G{i2+1}").strip()
-        for i2, u2 in enumerate(c["Q"][:2]):
-            role[u2] = (role.get(u2, "") + f" Q{i2+1}").strip()
-        print(f"　　{'馬番':>4}{'馬名':<12}{'単勝':>8}{'人気':>5}"
+        # ★★(232) 役割は「買う2点で使う馬」だけ。★表はモデル順、人気の列もあるので
+        #   それ以外のタグ（G1/Q2 など）は読み取れる＝出さない（利用者の指定）
+        role = {c["u"]: "★軸（穴馬）"}
+        for i2, u2 in enumerate(c["X"][:3]):
+            role[u2] = f"紐{i2+1}" + ("（モデル順）" if i2 < 2 else "（人気順）")
+        print(f"　　★**表はモデルの推奨度の降順。★市場の人気は「人気」列**"
+              f"（**紐1・紐2＝この表の上から2頭 / 紐3＝人気順で未使用の最上位**）")
+        print(f"　　{'馬番':>4}{'馬名':<12}{'単勝':>8}{'★人気':>6}"
               f"{'★推奨度':>9}{'市場':>8}{'★ズレ':>8}  役割")
         for a2 in c["all"]:
             n2 = x["nm"].get(a2["u"], "")
             mark = role.get(a2["u"], "")
             fin = f"  {x['fin'].get(a2['u'], 0)}着" if check else ""
-            print(f"　　{a2['u']:>4}{n2[:11]:<12}{a2['od']:>7.1f}倍{a2['rk']:>5}"
+            print(f"　　{a2['u']:>4}{n2[:11]:<12}{a2['od']:>7.1f}倍{a2['rk']:>5}番"
                   f"{a2['pn']:>9.3f}{a2['qp']:>8.3f}{a2['gap']:>+8.3f}  {mark}{fin}")
         cost = 0
         for lab, hk, kind, npt, roi11, yr11, shr, d2, st, buy in CAND:

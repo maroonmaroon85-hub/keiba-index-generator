@@ -404,6 +404,12 @@ def main():
                               if int(u) != ax][:5]}
             hp = [u for u in order_p if u != ax][:2]
             rec["C"]["X"] = hp + [u for u in rec["C"]["Q"] if u not in hp]
+            # ★★(231) 全馬の推奨度・市場・ズレを持たせる（利用者の指定）
+            rk = np.argsort(np.argsort(od)) + 1
+            rec["C"]["all"] = sorted(
+                [{"u": int(ub[j]), "od": float(od[j]), "rk": int(rk[j]),
+                  "pn": float(pn[j]), "qp": float(qp[j]), "gap": float(gap[j])}
+                 for j in range(len(ub))], key=lambda x: -x["pn"])
         cA = np.where((pn >= PN_FLOOR) & (gap >= GAP_A))[0]
         if len(cA):
             i = int(cA[int(np.argmax(pn[cA]))])
@@ -470,25 +476,49 @@ def main():
 
     nC = sum(1 for x in out if x["C"])
     print(f"\n{'='*104}")
-    print(f"■ ★★★★**推奨C: 穴側の候補4つ**（**(210)〜(214)**・"
+    print(f"■ ★★★★**推奨C: 買う2点＋参考3点**（**(210)〜(230)**・"
           f"**軸=pn≥{PN_FLOOR} かつ ズレ≥{GAP_A} かつ ★単勝≥{LFIX}倍 の中で pn最大**）")
-    print(f"★**この日の該当 {nC}本**　⚠**11年の数字は98マスから選んだもので、下端は全部0を割る**")
+    print(f"★**この日の該当 {nC}本**　→ ★**購入額 合計 {800*nC:,}円**（★買う2点＝1レース800円）")
+    print(f"　⚠**11年の数字は189マスから選んだもの。下端は189マス中1つしか0を超えていない**")
     tC = {c[0]: [0.0, 0.0, 0, 0] for c in CAND}
     for x in out:
         if not x["C"]:
             continue
         c = x["C"]
-        print(f"\n　★**{x['rid']}**　軸 **{c['u']}番 {x['nm'].get(c['u'],'')}**"
-              f"　**{c['od']:.1f}倍**　推奨度 {c['pn']:.3f}　ズレ {c['gap']:.3f}"
-              + (f"　→ **{c and x['fin'].get(c['u'],0)}着**" if check else ""))
-        print(f"　　紐P（人気側）{c['P'][:4]}　/　紐G（穴側）{c['G'][:4]}")
+        nm = x["nm"].get(c["u"], "")
+        print(f"\n　★★**{x['rid']}**　★軸（穴馬）**{c['u']}番"
+              + (f" {nm}" if nm else "") + f"**　**{c['od']:.1f}倍**"
+              + (f"　→ **{x['fin'].get(c['u'], 0)}着**" if check else ""))
+        # ★★(231) 全馬の推奨度を表で出す（★軸と紐がどれかを役割欄で示す）
+        role = {c["u"]: "★軸(穴馬)"}
+        for i2, u2 in enumerate(c["P"][:2]):
+            role[u2] = f"★紐P{i2+1}"
+        for u2 in c["X"][:3]:
+            if u2 not in role:
+                role[u2] = "★紐X3"
+        for i2, u2 in enumerate(c["G"][:2]):
+            role[u2] = (role.get(u2, "") + f" G{i2+1}").strip()
+        for i2, u2 in enumerate(c["Q"][:2]):
+            role[u2] = (role.get(u2, "") + f" Q{i2+1}").strip()
+        print(f"　　{'馬番':>4}{'馬名':<12}{'単勝':>8}{'人気':>5}"
+              f"{'★推奨度':>9}{'市場':>8}{'★ズレ':>8}  役割")
+        for a2 in c["all"]:
+            n2 = x["nm"].get(a2["u"], "")
+            mark = role.get(a2["u"], "")
+            fin = f"  {x['fin'].get(a2['u'], 0)}着" if check else ""
+            print(f"　　{a2['u']:>4}{n2[:11]:<12}{a2['od']:>7.1f}倍{a2['rk']:>5}"
+                  f"{a2['pn']:>9.3f}{a2['qp']:>8.3f}{a2['gap']:>+8.3f}  {mark}{fin}")
+        cost = 0
         for lab, hk, kind, npt, roi11, yr11, shr, d2, st, buy in CAND:
             tk = bet_tickets(kind, npt, c["u"], c[hk])
+            tag = "★買" if buy else "参考"
             if tk is None:
-                print(f"　　{lab:<18} ⚠**紐が足りず組めない**")
+                print(f"　　{tag} {lab:<14} ⚠**紐が足りず組めない**")
                 continue
-            line = f"　　{lab:<18} " + " / ".join("-".join(str(z) for z in sel)
-                                                 for _, sel in tk)
+            if buy:
+                cost += 100 * len(tk)
+            line = f"　　{tag} {lab:<14} " + " / ".join("-".join(str(z) for z in sel)
+                                                       for _, sel in tk)
             if check:
                 vs = [pay_of(x["rid"], k2, sel) for k2, sel in tk]
                 if any(v is None for v in vs):
@@ -499,6 +529,7 @@ def main():
                 t[0] += 100.0 * len(tk); t[1] += v; t[2] += 1; t[3] += 1 if v else 0
                 line += f"　→ **{(f'{int(v):,}円' if v else '−')}**"
             print(line)
+        print(f"　　→ ★**このレースの購入額 {cost:,}円**（★買のみ）")
 
     if check:
         print(f"\n{'='*104}")

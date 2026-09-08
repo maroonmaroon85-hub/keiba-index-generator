@@ -252,8 +252,11 @@ def axis_check(ts):
     sub["p"] = pred[m]
 
     nax = [0, 0, 0]          # 確定で軸あり / 朝も軸あり / 軸が同一
-    hit = {h: [] for h in ("P", "G", "Q")}
-    bet = {"G馬単M4点": [], "Q三連単A4点": []}
+    HK = ("P", "G", "Q", "X")
+    hit = {h: [] for h in HK}
+    # ★★(228) 紐X（モデル上位2頭＋人気順）の朝9時安定性を足す（★マスは増やさない）
+    bet = {"G馬単M4点": [], "Q三連単A4点": [], "P馬単M4点": [],
+           "X三連単A3点": [], "X三連単A4点": [], "P三連単A3点": []}
     for rid, g in sub.groupby("raceid"):
         rid = str(rid)
         rec, bd = ts.get(rid), boards.get(rid)
@@ -293,9 +296,19 @@ def axis_check(ts):
         for h in ("P", "G", "Q"):
             HF[h] = [int(ub[q]) for q in ordf[h] if int(ub[q]) != af]
             HM2[h] = [int(ub[q]) for q in ordm[h] if int(ub[q]) != am]
+        # ★紐X: モデル上位2頭を先頭、以降は人気順で未使用の馬（★朝版は朝の人気順を使う）
+        for tgt, HH in ((HF, HF), (HM2, HM2)):
+            x = HH["P"][:2]
+            x += [u for u in HH["Q"] if u not in x]
+            HH["X"] = x
+        for h in HK:
             hit[h].append(len(set(HF[h][:2]) & set(HM2[h][:2])) / 2.0)
         for lab, h, kind, k in (("G馬単M4点", "G", "馬単M", 4),
-                                ("Q三連単A4点", "Q", "三連単A", 4)):
+                                ("Q三連単A4点", "Q", "三連単A", 4),
+                                ("P馬単M4点", "P", "馬単M", 4),
+                                ("P三連単A3点", "P", "三連単A", 3),
+                                ("X三連単A3点", "X", "三連単A", 3),
+                                ("X三連単A4点", "X", "三連単A", 4)):
             tf = B.tickets(kind, k, af, HF[h])
             tm = B.tickets(kind, k, am, HM2[h])
             if tf is None or tm is None:
@@ -312,7 +325,7 @@ def axis_check(ts):
     print(f"　★★**そのうち軸が同一のレース: {nax[2]}本"
           f"（{100*nax[2]/max(nax[1],1):.1f}%）**")
     print(f"\n{'紐':<4}{'★上位2頭の一致率':>18}")
-    for h in ("P", "G", "Q"):
+    for h in HK:
         print(f"{h:<4}{100*np.mean(hit[h]):>17.1f}%")
     print(f"\n{'買い目':<16}{'本数':>6}{'★買い目そのものの一致率':>24}")
     for lab in bet:

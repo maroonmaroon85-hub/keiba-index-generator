@@ -83,13 +83,17 @@ from audit_ana_fix import LFIX
 #   ★**買う時点は「朝9時」**（利用者の決定）。⚠**(219)(220)で確定オッズとの差を測ってある**。
 #   ★**縮み** = (217)(221)の 前半(〜2020)→後半(2021〜) のROIの落ち幅。★**探索の下駄を直接見る量**。
 #   ★**朝安定** = (220)の紐の一致率（**朝9時 vs 確定**）。
+# ★★★(230) 利用者が買うと決めた2点（2026-09-08）。★他は記録だけ（買わない）
+#   ラベル,        紐, 券種,     点, 全期ROI, 必要年数, 縮みpt, 後半の差, 朝安定, ★買う
 CAND = [
-    # ラベル,          紐, 券種,     点, 全期ROI, 必要年数, 縮みpt, 後半の差, 朝安定
-    ("P複勝1点",      "P", "複勝",    1, 101.5,  999, -0.1,  +7.6, "軸のみ"),
-    ("P馬単M4点",     "P", "馬単M",   4, 113.4,  131, -8.1, +28.7, "100%"),
-    ("G馬単M4点",     "G", "馬単M",   4, 139.2,   39, -34.6, +34.2, "100%"),
-    ("Q三連単A4点",   "Q", "三連単A", 4, 141.6,   40, -18.9, +29.5, "⚠50%"),
+    ("P馬単M4点",   "P", "馬単M",   4, 113.4,  131,  -8.1, +28.7, "100%",  True),
+    ("X三連単A4点", "X", "三連単A", 4, 128.8,   77, +15.4, +43.0, "77.8%", True),
+    ("P複勝1点",    "P", "複勝",    1, 101.5,  999,  -0.1,  +7.6, "軸のみ", False),
+    ("G馬単M4点",   "G", "馬単M",   4, 139.2,   39, -34.6, +34.2, "100%",  False),
+    ("Q三連単A4点", "Q", "三連単A", 4, 141.6,   40, -18.9, +29.5, "⚠50%",  False),
 ]
+# ★2点の合計（(230)実測）: 相関0.316 / ROI121.1% / se19.55pt / 的中率8.0% / 63年
+#   ★前半120.3%（1058本）→ 後半123.9%（325本）＝★縮み +3.6pt
 FWD = "data/reco/ana_forward.csv"
 
 
@@ -158,6 +162,8 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
                 HH = {"P": [u for u in order_p if u != ax2][:5],
                       "G": [u for u in og if u != ax2][:5],
                       "Q": [u for u in oq if u != ax2][:5]}
+                # ★紐X: モデル上位2頭を先頭、以降は人気順で未使用の馬
+                HH["X"] = HH["P"][:2] + [u for u in HH["Q"] if u not in HH["P"][:2]]
                 fin2 = {int(u): int(x) for u, x
                         in zip(gg["umaban"].astype(int), gg["finish"].astype(int))}
                 row = {"rid": rid, "day": str(pd.Timestamp(day).date()), "ax": ax2,
@@ -165,7 +171,7 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
                        "fx": fin2.get(ax2, 0), "hp": HH["P"][:3], "hg": HH["G"][:3],
                        "fp": [fin2.get(u, 0) for u in HH["P"][:3]],
                        "fg": [fin2.get(u, 0) for u in HH["G"][:3]]}
-                for lab, hk, kind, npt, _r, _y, _s, _d, _st in CAND:
+                for lab, hk, kind, npt, _r, _y, _s, _d, _st, _b in CAND:
                     tk = bet_tickets(kind, npt, ax2, HH[hk])
                     if tk is None:
                         continue
@@ -209,7 +215,7 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
               f"　／　三連単 {T['b'][2]}本 {T['b'][3]}的中 "
               f"{T['b'][0]:,.0f}円→{T['b'][1]:,.0f}円 **{rb:.1f}%**")
     print(f"\n{'='*112}")
-    print(f"■ ★★★★**推奨C: 穴側の候補4つ**（**軸=pn≥{PN_FLOOR} かつ ズレ≥{GAP_A} かつ "
+    print(f"■ ★★★★**推奨C: 買う2点＋参考3点**（**軸=pn≥{PN_FLOOR} かつ ズレ≥{GAP_A} かつ "
           f"★単勝≥{LFIX}倍 の中で pn最大**）　★**該当 {len(CDET)}本**")
     if CDET:
         print(f"{'日付':<12}{'レース':<11}{'軸':>4}{'オッズ':>8}{'ズレ':>7}"
@@ -237,14 +243,14 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
         print(f"　★**軸の着順: 1着 {nax[1]}本 / 2着 {nax[2]}本 / 3着 {nax[3]}本 / "
               f"4着以下 {nax[0]-nax[1]-nax[2]-nax[3]}本**（**{nax[0]}本中**）")
         print(f"　★**11年の実測: 複勝的中率23.4%**＝**3着以内は4本に1本弱**")
-        print(f"\n{'買い方':<16}{'点':>3}{'本数':>5}{'的中':>5}{'買った額':>10}{'払戻':>10}"
+        print(f"\n{'':<4}{'買い方':<12}{'点':>3}{'本数':>5}{'的中':>5}{'買った額':>10}{'払戻':>10}"
               f"{'★収支':>10}{'★ROI':>8}{'11年':>8}{'必要年数':>8}{'★縮み':>9}{'朝安定':>8}")
-        for lab, hk, kind, npt, roi11, yr11, shr, d2, st in CAND:
+        for lab, hk, kind, npt, roi11, yr11, shr, d2, st, buy in CAND:
             t2 = TC[lab]
             if not t2[2]:
                 print(f"{lab:<16}{npt:>3}{'—':>5}")
                 continue
-            print(f"{lab:<16}{npt:>3}{t2[2]:>5}{t2[3]:>5}{t2[0]:>9,.0f}円"
+            print(f"{('★買 ' if buy else '参考'):<4}{lab:<12}{npt:>3}{t2[2]:>5}{t2[3]:>5}{t2[0]:>9,.0f}円"
                   f"{t2[1]:>9,.0f}円{t2[1]-t2[0]:>+9,.0f}円"
                   f"{100*t2[1]/t2[0]:>7.1f}%{roi11:>7.1f}%{yr11:>7}年"
                   f"{shr:>+8.1f}pt{st:>8}")
@@ -396,6 +402,8 @@ def main():
                         "G": [u for u in order_g if u != ax][:5],
                         "Q": [u for u in ub[np.argsort(od, kind="mergesort")]
                               if int(u) != ax][:5]}
+            hp = [u for u in order_p if u != ax][:2]
+            rec["C"]["X"] = hp + [u for u in rec["C"]["Q"] if u not in hp]
         cA = np.where((pn >= PN_FLOOR) & (gap >= GAP_A))[0]
         if len(cA):
             i = int(cA[int(np.argmax(pn[cA]))])
@@ -474,7 +482,7 @@ def main():
               f"　**{c['od']:.1f}倍**　推奨度 {c['pn']:.3f}　ズレ {c['gap']:.3f}"
               + (f"　→ **{c and x['fin'].get(c['u'],0)}着**" if check else ""))
         print(f"　　紐P（人気側）{c['P'][:4]}　/　紐G（穴側）{c['G'][:4]}")
-        for lab, hk, kind, npt, roi11, yr11, shr, d2, st in CAND:
+        for lab, hk, kind, npt, roi11, yr11, shr, d2, st, buy in CAND:
             tk = bet_tickets(kind, npt, c["u"], c[hk])
             if tk is None:
                 print(f"　　{lab:<18} ⚠**紐が足りず組めない**")
@@ -497,7 +505,7 @@ def main():
         print(f"■ ★★★★**推奨Cの答え合わせ**")
         print(f"{'買い方':<20}{'点':>4}{'本数':>6}{'的中':>6}{'買った額':>11}{'払戻':>11}"
               f"{'★収支':>11}{'★ROI':>9}{'11年':>9}{'必要年数':>10}")
-        for lab, hk, kind, npt, roi11, yr11, shr, d2, st in CAND:
+        for lab, hk, kind, npt, roi11, yr11, shr, d2, st, buy in CAND:
             t = tC[lab]
             if not t[2]:
                 print(f"{lab:<20}{npt:>4}{'—':>6}")

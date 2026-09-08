@@ -892,8 +892,10 @@ def selftest():
     return 0 if ok else 1
 
 
-PORT = [("P複勝1点", ("P", "複勝", 0)), ("P馬単M4点", ("P", "馬単M", 4)),
-        ("G馬単M4点", ("G", "馬単M", 4)), ("Q三連単A4点", ("Q", "三連単A", 4))]
+# ★★★(230) 利用者が買うと決めた2点（2026-09-08）＋参考3点
+BUY = [("P馬単M4点", ("P", "馬単M", 4)), ("X三連単A4点", ("X", "三連単A", 4))]
+PORT = BUY + [("P複勝1点", ("P", "複勝", 0)),
+              ("G馬単M4点", ("G", "馬単M", 4)), ("Q三連単A4点", ("Q", "三連単A", 4))]
 
 
 def portfolio_and_tail(K, cs, z):
@@ -932,6 +934,34 @@ def portfolio_and_tail(K, cs, z):
     for lab, c in have:
         i = [x[0] for x in have].index(lab)
         print(f"　　{lab:<14} 単独 ROI {roi_of(A[i]):>6.1f}%　se {ses[i]:>5.2f}pt")
+
+    # ★★★(230) 利用者が買う2点だけの合計
+    hb = [(lab, c) for lab, c in BUY if c in K and K[c]["a"]]
+    if len(hb) == len(BUY) and all(K[c]["rid"] == rid0 for _, c in hb):
+        B2 = np.array([np.asarray(K[c]["a"], float) * 100.0 for _, c in hb])
+        W2 = np.array([100.0 * len(tickets(c[1], c[2], 1, [2, 3, 4, 5, 6, 7]))
+                       for _, c in hb])
+        p2 = (B2 * W2[:, None]).sum(axis=0) / W2.sum()
+        se2 = p2.std(ddof=1) / math.sqrt(n)
+        s2 = np.array([a.std(ddof=1) / math.sqrt(n) for a in B2])
+        w2 = W2 / W2.sum()
+        i2 = math.sqrt(float(np.sum((w2 * s2) ** 2)))
+        r2 = float(np.corrcoef(B2)[0, 1])
+        nd2 = ((zq(ALPHA) * p2.std(ddof=1) / (roi_of(p2) - 100.0)) ** 2
+               if roi_of(p2) > 100 else None)
+        print(f"\n■ ★★★★**(230) 利用者が買う2点だけの合計**"
+              f"（**{' + '.join(lab for lab, _ in hb)}**）")
+        print(f"　★**相関 {r2:.3f}**　★**合計 ROI {roi_of(p2):.1f}%**"
+              f"（**1レース {W2.sum():,.0f}円 × {n:,}本**）　se **{se2:.2f}pt**")
+        print(f"　★**2つ独立なら se {i2:.2f}** → **実際は {se2:.2f}**（**{se2/i2:.2f}倍**）")
+        print(f"　★**的中率 {100*np.mean(p2 > 0):.1f}%**"
+              f"　★**必要年数 "
+              f"{('%s年' % format(nd2 / (n / len(set(K[hb[0][1]]['yr']))), ',.0f')) if nd2 else '到達せず'}**")
+        yv = np.asarray(K[hb[0][1]]["yr"], int)
+        h1 = yv < SPLIT
+        print(f"　★**前半 {roi_of(p2[h1]):.1f}%（{int(h1.sum())}本） / "
+              f"後半 {roi_of(p2[~h1]):.1f}%（{int((~h1).sum())}本）"
+              f"　★縮み {roi_of(p2[~h1])-roi_of(p2[h1]):+.1f}pt**")
 
     print(f"\n■ ★★**(226)C 単勝の後半は裾か**（**(224)で唯一「縮みの逆」だった**）")
     cu = ("P", "単勝", 0)

@@ -116,6 +116,27 @@
 　　（**09:00は全レースの発走前・締切直前は定義上発走前**）。
 　★★**(223)は各レースの発走前の値しか使わないので、そちらが正しい**。
 
+■ ★★★★**(226) 追記（2026-09-08・★利用者の「おすすめからやっていこう」）**
+　⚠★**規則の凍結日は2026-09-07だった。今日は9/8**。**まだ開催が無く前向きの標本はゼロなので実害は無い**
+　　が、★**この測定は規則を変えない**（**マスを増やさない・買い目を変えない・基準を変えない**）。
+
+　★**A. 4つ同時に買ったときの合計の分散と相関**
+　　★**4つは同じ軸を共有する**ので、**当たりが揃う**。⚠**「4つ買えば分散が下がる」は暗黙の期待で、
+　　一度も確かめていない**。★**相関行列と、合計の se を「4つ独立なら」と比べる**。
+　　■ ゲート2: ★**完全に独立なら se(合計) = √(Σ w²se²) に一致する**。**完全相関なら Σw·se**。
+　　★**その2つを両端として出す**。
+
+　★**C. 単勝の後半+14.5ptは裾か**
+　　★**(224)で出た唯一の「縮みの逆」**。**後半の当たり22本の配当を並べ、
+　　★最大の1本を抜いたらROIがどうなるかを見る**。
+　　■ ゲート2: ★**裾でないなら、1本抜いてもROIはほとんど動かない**。
+　　⚠**「上位k本を抜く」は(193)で私が踏んだ罠**——**乱にも同じ操作をして基準線を出す**。
+
+　★**B. 裾を外したROI**（**(211)でG馬連2点の再開条件として書いたまま未実施**）
+　　★**各的中の配当を「中央配当」に置き換えたROI**を出す＝**裾を完全に外した水準**。
+　　★**対象は候補4つ＋主要マス**。■ ゲート2: ★**裾に頼っていないなら、置き換えてもROIは下がらない**。
+　　★**払戻率も併記する**——**裾を外したROIが払戻率(0.750〜0.800)を上回るかが本質**。
+
 ■ ★**券種 15通り**（**1点=100円。点数ぶん賭ける**）
 | 券種 | k | 点数 | 払戻率 | ★**必要な優位比 1/払戻率** |
 |---|---|---|---|---|
@@ -717,6 +738,89 @@ def selftest():
     return 0 if ok else 1
 
 
+PORT = [("P複勝1点", ("P", "複勝", 0)), ("P馬単M4点", ("P", "馬単M", 4)),
+        ("G馬単M4点", ("G", "馬単M", 4)), ("Q三連単A4点", ("Q", "三連単A", 4))]
+
+
+def portfolio_and_tail(K, cs, z):
+    """★(226) A: 合計の分散と相関 ／ C: 単勝の裾 ／ B: 裾を外したROI"""
+    print(f"\n{'='*104}")
+    print("■ ★★★★**(226)A 4つ同時に買ったときの合計**（★**同じ軸を共有するので当たりが揃う**）")
+    have = [(lab, c) for lab, c in PORT if c in K and K[c]["a"]]
+    rid0 = K[have[0][1]]["rid"]
+    ok = all(K[c]["rid"] == rid0 for _, c in have)
+    print(f"　★対象マス {len(have)}／{len(PORT)}　整列 {'★OK（同じレース・同じ順）' if ok else '⚠NG'}")
+    if not ok:
+        print("　⚠**整列していないので読まない**")
+        return
+    A = np.array([np.asarray(K[c]["a"], float) * 100.0 for _, c in have])
+    W = np.array([100.0 * (len(tickets(c[1], c[2], 1, [2, 3, 4, 5, 6, 7]))
+                           if c[1] != "枠連" else c[2]) for _, c in have])
+    n = A.shape[1]
+    print(f"\n{'':<14}" + "".join(f"{lab:>13}" for lab, _ in have))
+    R = np.corrcoef(A)
+    for i, (lab, _) in enumerate(have):
+        print(f"{lab:<14}" + "".join(f"{R[i, j]:>13.3f}" for j in range(len(have))))
+    off = [R[i, j] for i in range(len(have)) for j in range(i + 1, len(have))]
+    print(f"　★**相関の平均 {np.mean(off):.3f}**（**最大 {np.max(off):.3f} / 最小 {np.min(off):.3f}**）")
+
+    port = (A * W[:, None]).sum(axis=0) / W.sum()
+    se = port.std(ddof=1) / math.sqrt(n)
+    ses = np.array([a.std(ddof=1) / math.sqrt(n) for a in A])
+    w = W / W.sum()
+    ind = math.sqrt(float(np.sum((w * ses) ** 2)))
+    full = float(np.sum(w * ses))
+    print(f"\n　★**合計 ROI {roi_of(port):.1f}%**（**1レース {W.sum():,.0f}円 × {n:,}本**）"
+          f"　se **{se:.2f}pt**")
+    print(f"　★**4つ独立なら se {ind:.2f} / 完全相関なら {full:.2f}**"
+          f"　→ ★**実際は {se:.2f}**"
+          f"（**独立の {se/ind:.2f}倍・完全相関の {se/full:.2f}倍**）")
+    for lab, c in have:
+        i = [x[0] for x in have].index(lab)
+        print(f"　　{lab:<14} 単独 ROI {roi_of(A[i]):>6.1f}%　se {ses[i]:>5.2f}pt")
+
+    print(f"\n■ ★★**(226)C 単勝の後半は裾か**（**(224)で唯一「縮みの逆」だった**）")
+    cu = ("P", "単勝", 0)
+    if cu in K and K[cu]["a"]:
+        a = np.asarray(K[cu]["a"], float) * 100.0
+        r = np.asarray(K[cu]["r"], float) * 100.0
+        yr = np.asarray(K[cu]["yr"], int)
+        for lab, m in (("全期間", np.ones(len(a), bool)), ("前半(〜2020)", yr < SPLIT),
+                       ("後半(2021〜)", yr >= SPLIT)):
+            v, vr = a[m], r[m]
+            h = np.sort(v[v > 0])[::-1]
+            if not len(h):
+                continue
+            cut = np.sort(v)[::-1]
+            v1 = np.concatenate([cut[1:], [0.0]])
+            r1 = np.concatenate([np.sort(vr)[::-1][1:], [0.0]])
+            print(f"　{lab:<14} ROI {roi_of(v):>6.1f}%　的中 {len(h):>3}本"
+                  f"　最大配当 {h[0]:>7,.0f}円　中央 {np.median(h):>6,.0f}円"
+                  f"　★最大1本抜き {roi_of(v1):>6.1f}%（**{roi_of(v1)-roi_of(v):+.1f}pt**）"
+                  f"　⚠乱も {roi_of(r1)-roi_of(vr):+.1f}pt")
+        print("　⚠**「上位1本を抜く」は必ずROIを下げる**——★**乱に同じ操作をした値と比べる**（(193)の罠）")
+
+    print(f"\n■ ★★★**(226)B 裾を外したROI**（★**各的中の配当を「中央配当」に置き換える**）")
+    print(f"{'紐':<3}{'券種':<9}{'点':>3}{'ROI':>8}{'★中央だけのROI':>16}{'払戻率':>8}"
+          f"{'★★中央ROI÷払戻率':>18}{'的中率':>8}{'平÷中':>7}")
+    for lab, c in PORT + [(None, ("G", "馬連", 2)), (None, ("Q", "三連単A", 3))]:
+        if c not in K or not K[c]["a"]:
+            continue
+        a = np.asarray(K[c]["a"], float) * 100.0
+        h = a[a > 0]
+        if not len(h):
+            continue
+        med = float(np.median(h))
+        rmed = 100.0 * (len(h) * med) / (100.0 * len(a))
+        rt = rate(c[1])
+        pts = (len(tickets(c[1], c[2], 1, [2, 3, 4, 5, 6, 7])) if c[1] != "枠連" else c[2])
+        print(f"{c[0]:<3}{c[1]:<9}{pts:>3}{roi_of(a):>7.1f}%{rmed:>15.1f}%"
+              f"{100*rt:>7.1f}%{rmed/100.0/rt:>17.3f}{100*np.mean(a>0):>7.1f}%"
+              f"{h.mean()/med:>7.2f}")
+    print("　★**中央ROI÷払戻率 が 1.00 を超えれば、裾を外しても優位が残る**"
+          "　⚠**下回れば、その水準は裾で出来ている**")
+
+
 def main():
     z = zq(ALPHA)
     cs = cells()
@@ -749,7 +853,7 @@ def main():
     sub = d.loc[msk, ["raceid", "umaban", "odds", "date"]].copy()
     sub["p"] = pred[msk]
 
-    K = {c: {"a": [], "r": [], "hit": [], "yr": []} for c in cs}
+    K = {c: {"a": [], "r": [], "hit": [], "yr": [], "rid": []} for c in cs}
     HD = {h: {"od": [], "rk": []} for h in HIMO}
     HD["ov"] = []
     HD["pq"] = []
@@ -874,6 +978,7 @@ def main():
                 continue
             c = K[(h, kind, k)]
             c["yr"].append(int(gg["date"].iloc[0].year))
+            c["rid"].append(rid)
             c["a"].append(sum(va) / cost)
             c["r"].append(float(np.mean(acc)))
             c["hit"].append(sum(va))
@@ -979,6 +1084,8 @@ def main():
               f"{d1:>+9.1f}円{d2:>+9.1f}円")
     print(f"　★**縮みが大きいほど、前半の数字は探索の下駄だった可能性が高い**"
           f"（**(201)は25.8pt・(209)は97.4pt縮んだ**）")
+
+    portfolio_and_tail(K, cs, z)
 
     print(f"\n■ ★★**紐の中身（上位3頭・PとGで何が違うか）**")
     print(f"{'紐':<4}{'平均オッズ':>12}{'中央オッズ':>12}{'平均人気':>10}{'中央人気':>10}")

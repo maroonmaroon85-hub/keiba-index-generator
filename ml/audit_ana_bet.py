@@ -155,6 +155,26 @@
 　　★**紐XはPとQの中間になると見る**——**混合は(205)で post-hoc の下駄だったので、期待しない**。
 　　⚠**もしXが両方を上回るなら、それは「モデルと市場は別の情報を持っている」ことを意味する**。
 
+■ ★★★★**(234) 追記（2026-09-09・★買うと決めた2点を分解する）**
+　★**利用者は `P馬単M4点 + X三連単A4点` を買うと決めた**（2026-09-08）。
+　⚠★**だが X三連単A4点の「縮み +15.4pt」は、後半325本・的中率1.9%＝★6本の当たりで出ている**。
+　　★**P三連単A4点と後半ROIが完全一致（140.6%）していたのも、同じ6本を拾っているから**。
+　　→ ⚠★**「縮まない」という最強の根拠が6本に乗っている。分解しないまま買い始めるのは、
+　　　今日ずっと避けてきた形と同じ**。
+
+　★**A. 後半の当たりを分解する**（**マスは増やさない・計算済みの値**）
+　　1. ★**的中が何年に散っているか**（**特定の年に固まっていないか**）
+　　2. ★**最大配当を1本抜いたときの後半ROI**。⚠**「上位k本抜き」は必ず下げる**ので
+　　　 ★**乱にも同じ操作をして基準線を出す**（**(193)で私が踏んだ罠**）
+　　3. ★**前半と後半で、的中時の配当の分布が違うか**（**中央値・最大**）
+　　■ ゲート2: ★**6本が偏っていなければ、年別に散り、1本抜きの下げ幅は乱と同じになる**。
+
+　★**B. 2点構成の年別ROI**（**前半/後半だけでなく11年分**）
+　　★**何年が100%割れか**を出す。■ ゲート2: ★**優位が無ければ、100%超の年は約半分になる**。
+
+　■ ★★内部対照（**決定的**）: **X三連単A4点の全期間 128.8% / n=1,383**、
+　　**P馬単M4点 113.4% / n=1,383**、**2点合計 121.1%**。⚠**ずれたら読まない**。
+
 ■ ★**券種 15通り**（**1点=100円。点数ぶん賭ける**）
 | 券種 | k | 点数 | 払戻率 | ★**必要な優位比 1/払戻率** |
 |---|---|---|---|---|
@@ -898,6 +918,63 @@ PORT = BUY + [("P複勝1点", ("P", "複勝", 0)),
               ("G馬単M4点", ("G", "馬単M", 4)), ("Q三連単A4点", ("Q", "三連単A", 4))]
 
 
+def breakdown(K, n, rid0):
+    """★(234) 買う2点を分解する — A: 後半の当たり / B: 年別"""
+    hb = [(lab, c) for lab, c in BUY if c in K and K[c]["a"]]
+    if len(hb) != len(BUY):
+        print("\n⚠**買う2点が揃っていないので読まない**")
+        return
+    A = {lab: np.asarray(K[c]["a"], float) * 100.0 for lab, c in hb}
+    R = {lab: np.asarray(K[c]["r"], float) * 100.0 for lab, c in hb}
+    yr = np.asarray(K[hb[0][1]]["yr"], int)
+    W = {lab: 100.0 * len(tickets(c[1], c[2], 1, [2, 3, 4, 5, 6, 7])) for lab, c in hb}
+    tot = sum(W.values())
+    port = sum(A[lab] * W[lab] for lab in A) / tot
+
+    print(f"\n{'='*104}")
+    print("■ ★★★★**(234)A 後半の当たりを分解する**"
+          "（⚠**X三連単A4点の「縮み+15.4pt」は後半6本に乗っている**）")
+    for lab in A:
+        v, r = A[lab], R[lab]
+        h2 = yr >= SPLIT
+        hi = np.where((v > 0) & h2)[0]
+        print(f"\n　★**{lab}**　全期間 {roi_of(v):.1f}%（{len(v):,}本）"
+              f"　後半 {roi_of(v[h2]):.1f}%（{int(h2.sum())}本・★的中 {len(hi)}本）")
+        if len(hi):
+            print(f"　　★**後半の的中の年と配当**: "
+                  + " / ".join(f"{yr[i]}年 {v[i]:,.0f}円" for i in np.argsort(-v)[
+                      [j for j in range(len(v)) if (v[np.argsort(-v)][j] > 0
+                                                    and h2[np.argsort(-v)][j])]][:12]))
+        v2, r2 = v[h2], r[h2]
+        for k2 in (1, 2):
+            if (v2 > 0).sum() <= k2:
+                continue
+            o = np.sort(v2)[::-1]
+            orr = np.sort(r2)[::-1]
+            a2 = np.concatenate([o[k2:], np.zeros(k2)])
+            b2 = np.concatenate([orr[k2:], np.zeros(k2)])
+            print(f"　　★**上位{k2}本抜き**: 後半 {roi_of(v2):.1f}% → **{roi_of(a2):.1f}%**"
+                  f"（**{roi_of(a2)-roi_of(v2):+.1f}pt**）"
+                  f"　⚠**乱も {roi_of(b2)-roi_of(r2):+.1f}pt**"
+                  f"　→ ★**純粋な差 {(roi_of(a2)-roi_of(v2))-(roi_of(b2)-roi_of(r2)):+.1f}pt**")
+        for lab2, m2 in (("前半", yr < SPLIT), ("後半", h2)):
+            hv = v[m2][v[m2] > 0]
+            if len(hv):
+                print(f"　　{lab2}の的中: {len(hv):>3}本　中央 {np.median(hv):>7,.0f}円"
+                      f"　最大 {hv.max():>8,.0f}円　平均 {hv.mean():>7,.0f}円")
+
+    print(f"\n■ ★★★**(234)B 年別**（★**買う2点と、その合計**）")
+    ys = sorted(set(yr))
+    print(f"{'':<16}" + "".join(f"{u:>8}" for u in ys) + f"{'★100%超':>10}")
+    print(f"{'本数':<16}" + "".join(f"{int((yr==u).sum()):>8}" for u in ys))
+    for lab in list(A) + ["★合計(800円)"]:
+        v = port if lab.startswith("★合計") else A[lab]
+        rs = [roi_of(v[yr == u]) for u in ys]
+        print(f"{lab:<16}" + "".join(f"{x:>7.0f}%" for x in rs)
+              + f"{sum(1 for x in rs if x > 100):>7}/{len(ys)}")
+    print(f"　★**「優位が無ければ100%超は約半分」**——**それより多いかを見る**")
+
+
 def portfolio_and_tail(K, cs, z):
     """★(226) A: 合計の分散と相関 ／ C: 単勝の裾 ／ B: 裾を外したROI"""
     print(f"\n{'='*104}")
@@ -962,6 +1039,8 @@ def portfolio_and_tail(K, cs, z):
         print(f"　★**前半 {roi_of(p2[h1]):.1f}%（{int(h1.sum())}本） / "
               f"後半 {roi_of(p2[~h1]):.1f}%（{int((~h1).sum())}本）"
               f"　★縮み {roi_of(p2[~h1])-roi_of(p2[h1]):+.1f}pt**")
+
+    breakdown(K, n, rid0)
 
     print(f"\n■ ★★**(226)C 単勝の後半は裾か**（**(224)で唯一「縮みの逆」だった**）")
     cu = ("P", "単勝", 0)

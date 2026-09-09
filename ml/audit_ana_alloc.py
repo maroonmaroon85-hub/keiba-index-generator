@@ -6,8 +6,8 @@
 ■ ★**対象の4本**（**すべて同じ軸＝pn≥0.15 かつ ズレ≥0.15 かつ 単勝≥10.0倍 の中で pn最大**）
 | 記号 | 買い目 | 全期間ROI | 的中率 |
 |---|---|---|---|
-| **T** | **単勝1点** | 101.8% | 6.7% |
-| **F** | **複勝1点** | 101.6% | 23.5% |
+| **T** | **単勝1点** | 102.1% | 6.7% |
+| **F** | **複勝1点** | 101.5% | 23.4% |
 | **U** | ★**P馬単M4点**（**紐＝モデル上位2頭・マルチ**） | 113.4% | 7.6% |
 | **S** | ★**X三連単A4点**（**紐＝モデル上位2頭＋人気1頭・軸1着**） | 128.8% | 1.9% |
 
@@ -35,9 +35,20 @@
 　★**等分配分を必ず併記する**。**さらに「後半で最適化した配分」も出し、前半最適との差＝縮みを見る**。
 　★**単独4本の後半成績も併記**（**混ぜる価値があるのかを見る**）。
 
-■ ★★★内部対照（**決定的**）: ★**対象レース数が 1,398**（**軸が立った全数**）
-　**かつ 4本の全期間ROIが T 101.8% / F 101.6% / U 113.4% / S 128.8%（±0.2pt）**。
-　⚠**ずれたら読まない**。★**(237)で決めた「必ず1,398と突き合わせる」を守る**。
+■ ★★★内部対照（**決定的**）: ★**対象レース数が 1,383**
+　**かつ 4本の全期間ROIが T 102.1% / F 101.5% / U 113.4% / S 128.8%（±0.2pt）**。
+　⚠**ずれたら読まない**。
+
+■ ⚠★★★**対照を1度書き直した（判定基準37・9回目）——先に記録する**
+　★**最初の事前登録では「1,398本 かつ T 101.8 / F 101.6 / U 113.4 / S 128.8」と書いた**。
+　★**走らせたら U 112.9% / S 141.9% でずれ、対照が落ちた**（**結果は読んでいない・判定基準32**）。
+　★★**原因: 2つの母集団の値を1つの対照に混ぜていた**（★**判定基準25**）。
+　　**1,398 = 軸が立った全数**。**101.8 / 101.6 はこちらの値**。
+　　**1,383 = ±20%の乱が「軸+紐3」で引けたレース**（`audit_ana_bet.py` の `if not okd: continue`）。
+　　★**113.4 / 128.8 はこちらの値**。**同じ表の単勝・複勝は 102.1 / 101.5**（**1,383**）。
+　★★**直し方: 母集団を1,383に揃える**（**乱の引けるレースだけに絞る**）。
+　　★**そうすると4本とも `audit_ana_bet.py` の同じ表から取れる**（**485-486行・175-176行**）。
+　⚠**乱そのものは配分の測定に使わない。レースの絞り込みにだけ使う**。
 
 ■ ⚠★**先に書いておく限界**
 　★**必要年数の最小化は「決着の速さ」であって「儲け」ではない**。
@@ -55,6 +66,8 @@ import math
 import sys
 from itertools import product
 
+from zlib import crc32
+
 import numpy as np
 
 sys.path.insert(0, "ml")
@@ -64,13 +77,14 @@ from audit_ana_odds import MIN_HORSES, roi_of
 from audit_ana_board import NPLACE, load_fuku_boards, qpool
 from audit_ana_band import PN_FLOOR
 from audit_ana_fix import LFIX
-from audit_ana_hole import GAP, SPLIT
+from audit_ana_hole import GAP, NRAND, SEED, SPLIT
+from audit_ana_ladder import FINE
 from audit_ana_marg import wf_predict
 from audit_ana_bet import tickets
 from train_prod import add_odds_features
 
 NAMES = ["T 単勝1点", "F 複勝1点", "U P馬単M4点", "S X三連単A4点"]
-KNOWN_R, KNOWN_ROI, TOL = 1398, [101.8, 101.6, 113.4, 128.8], 0.2
+KNOWN_R, KNOWN_ROI, TOL = 1383, [102.1, 101.5, 113.4, 128.8], 0.2
 STEP = 0.05
 ALPHA = 0.01
 
@@ -153,7 +167,29 @@ def main():
             continue
         i = int(c[int(np.argmax(pn[c]))])
         ax = int(ub[i])
-        op = [int(u) for u in ub[np.argsort(-pv, kind="mergesort")] if int(u) != ax]
+        # ★★★母集団を1,383に揃える: ±20%の乱が「軸+紐3」で引けるレースだけ
+        #   （audit_ana_bet.py の `if not okd: continue` と厳密に同じ）
+        op0 = [int(u) for u in ub[np.argsort(-pv, kind="mergesort")]]
+        HMP = [u for u in op0 if u != ax]
+        pos = {int(u): q for q, u in enumerate(ub)}
+        okd = True
+        for sd in range(NRAND):
+            g2 = np.random.default_rng([SEED + sd, crc32(rid.encode())])
+            out = []
+            for u in [ax] + HMP[:3]:
+                k0 = pos[u]
+                pl = [int(ub[q]) for q in range(len(ub))
+                      if int(ub[q]) not in out
+                      and od[k0] / FINE <= od[q] <= od[k0] * FINE]
+                if not pl:
+                    okd = False
+                    break
+                out.append(int(g2.choice(pl)))
+            if not okd:
+                break
+        if not okd:
+            continue
+        op = HMP
         oq = [int(u) for u in ub[np.argsort(od, kind="mergesort")] if int(u) != ax]
         X = op[:2] + [u for u in oq if u not in op[:2]]
         vt, vf = payoff(r, "単勝", [ax]), payoff(r, "複勝", [ax])

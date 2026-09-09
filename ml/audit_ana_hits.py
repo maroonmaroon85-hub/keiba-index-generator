@@ -1,0 +1,156 @@
+"""(237) ★**買う2点の的中を全件出す** —— 前半・後半の日付の範囲と、払戻の一覧
+
+★★**動機（2026-09-09・利用者の指定）**: ★**「後半っていつからいつまで？ 的中した払い戻し一覧を出して」**
+
+■ ★**これは記述のみ**。**新しいマスを作らない。軸も買い目も基準も動かさない**。
+　★**(234)で数えた的中を、日付と払戻つきで並べ直すだけ**。
+■ ★**前半 = 2016〜2020 / 後半 = 2021〜**（`audit_ana_hole.SPLIT = 2021`）。
+■ ★★★内部対照（**決定的**）: ★**的中数が (234) と一致すること**
+　**P馬単M4点: 前半89本 / 後半16本　　X三連単A4点: 前半19本 / 後半7本**。⚠**ずれたら読まない**。
+
+実行: python3 ml/audit_ana_hits.py    自己テスト: python3 ml/audit_ana_hits.py --selftest
+"""
+import sys
+
+import numpy as np
+
+sys.path.insert(0, "ml")
+import features as F
+from audit_crosspool import load_races, payoff
+from audit_ana_odds import MIN_HORSES
+from audit_ana_board import NPLACE, load_fuku_boards, qpool
+from audit_ana_band import PN_FLOOR
+from audit_ana_fix import LFIX
+from audit_ana_hole import GAP, SPLIT
+from audit_ana_marg import wf_predict
+from audit_ana_bet import BUY, tickets
+from train_prod import add_odds_features
+
+KNOWN = {"P馬単M4点": (89, 16), "X三連単A4点": (19, 7)}
+
+
+def selftest():
+    print(f"★前半 = 2016〜{SPLIT - 1} / 後半 = {SPLIT}〜")
+    print(f"★買う2点: " + " / ".join(f"{lab}（紐{c[0]}・{c[1]}・{c[2]}点）" for lab, c in BUY))
+    print("★★★内部対照: **的中数が (234) と一致**")
+    for k, (a, b) in KNOWN.items():
+        print(f"　{k:<14} 前半 {a:>3}本 / 後半 {b:>3}本")
+    print("⚠**記述のみ。マスも軸も買い目も基準も動かさない**")
+    print("★自己テスト: 全部OK")
+    return 0
+
+
+def main():
+    print("(237) ★**買う2点の的中を全件出す**\n")
+    races = {r["rid"]: r for r in load_races()}
+    boards = load_fuku_boards()
+    d = F.to_model(F.load_files())
+    f = F.build_features(d)
+    keep = (f["n_prior"] >= 1) & d["odds"].notna() & (d["odds"] > 0)
+    d, f = d[keep].reset_index(drop=True), f[keep].reset_index(drop=True)
+    y = (d["finish"] <= 3).astype(int).to_numpy()
+    fx, _ = F.encode_categoricals(f)
+    fx = add_odds_features(fx, d["odds"].to_numpy(float), d["raceid"].to_numpy())
+    pred = wf_predict(d, fx, y, 3)
+    m = ~np.isnan(pred)
+    sub = d.loc[m, ["raceid", "umaban", "odds", "date"]].copy()
+    sub["p"] = pred[m]
+
+    rows = {lab: [] for lab, _ in BUY}
+    days = {"前半": [], "後半": []}
+    nrace = {"前半": 0, "後半": 0}
+    for rid, g in sub.groupby("raceid"):
+        rid = str(rid)
+        r, bd = races.get(rid), boards.get(rid)
+        if r is None or bd is None:
+            continue
+        nums = {u for u, _, _ in r["horses"]}
+        gg = g[g["umaban"].astype(int).isin(nums)]
+        ub = gg["umaban"].astype(int).to_numpy()
+        if len(gg) < MIN_HORSES or not all(int(u) in bd for u in ub):
+            continue
+        od = gg["odds"].to_numpy(float)
+        pv = gg["p"].to_numpy(float)
+        if not np.isfinite(od).all() or (od <= 0).any() or pv.sum() <= 0:
+            continue
+        pn = pv / pv.sum() * NPLACE
+        qp, _ = qpool([bd[int(u)] for u in ub], "harm")
+        gap = pn - qp
+        cand = np.where((pn >= PN_FLOOR) & (gap >= GAP) & (od >= LFIX))[0]
+        if not len(cand):
+            continue
+        i = int(cand[int(np.argmax(pn[cand]))])
+        ax = int(ub[i])
+        op = [int(u) for u in ub[np.argsort(-pv, kind="mergesort")] if int(u) != ax]
+        oq = [int(u) for u in ub[np.argsort(od, kind="mergesort")] if int(u) != ax]
+        HM = {"P": op, "X": op[:2] + [u for u in oq if u not in op[:2]]}
+        dt = gg["date"].iloc[0]
+        half = "前半" if dt.year < SPLIT else "後半"
+        ok = True
+        buf = []
+        for lab, c in BUY:
+            tk = tickets(c[1], c[2], ax, HM[c[0]])
+            if tk is None:
+                ok = False
+                break
+            va = [payoff(r, k2, sel) for k2, sel in tk]
+            if any(x is None for x in va):
+                ok = False
+                break
+            buf.append((lab, sum(va), 100 * len(tk),
+                        [sel for (k2, sel), v in zip(tk, va) if v]))
+        if not ok:
+            continue
+        nrace[half] += 1
+        days[half].append(dt)
+        for lab, v, cost, wsel in buf:
+            if v > 0:
+                rows[lab].append({"d": dt, "rid": rid, "ax": ax, "od": float(od[i]),
+                                  "gap": float(gap[i]), "v": v, "c": cost,
+                                  "sel": wsel, "half": half})
+
+    okc = all(
+        (sum(1 for x in rows[lab] if x["half"] == "前半"),
+         sum(1 for x in rows[lab] if x["half"] == "後半")) == KNOWN[lab]
+        for lab in rows)
+    print("★★★内部対照（的中数 vs (234)）")
+    for lab in rows:
+        a = sum(1 for x in rows[lab] if x["half"] == "前半")
+        b = sum(1 for x in rows[lab] if x["half"] == "後半")
+        print(f"　{lab:<14} 前半 {a:>3}本 / 後半 {b:>3}本"
+              f"　既知 {KNOWN[lab][0]}/{KNOWN[lab][1]}"
+              f"　{'★一致' if (a, b) == KNOWN[lab] else '⚠ずれた'}")
+    if not okc:
+        print("⚠⚠**対照が落ちた。読まない**（判定基準32）。")
+        return
+
+    print(f"\n■ ★**日付の範囲**")
+    for h in ("前半", "後半"):
+        dd = sorted(days[h])
+        print(f"　★**{h}**　{dd[0].date()} 〜 {dd[-1].date()}"
+              f"　**{nrace[h]:,}レース**（{len(set(x.date() for x in dd)):,}開催日）")
+
+    for lab in rows:
+        print(f"\n{'='*104}")
+        print(f"■ ★★**{lab} の的中 全{len(rows[lab])}件**")
+        for h in ("前半", "後半"):
+            rs = sorted([x for x in rows[lab] if x["half"] == h], key=lambda x: x["d"])
+            if not rs:
+                continue
+            tot = sum(x["v"] for x in rs)
+            print(f"\n　★**{h}（{len(rs)}本・払戻合計 {tot:,.0f}円）**")
+            print(f"　{'日付':<12}{'レース':<11}{'軸':>4}{'単勝':>8}{'ズレ':>7}"
+                  f"{'★払戻':>10}{'収支':>10}  当たった買い目")
+            for x in rs:
+                sel = " / ".join("-".join(str(z) for z in s) for s in x["sel"])
+                print(f"　{str(x['d'].date()):<12}{x['rid']:<11}{x['ax']:>4}"
+                      f"{x['od']:>7.1f}倍{x['gap']:>7.3f}{x['v']:>9,.0f}円"
+                      f"{x['v']-x['c']:>+9,.0f}円  {sel}")
+            v = np.array([x["v"] for x in rs], float)
+            print(f"　　★中央 {np.median(v):,.0f}円 / 平均 {v.mean():,.0f}円 / "
+                  f"最大 {v.max():,.0f}円 / 最小 {v.min():,.0f}円")
+    print("\n⚠**枠連の運用には触れない**。**設定変更は提案しない**。")
+
+
+if __name__ == "__main__":
+    sys.exit(selftest() if "--selftest" in sys.argv else (main() or 0))

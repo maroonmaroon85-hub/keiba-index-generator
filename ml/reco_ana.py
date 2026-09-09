@@ -73,7 +73,7 @@ from audit_ana_band import PN_FLOOR
 from train_prod import add_odds_features
 
 GAP_A, GAP_B = 0.15, 0.02
-# ★★(215) (210)〜(214)で出した穴側の候補4つを、同じ画面に並べる
+# ★★(215)(230) 買う2点＋参考3点を、同じ画面に並べる
 #   ★軸 = pn≥0.15 かつ gap≥0.15 かつ ★単勝オッズ≥10.0倍 の中で pn最大（**(210)で固定**）
 #   ★紐 P = pn降順（人気馬・平均2.3番人気）／ G = gap降順（穴馬・平均6.6番人気）
 from audit_ana_bet import tickets as bet_tickets
@@ -149,7 +149,7 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
             nr += 1
             order_p = [int(u) for u in ub[np.argsort(-pv, kind="mergesort")]]
             A, B = picks_of_race(gg, ub, od, pv, bd, order_p)
-            # ★★(215) 推奨C: (210)で固定した軸 ＋ (212)〜(214)の候補4つ
+            # ★★(215)(230) 推奨C: (210)で固定した軸 ＋ 買う2点・参考3点
             pnv = pv / pv.sum() * NPLACE
             qpv, _ = qpool([bd[int(u)] for u in ub], "harm")
             gpv = pnv - qpv
@@ -543,7 +543,7 @@ def main():
         print(f"⚠⚠**この表で「良かった／悪かった」を読まないこと**——"
               f"**本数が少なすぎる**（**11年1,383本でも下端は0を割っている**）。")
         print(f"⚠★**これは前向きの検定ではない**——"
-              f"**直近のレースは、98マスを選ぶのに使った11年の中に入っている**。")
+              f"**直近のレースは、189マスを選ぶのに使った11年の中に入っている**。")
 
     if check:
         print(f"\n{'='*96}")

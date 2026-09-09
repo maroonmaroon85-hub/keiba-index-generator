@@ -54,17 +54,26 @@ from audit_ana_hole import GAP
 from audit_ana_marg import wf_predict
 from train_prod import add_odds_features
 
-KNOWN = [354, 231, 218, 159, 96, 87, 62, 43, 56, 41, 36]   # ★(234)の該当本数
+# ⚠★★訂正（2026-09-09・実行後・結果を読む前）: **初版はここに (234) の年別
+#   [354,231,...,36]（合計1,383）を置いて対照が落ちた**。★**1,383は「±20%の乱が
+#   軸＋紐3頭ぶん引けたレース」だけ**で、★**この測定は乱を使わないので全数1,398が正しい**。
+#   ⚠**昨日 ANA_RULE.md に「1,398/1,383/1,356の3つの数」の注記を書いた翌日に、同じ穴に落ちた**
+#   （★**判定基準37の7回目**）。★**対照は「合計1,398」＋「各年が(234)を下回らない」に直す**。
+KNOWN_LOW = [354, 231, 218, 159, 96, 87, 62, 43, 56, 41, 36]   # ★(234)＝乱の条件つき
+KNOWN_SUM = 1398                                               # ★★軸が立った全数
 
 
 def selftest():
     ok = True
     print(f"★軸の3条件: **pn ≥ {PN_FLOOR}** かつ **ズレ ≥ {GAP}** かつ **単勝 ≥ {LFIX}倍**")
     print("★測るのは年別・1レースあたりの頭数（①〜⑦）＋ 平均頭数・ズレの分位点")
-    print(f"★★★内部対照: **⑦の年別合計が (234) の該当本数と一致**")
-    print("　" + " / ".join(str(x) for x in KNOWN) + f"　（合計 {sum(KNOWN):,}本）")
-    ok &= sum(KNOWN) == 1383
-    print(f"　合計が1,383と一致 {'★OK' if sum(KNOWN) == 1383 else '⚠NG'}")
+    print(f"★★★内部対照（★訂正版）: **⑦の年別合計が {KNOWN_SUM:,}（軸が立った全数）**"
+          f"　かつ **各年が(234)の値を下回らない**")
+    print("　★(234)の年別（乱の条件つき・合計1,383）: "
+          + " / ".join(str(x) for x in KNOWN_LOW))
+    print(f"　⚠**差の15本は乱の抽選が失敗したレース**"
+          f"　{'★OK' if KNOWN_SUM - sum(KNOWN_LOW) == 15 else '⚠NG'}")
+    ok &= KNOWN_SUM - sum(KNOWN_LOW) == 15
     print("★★ゲート2: **どの条件も横ばいなら3本とも平らな線を返す**"
           "　→ ★**そのとき該当減少は説明できず、別の原因を探すことになる**")
     print("⚠**探索ではない。マスを増やさない。軸の定義も動かさない**")
@@ -122,10 +131,13 @@ def main():
 
     ys = sorted(k for k in acc if k >= 2016)
     got = [int(acc[u]["hit"]) for u in ys]
-    okc = got == KNOWN
-    print(f"★★★内部対照（⑦の年別レース数 vs (234)）")
-    print(f"　実測 {got}")
-    print(f"　既知 {KNOWN}　{'★★一致' if okc else '⚠⚠ずれた'}")
+    okc = (sum(got) == KNOWN_SUM
+           and all(a >= b for a, b in zip(got, KNOWN_LOW)))
+    print(f"★★★内部対照（★訂正版）")
+    print(f"　実測 {got}　合計 {sum(got):,}（★{KNOWN_SUM:,}であること）")
+    print(f"　(234) {KNOWN_LOW}　合計 {sum(KNOWN_LOW):,}（乱の条件つき）")
+    print(f"　★各年が(234)以上 かつ 合計が{KNOWN_SUM:,}　"
+          f"{'★★立った' if okc else '⚠⚠落ちた'}")
     if not okc:
         print("⚠⚠**対照が落ちた。読まない**（判定基準32）。")
         return

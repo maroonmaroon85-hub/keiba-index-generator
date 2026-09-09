@@ -66,9 +66,11 @@ def main():
           f" ★検証 {int(te.sum()):,}行（{cut.date()}〜{d['date'].max().date()}）")
     print(f"　検証レース {d.loc[te,'raceid'].nunique():,}\n")
 
-    m = fit_seeds(fx[tr], y[tr], 3, PAR)
-    p = np.mean([mm.predict(fx) for mm in m], axis=0) if isinstance(m, list) \
-        else m.predict(fx)
+    ms = fit_seeds(fx[tr], y[tr], 3, PAR)
+    # ⚠★`predict()` は**0/1のラベル**を返す。**確率は `predict_proba(...)[:, 1]`**。
+    # 　2026-09-09に間違えて AUC 0.6308 と出し、市場0.8081に「大敗」と誤読しかけた。
+    # 　★他の監査（audit_gap_axis 等）は全部 predict_proba を使っている。**揃える**。
+    p = np.mean([m.predict_proba(fx)[:, 1] for m in ms], axis=0)
 
     # 市場: レース内で 1/odds を正規化（穴馬側の qp と同じ定義）
     rid = d["raceid"].to_numpy()

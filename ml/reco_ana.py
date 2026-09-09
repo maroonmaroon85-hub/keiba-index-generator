@@ -50,8 +50,11 @@
 　python3 ml/reco_ana.py [YYYY-MM-DD]        ★推奨だけ（結果を見ない）
 　python3 ml/reco_ana.py [YYYY-MM-DD] --check  ★答え合わせ
 　python3 ml/reco_ana.py --from 2026-07-19 --check   ★日別の集計
+　★★python3 ml/reco_ana.py [YYYY-MM-DD] --sns          ★**SNS用の印だけを出す**（`ANA_SNS_RULE.md`）
+　★★python3 ml/reco_ana.py [YYYY-MM-DD] --sns --check  ★**印＋◎の答え合わせ**
 """
 import glob
+import json
 import os
 import sys
 from itertools import combinations
@@ -278,6 +281,82 @@ def per_day(sub, days, races, pays, boards, pay_of, check):
     print("\n⚠**枠連の運用には触れない**。**設定変更は提案しない**。")
 
 
+def load_entry_names():
+    """★★(238) 馬名を `data/nk/entries*.json` から引く（**raceid(8桁) → {馬番: 馬名}**）。
+
+    ⚠**ルートCSV(`to_model`)に馬名の列は無い**（`horse` は馬ID）。**SNS投稿には名前が要る**。
+    ⚠★**`data/nk/` は別セッション(148)の収集分。★読むだけで、書かない・集め方に触れない**。
+    ★**その日の出馬表が無ければ空を返す**——**馬番だけで出す**（**落とさない**）。
+    """
+    out = {}
+    for fp in sorted(glob.glob("data/nk/entries*.json")):
+        try:
+            with open(fp, encoding="utf-8") as fh:
+                recs = json.load(fh)
+        except (OSError, ValueError):
+            continue                      # ⚠壊れていても落とさない
+        for rec in recs if isinstance(recs, list) else []:
+            rid = str(rec.get("raceid") or "")
+            if not rid:
+                continue
+            m = out.setdefault(rid, {})
+            for h in rec.get("horses") or []:
+                try:
+                    m[int(h["umaban"])] = str(h.get("name") or "")
+                except (KeyError, TypeError, ValueError):
+                    continue
+    return out
+
+
+MARK = ["◎", "○", "▲", "△"]
+
+
+def sns_post(out, day, check, pay_of, names):
+    """★★(238) SNS用の投稿の形（★印で出す・⚠買い目は出さない）
+
+    ★**利用者の指定（2026-09-09）**: **「競馬でよくある本命とかの印で出す」**。
+    ★**◎=軸① / ○=紐② / ▲=紐③ / △=紐④**（**紐はP＝モデル順**）。
+    ⚠**☆以降は要らない**——**どの券種も紐④までしか使わない**。
+    ⚠★**買い目の羅列は出さない**。★**印だけで4点とも復元できる**が、それは読み手の側の話。
+    ★**規則は `ANA_SNS_RULE.md`**。
+    """
+    hit = [x for x in out if x.get("C")]
+    print(f"\n{'='*72}")
+    print(f"■ ★★★**SNS投稿の形**（**印**）　★対象日 **{pd.Timestamp(day).date()}**")
+    print(f"{'='*72}")
+    if not hit:
+        # ⚠★該当0本の日は開催日の39.1%（(231)で実測）。★見送りも投稿する
+        print("\n本日は該当なし（見送り）。")
+        print("\n　⚠★**該当0本は開催日の39.1%**（**(231)で実測・447/1,142日**）。"
+              "★**見送りを出すことが規則を守る側の証拠になる**（`ANA_SNS_RULE.md` §7）。")
+        return
+    print(f"\n★**{len(hit)}レース**（★この日のレース {len(out)}本中）\n")
+    for x in hit:
+        c = x["C"]
+        rk, oda = c["rk"], c["odall"]
+        nm = names.get(str(x["rid"])) or x["nm"]   # ★出馬表の名前を優先
+        us = [c["u"]] + list(c["P"][:3])
+        print(f"【{x['rid']}】")
+        for mk, u in zip(MARK, us):
+            u = int(u)
+            print(f"　{mk} {u:>2} {nm.get(u,''):<18}"
+                  f"{rk.get(u,0):>3}番人気 {oda.get(u,0):>6.1f}倍"
+                  + (f"　ズレ {c['gap']:.3f}" if mk == "◎" else ""))
+        if check and x["fin"]:
+            f0 = x["fin"].get(int(c["u"]), 0)
+            vf = pay_of(x["rid"], "複勝", [int(c["u"])])
+            vt = pay_of(x["rid"], "単勝", [int(c["u"])])
+            sf = f"{vf:,.0f}円 ★的中" if vf else "―"
+            st = f"{vt:,.0f}円 ★的中" if vt else "―"
+            print(f"　→ ◎ **{f0}着**　複勝 {sf}　単勝 {st}")
+        print()
+    print("　⚠★**買い目は書かない**（**利用者の指定**）。"
+          "★**公開面は「◎が来たか」だけに絞る**——**複勝23.5% / 単勝6.7%**。")
+    print("　★**書いてよい**: 「6番人気の馬が23.5%で複勝に来る」「複勝の中央配当は370円」")
+    print("　⚠**書いてはいけない**: 「平均21.2倍の馬が23.4%で来る」"
+          "（**的中の平均は16.9倍＝別の量**）／「単勝は儲かる」（**ROI102.1%・2,028年**）")
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     check = "--check" in sys.argv
@@ -390,8 +469,11 @@ def main():
         if len(cC):
             i = int(cC[int(np.argmax(pn[cC]))])
             ax = int(ub[i])
+            _rk = {int(u): int(q) for q, u
+                   in enumerate(ub[np.argsort(od, kind="mergesort")], 1)}
             rec["C"] = {"u": ax, "od": float(od[i]), "pn": float(pn[i]),
-                        "gap": float(gap[i]),
+                        "gap": float(gap[i]), "rk": _rk,
+                        "odall": {int(u): float(o) for u, o in zip(ub, od)},
                         "P": [u for u in order_p if u != ax][:5],
                         "G": [u for u in order_g if u != ax][:5],
                         "Q": [u for u in ub[np.argsort(od, kind="mergesort")]
@@ -411,6 +493,10 @@ def main():
                             "gap": float(gap[i]), "h": himo}
         rec["nm"], rec["fin"] = nm, fin
         out.append(rec)
+
+    if "--sns" in sys.argv:
+        # ★★(238) SNS用は印だけを出して終わる（⚠既存の推奨A/B/Cの出力は出さない）
+        return sns_post(out, day, check, pay_of, load_entry_names())
 
     nA = sum(1 for x in out if x["A"])
     nB = sum(1 for x in out if x["B"])

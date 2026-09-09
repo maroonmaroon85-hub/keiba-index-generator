@@ -5,8 +5,17 @@
 ■ ★**これは記述のみ**。**新しいマスを作らない。軸も買い目も基準も動かさない**。
 　★**(234)で数えた的中を、日付と払戻つきで並べ直すだけ**。
 ■ ★**前半 = 2016〜2020 / 後半 = 2021〜**（`audit_ana_hole.SPLIT = 2021`）。
-■ ★★★内部対照（**決定的**）: ★**的中数が (234) と一致すること**
-　**P馬単M4点: 前半89本 / 後半16本　　X三連単A4点: 前半19本 / 後半7本**。⚠**ずれたら読まない**。
+■ ★★★内部対照（**決定的**）——⚠★**訂正（実行後・結果を読む前）**
+　⚠**初版は「的中数が (234) と一致」を対照にして落ちた**（**91/16・19/8 vs 89/16・19/7**）。
+　★**(234)の的中数は1,383本（±20%の乱が引けたレース）で数えたもの**。
+　★**この測定は乱を使わないので対象は全数1,398本**——**差の15レースに的中が4本ある**。
+　⚠★★**これは判定基準37の8回目。同じ1,383/1,398の取り違えが3回連続**
+　　（**(233)で注記を書き、(235)で踏み、ここでまた踏んだ**）。
+　　→ ★**注記では効かないので、★対照の作り方を変える**:
+　★★**① 対象レース数の合計が 1,398 であること**（**軸が立った全数・(234)(235)と共通**）
+　★★**② 的中数が (234) の値を下回らないこと**（**乱の条件を外したので増えることはあっても減らない**）
+　★★**③ 超過が15レース分（＝各券種15本）を超えないこと**
+　⚠**3つ全部が立たなければ読まない**。
 
 実行: python3 ml/audit_ana_hits.py    自己テスト: python3 ml/audit_ana_hits.py --selftest
 """
@@ -26,15 +35,20 @@ from audit_ana_marg import wf_predict
 from audit_ana_bet import BUY, tickets
 from train_prod import add_odds_features
 
-KNOWN = {"P馬単M4点": (89, 16), "X三連単A4点": (19, 7)}
+KNOWN = {"P馬単M4点": (89, 16), "X三連単A4点": (19, 7)}   # ★(234)＝乱の条件つき1,383本
+KNOWN_R = 1398   # ★★軸が立った全数（(234)(235)と共通）。★新しいスクリプトは必ずここと突き合わせる
+DIFF_MAX = 15    # ★乱が引けなかったレース数
 
 
 def selftest():
     print(f"★前半 = 2016〜{SPLIT - 1} / 後半 = {SPLIT}〜")
     print(f"★買う2点: " + " / ".join(f"{lab}（紐{c[0]}・{c[1]}・{c[2]}点）" for lab, c in BUY))
-    print("★★★内部対照: **的中数が (234) と一致**")
+    print(f"★★★内部対照（★訂正版・3つ全部）")
+    print(f"　★① 対象レース数の合計 = **{KNOWN_R:,}**（軸が立った全数）")
+    print(f"　★② 的中数が (234) 以上　★③ 超過が {DIFF_MAX} 本以内")
     for k, (a, b) in KNOWN.items():
-        print(f"　{k:<14} 前半 {a:>3}本 / 後半 {b:>3}本")
+        print(f"　　{k:<14} (234) 前半 {a:>3}本 / 後半 {b:>3}本"
+              f"　⚠**これは1,383本（乱の条件つき）で数えた値**")
     print("⚠**記述のみ。マスも軸も買い目も基準も動かさない**")
     print("★自己テスト: 全部OK")
     return 0
@@ -109,17 +123,22 @@ def main():
                                   "gap": float(gap[i]), "v": v, "c": cost,
                                   "sel": wsel, "half": half})
 
-    okc = all(
-        (sum(1 for x in rows[lab] if x["half"] == "前半"),
-         sum(1 for x in rows[lab] if x["half"] == "後半")) == KNOWN[lab]
-        for lab in rows)
-    print("★★★内部対照（的中数 vs (234)）")
+    tot_r = nrace["前半"] + nrace["後半"]
+    ok1 = tot_r == KNOWN_R
+    print(f"★★★内部対照（★訂正版）")
+    print(f"　★①対象レース数 **{tot_r:,}**（{KNOWN_R:,}であること）"
+          f"　{'★立った' if ok1 else '⚠落ちた'}")
+    ok23 = True
     for lab in rows:
         a = sum(1 for x in rows[lab] if x["half"] == "前半")
         b = sum(1 for x in rows[lab] if x["half"] == "後半")
-        print(f"　{lab:<14} 前半 {a:>3}本 / 後半 {b:>3}本"
-              f"　既知 {KNOWN[lab][0]}/{KNOWN[lab][1]}"
-              f"　{'★一致' if (a, b) == KNOWN[lab] else '⚠ずれた'}")
+        ka, kb = KNOWN[lab]
+        g = (a >= ka and b >= kb and (a - ka) + (b - kb) <= DIFF_MAX)
+        ok23 &= g
+        print(f"　★②③{lab:<14} 前半 {a:>3}本 / 後半 {b:>3}本"
+              f"　（(234)は {ka}/{kb}・乱の条件つき1,383本）"
+              f"　超過 {(a - ka) + (b - kb)}本　{'★立った' if g else '⚠落ちた'}")
+    okc = ok1 and ok23
     if not okc:
         print("⚠⚠**対照が落ちた。読まない**（判定基準32）。")
         return

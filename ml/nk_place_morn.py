@@ -14,21 +14,41 @@
 | **1** | ★**枠連の運用に一切触らない** | `nk_fetch.py` も `nk_odds_bulk.py` も**読むだけ・書き換えない**。**別プロセスなので落ちても枠連は無事** |
 | **2** | ★★**出力先を分ける**（`data/nk_odds_morn/`） | ⚠**`data/nk_odds/type2_*` は11年バックテストの母集団**。**朝の板を混ぜたら確定板の母集団が壊れる** |
 | **3** | ★**自分の時計を正とする**（`fetched_at`） | ⚠**`official_datetime` は値の時刻を表さない**（09:57のスタンプで値が確定だった実測がある） |
-| **4** | ★**連続失敗したら自分から止まる**（終了コード2） | **ブロックされているのに叩き続けない**（(70)⑤の方針） |
+| **4** | ★**連続失敗したら自分から止まる**（終了コード2） | **ブロックされているのに叩き続けない**（(70)⑤の方針）。⚠★**終了コード2で自動再開する形に包まないこと** |
+| **4b** | ★**`nk_odds_bulk` と同時に走らせない** | ★**枠連側の回答【4】: 開催日の規則は時間帯ではなく同時実行の問題**。**起動時に `pgrep` で見る** |
 | **5** | ★**キャッシュを使わない・残さない** | ⚠`nk_fetch.get` はキャッシュ優先。**朝の板は時点が意味を持つ**ので鍵に時刻を入れる。★**そのぶん生JSONは読んだら消す**（放置すると `data/nk_cache` に毎開催36個ずつ溜まる） |
 
 ■ ★**取るもの**: **type=2（複勝）だけ**。1開催日36レース・1.5秒間隔で**約1分**。
 　★**単勝は `nk_fetch.py entries` が既に取っている**ので、ここでは取らない（**二重に叩かない**）。
 
-■ ⚠★**まだ確認できていないこと（★枠連側に確認中・2026-09-10）**
-　★**未走のレースに type=2 を投げたとき、その時点の板が返るか**。
-　　**返る想定だが検証していない**。→ ★**初回は必ず `--dry` で1レースだけ試すこと**。
-　⚠**空が返るのは異常ではない**（`entries` も「発売前は空で返る」と書いてある）。
+■ ★★**枠連側からの回答（2026-09-10）——★叩く前に読むこと**
+| | ★**回答** |
+|---|---|
+| ★**未走で板が返るか** | ★**type=1 では返る**（**実測: 9/6 札幌6R が 08:04 2.3倍 → 08:45 2.5倍 → 15:02 2.5倍**）。⚠★**type=2 は双方とも未実測**。**同じエンドポイントで type 違いなので返る想定は妥当だが確証は無い** |
+| ★**1.5秒間隔・UA** | ★**そのままでよい**（**42,000回を18時間流してブロックされたことは無い**）。⚠★**間隔は縮めないこと** |
+| ★**Referer** | ★**`shutuba.html` でよい**（`entries` に合わせるのが正解） |
+| ★★**開催日の規則** | ★**時間帯の規則ではない。★同時実行の問題**（`nk_odds_bulk` と衝突する）。→ ★**このスクリプトは起動時に `pgrep -f nk_odds_bulk` を見る**（下の `bulk_running`） |
+| ★**キャッシュ** | ★**衝突しない**（`data/nk_cache` は .gitignore 済み・鍵に時刻が入るので `get` のキャッシュ判定に当たらない）。⚠★**消すときに `odds_*` の glob を使わないこと**——**`cmd_entries` が同じ接頭辞で書いている**。→ ★**このスクリプトは `morn2_` 接頭辞の★完全パスだけを消す** |
+| ★**ブロックの兆候** | ⚠**本物のブロックの実例は無い**。**唯一の事故(2026-08-09)は全券種 HTTP 400 ＝仕様変更だった**。★**400 が出たら、まずブラウザの DevTools で実物のリクエストを見ること**（**症状から推測して外した前科がある**） |
+
+■ ⚠★★**叩くときの禁止事項（★枠連側の実体験から）**
+　1. ⚠★**終了コード2（連続失敗）で★自動再開しないこと**。
+　　　**`until` ループで回して2でも5分後に叩き直し、「止まる」配慮を自分で無意味にした前科がある**。
+　2. ⚠★**`--dry` は 1レース・1回だけ**。**2026-08-09 に「叩いて確かめる」で症状を悪化させた**
+　　　（**切り分けのため連続で叩いた結果、成功していた type=7 まで含めて5券種すべて400になった**）。
+　　　★**(70)⑤の負荷方針は「集めるとき」だけでなく★「調べるとき」にも適用する**。
+　3. ⚠★**キャッシュのある道具で疎通確認をしないこと**（**`--old` がキャッシュを返して誤判定しかけた**）。
+　　　★**このスクリプトはキャッシュを使わないので、疎通確認にも使える**。
+　4. ⚠★**間隔（1.5秒）を縮めないこと**。
+
+■ ⚠★**発売前は空で返るのが正常**（`ml/nk_parse.py` の `parse_odds_json` に明記）。
+　★**「空＝異常」と判断しない**。⚠**複勝の発売開始時刻が単勝と同じかは双方とも未確認**。
 
 使い方（★Macで実行）:
     python3 ml/nk_place_morn.py 20260912 --dry     # ★まず1レースだけ試す（保存しない）
     python3 ml/nk_place_morn.py 20260912           # その日の全レースの複勝板を取る
     python3 ml/nk_place_morn.py 20260912 --status  # 何レース貯まっているか見るだけ（通信しない）
+　★`nk_odds_bulk` が走っていると**起動時に止まる**（終了コード2）。⚠**押し切るなら `--force`（推奨しない）**
 
 出力: **data/nk_odds_morn/place<YYYYMMDD>.jsonl**（1行1レース・追記）
 　{"race_id","raceid","fetched_at","official_at","n","odds":{"01":[下限,上限],…}}
@@ -38,6 +58,7 @@
 """
 import json
 import os
+import subprocess
 import sys
 import time
 
@@ -49,6 +70,57 @@ from nk_parse import nk_raceid
 OUT = "data/nk_odds_morn"          # ★確定板の data/nk_odds とは必ず分ける
 TYPE = 2                            # ★複勝のみ
 MAX_FAIL = 5                        # ★連続でこれだけ失敗したら止まる
+
+
+def _ancestors():
+    """★自分と自分の祖先のpid（★誤検知よけ）。
+
+    ⚠**`pgrep -f` は「コマンドラインに文字列が含まれるプロセス」を拾うので、
+    　★このスクリプトを起動したシェル自身が引っかかる**（実際に2026-09-10に踏んだ）。
+    　→ ★**自分と祖先は必ず除く**。
+    """
+    out, pid = set(), os.getpid()
+    for _ in range(12):                     # ★念のため上限を切る（循環よけ）
+        out.add(pid)
+        try:
+            r = subprocess.run(["ps", "-o", "ppid=", "-p", str(pid)],
+                               capture_output=True, text=True, timeout=10)
+            pid = int(r.stdout.strip())
+        except (OSError, ValueError, subprocess.SubprocessError):
+            break
+        if pid <= 1 or pid in out:
+            break
+    return out
+
+
+def bulk_running():
+    """★`nk_odds_bulk` が走っていないか（★枠連側の回答【4】: 規則は時間帯ではなく★同時実行）。
+
+    → (走っている?, 説明)。★`pgrep`/`ps` が使えない環境では None（**勝手に続けない**）。
+    ⚠**自分と祖先は除く**。★**このスクリプト自身（`nk_place_morn`）を含む行も除く**。
+    """
+    try:
+        r = subprocess.run(["pgrep", "-f", "nk_odds_bulk"],
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, f"pgrep が使えない（{e}）"
+    mine, hit = _ancestors(), []
+    for x in r.stdout.split():
+        try:
+            pid = int(x)
+        except ValueError:
+            continue
+        if pid in mine:
+            continue                        # ★自分・自分を起動したシェル
+        try:
+            a = subprocess.run(["ps", "-o", "args=", "-p", str(pid)],
+                               capture_output=True, text=True, timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            a = ""
+        if "nk_place_morn" in a:
+            continue                        # ★このスクリプトを起動した別の包み
+        hit.append(pid)
+    return (bool(hit), f"pid {' '.join(str(x) for x in hit)}" if hit else "走っていない")
 
 
 def out_path(ymd):
@@ -92,7 +164,11 @@ def selftest():
     print("　1. **枠連の運用に触らない**（nk_fetch も nk_odds_bulk も読むだけ）")
     print(f"　2. ★**出力先を分ける**: {OUT}/  ⚠**data/nk_odds とは別**")
     print("　3. ★**自分の時計 `fetched_at` を正とする**（official_datetime は値の時刻ではない）")
-    print(f"　4. **連続{MAX_FAIL}回失敗したら止まる**（終了コード2）")
+    print(f"　4. **連続{MAX_FAIL}回失敗したら止まる**（終了コード2）"
+          "　⚠★**自動再開する形に包まないこと**")
+    b, why = bulk_running()
+    print(f"　4b. ★**nk_odds_bulk と同時に走らせない**（今: {why}）"
+          + ("　⚠**確認できない環境**" if b is None else ""))
     print(f"　5. **キャッシュを使わない・残さない**（鍵に時刻を入れ、生JSONは読んだら {CACHE} から消す）")
     ok &= OUT != "data/nk_odds" and not OUT.rstrip("/").endswith("nk_odds")
     print(f"　→ 出力先が確定板と別 {'★OK' if ok else '⚠NG'}")
@@ -130,6 +206,21 @@ def main():
         status(ymd)
         return 0
     dry = "--dry" in sys.argv
+
+    # ★★★叩く前に必ず: nk_odds_bulk と同時に走らせない（枠連側の回答【4】）
+    busy, why = bulk_running()
+    if busy:
+        print(f"⚠⚠**`nk_odds_bulk` が走っている（{why}）。同時実行はしない**"
+              "　★**止まるのを待つか、`--force` で押し切る（★推奨しない）**")
+        if "--force" not in sys.argv:
+            return 2
+    elif busy is None:
+        print(f"⚠**同時実行の確認ができなかった（{why}）**"
+              "　★**手で `pgrep -f nk_odds_bulk` を見てから `--force` で実行すること**")
+        if "--force" not in sys.argv:
+            return 2
+    else:
+        print(f"★同時実行の確認: `nk_odds_bulk` は{why}")
 
     ids = race_ids_of_day(ymd)
     if not ids:

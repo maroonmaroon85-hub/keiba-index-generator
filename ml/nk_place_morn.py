@@ -13,7 +13,7 @@
 |---|---|---|
 | **1** | ★**枠連の運用に一切触らない** | `nk_fetch.py` も `nk_odds_bulk.py` も**読むだけ・書き換えない**。**別プロセスなので落ちても枠連は無事** |
 | **2** | ★★**出力先を分ける**（`data/nk_odds_morn/`） | ⚠**`data/nk_odds/type2_*` は11年バックテストの母集団**。**朝の板を混ぜたら確定板の母集団が壊れる** |
-| **3** | ★**自分の時計を正とする**（`fetched_at`） | ⚠**`official_datetime` は値の時刻を表さない**（09:57のスタンプで値が確定だった実測がある） |
+| **3** | ★**自分の時計を正とする**（`fetched_at`・★**オフセット付き**） | ⚠**`official_datetime` は値の時刻を表さない**（09:57のスタンプで値が確定だった実測がある）。★**「朝9時の板」の唯一の根拠になる値なので、タイムゾーンまで残す** |
 | **4** | ★**連続失敗したら自分から止まる**（終了コード2） | **ブロックされているのに叩き続けない**（(70)⑤の方針）。⚠★**終了コード2で自動再開する形に包まないこと** |
 | **4b** | ★**他の取得と同時に走らせない**（`nk_odds_bulk` / `nk_fetch` / `nk_odds_combo`） | ★**枠連側の回答【4】: 開催日の規則は時間帯ではなく同時実行の問題**。⚠**`entries` も netkeiba を叩くので同じ扱いにした**（回答の「entries の後に順番に流せば大丈夫」＝並走させない）。**起動時に `pgrep` で見る** |
 | **4c** | ★**レース一覧が欠けていたら止まる** | ⚠**一覧はキャッシュされる。開催途中に取った欠けた一覧が残っていると欠けたまま集める**（**2026-08-09 に 13/36 で固まった前例**）。★**場ごとに12レース揃っているかを見る**。→ `--refresh` |
@@ -162,7 +162,19 @@ def status(ymd):
     if not os.path.exists(p):
         print(f"{p} はまだ無い")
         return
-    rows = [json.loads(x) for x in open(p, encoding="utf-8") if x.strip()]
+    rows, broken = [], 0
+    for x in open(p, encoding="utf-8"):
+        if not x.strip():
+            continue
+        try:
+            rows.append(json.loads(x))      # ⚠**書き込み中に落ちると末尾が欠ける**
+        except ValueError:
+            broken += 1
+    if broken:
+        print(f"⚠**読めない行が {broken} 行ある**（**書き込み中に落ちた末尾の可能性**）")
+    if not rows:
+        print("⚠**読める行が無い**")
+        return
     ts = sorted({r["fetched_at"][:16] for r in rows})
     print(f"{p}: **{len(rows)}行 / {len({r['race_id'] for r in rows})}レース**")
     print(f"　収集した時点: {' / '.join(ts)}")
@@ -216,6 +228,12 @@ def main():
         status(ymd)
         return 0
     dry = "--dry" in sys.argv
+    # ★★★これは「朝9時の板」を作るための道具。★昼以降に走らせたら別物になる。
+    #   ⚠**止めはしない**（発売前で空だったときの取り直しは正当）。★**必ず言う**。
+    hh = int(time.strftime("%H"))
+    if not 8 <= hh <= 11:
+        print(f"⚠⚠**今 {time.strftime('%H:%M %Z')} です。★これは「朝9時の板」ではありません**"
+              "　★**記録には残りますが、朝9時運用の標本としては使えません**")
 
     # ★★★叩く前に必ず: nk_odds_bulk と同時に走らせない（枠連側の回答【4】）
     busy, why = bulk_running()
@@ -258,14 +276,17 @@ def main():
         os.makedirs(OUT, exist_ok=True)
 
     fh = None if dry else open(out_path(ymd), "a", encoding="utf-8")
-    nfail, nok, nempty = 0, 0, 0
+    # ⚠**`nfail` は「連続」失敗のカウンタ（MAX_FAIL 用）。★総数は別に持つ**
+    #   （初版は最後に `nfail` を「失敗数」として出していたので、飛び飛びの失敗が 0 と出ていた）
+    nfail, nok, nempty, nbad = 0, 0, 0, 0
     try:
         for rid in ids:
             od, at, drop = fetch_one(rid)
-            now = time.strftime("%Y-%m-%d %H:%M:%S")
+            now = time.strftime("%Y-%m-%d %H:%M:%S%z")   # ★実行機の地方時＋オフセット
             if od is None:
                 nfail += 1
-                print(f"  {rid} ⚠取得失敗（連続{nfail}）")
+                nbad += 1
+                print(f"  {rid} ⚠取得失敗（連続{nfail} / 通算{nbad}）")
                 if nfail >= MAX_FAIL:
                     print(f"⚠⚠**連続{MAX_FAIL}回失敗した。ブロックの疑いで止める**")
                     return 2
@@ -290,7 +311,7 @@ def main():
         if fh:
             fh.close()
 
-    print(f"\n★**取れた {nok} / 空 {nempty} / 失敗 {nfail}**")
+    print(f"\n★**取れた {nok} / 空 {nempty} / 失敗 {nbad}**（対象 {len(ids)}）")
     if dry:
         print("⚠**--dry なので保存していない**。★**板が返っているなら --dry 無しで本番**")
         return 0

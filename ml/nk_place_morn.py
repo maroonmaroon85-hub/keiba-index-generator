@@ -15,7 +15,8 @@
 | **2** | ★★**出力先を分ける**（`data/nk_odds_morn/`） | ⚠**`data/nk_odds/type2_*` は11年バックテストの母集団**。**朝の板を混ぜたら確定板の母集団が壊れる** |
 | **3** | ★**自分の時計を正とする**（`fetched_at`） | ⚠**`official_datetime` は値の時刻を表さない**（09:57のスタンプで値が確定だった実測がある） |
 | **4** | ★**連続失敗したら自分から止まる**（終了コード2） | **ブロックされているのに叩き続けない**（(70)⑤の方針）。⚠★**終了コード2で自動再開する形に包まないこと** |
-| **4b** | ★**`nk_odds_bulk` と同時に走らせない** | ★**枠連側の回答【4】: 開催日の規則は時間帯ではなく同時実行の問題**。**起動時に `pgrep` で見る** |
+| **4b** | ★**他の取得と同時に走らせない**（`nk_odds_bulk` / `nk_fetch` / `nk_odds_combo`） | ★**枠連側の回答【4】: 開催日の規則は時間帯ではなく同時実行の問題**。⚠**`entries` も netkeiba を叩くので同じ扱いにした**（回答の「entries の後に順番に流せば大丈夫」＝並走させない）。**起動時に `pgrep` で見る** |
+| **4c** | ★**レース一覧が欠けていたら止まる** | ⚠**一覧はキャッシュされる。開催途中に取った欠けた一覧が残っていると欠けたまま集める**（**2026-08-09 に 13/36 で固まった前例**）。★**場ごとに12レース揃っているかを見る**。→ `--refresh` |
 | **5** | ★**キャッシュを使わない・残さない** | ⚠`nk_fetch.get` はキャッシュ優先。**朝の板は時点が意味を持つ**ので鍵に時刻を入れる。★**そのぶん生JSONは読んだら消す**（放置すると `data/nk_cache` に毎開催36個ずつ溜まる） |
 
 ■ ★**取るもの**: **type=2（複勝）だけ**。1開催日36レース・1.5秒間隔で**約1分**。
@@ -48,6 +49,7 @@
     python3 ml/nk_place_morn.py 20260912 --dry     # ★まず1レースだけ試す（保存しない）
     python3 ml/nk_place_morn.py 20260912           # その日の全レースの複勝板を取る
     python3 ml/nk_place_morn.py 20260912 --status  # 何レース貯まっているか見るだけ（通信しない）
+    python3 ml/nk_place_morn.py 20260912 --refresh # ★レース一覧のキャッシュを捨てて取り直す
 　★`nk_odds_bulk` が走っていると**起動時に止まる**（終了コード2）。⚠**押し切るなら `--force`（推奨しない）**
 
 出力: **data/nk_odds_morn/place<YYYYMMDD>.jsonl**（1行1レース・追記）
@@ -93,14 +95,20 @@ def _ancestors():
     return out
 
 
-def bulk_running():
-    """★`nk_odds_bulk` が走っていないか（★枠連側の回答【4】: 規則は時間帯ではなく★同時実行）。
+# ★★同時に netkeiba を叩く可能性のあるもの（★枠連側の回答【4】: 規則は時間帯でなく同時実行）
+#   ⚠**`nk_odds_bulk` だけでなく `nk_fetch`（entries/results）も叩く**。
+#   　★枠連側の回答も「**entries の後に順番に流せば大丈夫**」＝**並走させない**という意味だった。
+FETCHERS = ("nk_odds_bulk", "nk_fetch", "nk_odds_combo")
 
-    → (走っている?, 説明)。★`pgrep`/`ps` が使えない環境では None（**勝手に続けない**）。
+
+def bulk_running():
+    """★他の取得プロセスが走っていないか。→ (走っている?, 説明)。
+
+    ★`pgrep`/`ps` が使えない環境では None（**勝手に続けない**）。
     ⚠**自分と祖先は除く**。★**このスクリプト自身（`nk_place_morn`）を含む行も除く**。
     """
     try:
-        r = subprocess.run(["pgrep", "-f", "nk_odds_bulk"],
+        r = subprocess.run(["pgrep", "-f", "|".join(FETCHERS)],
                            capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.SubprocessError) as e:
         return None, f"pgrep が使えない（{e}）"
@@ -119,8 +127,10 @@ def bulk_running():
             a = ""
         if "nk_place_morn" in a:
             continue                        # ★このスクリプトを起動した別の包み
-        hit.append(pid)
-    return (bool(hit), f"pid {' '.join(str(x) for x in hit)}" if hit else "走っていない")
+        if not any(f in a for f in FETCHERS):
+            continue                        # ★pgrep が拾ったが実体が違う
+        hit.append(f"{pid}({next(f for f in FETCHERS if f in a)})")
+    return (bool(hit), ("走っている: " + " ".join(hit)) if hit else "走っていない")
 
 
 def out_path(ymd):
@@ -167,7 +177,7 @@ def selftest():
     print(f"　4. **連続{MAX_FAIL}回失敗したら止まる**（終了コード2）"
           "　⚠★**自動再開する形に包まないこと**")
     b, why = bulk_running()
-    print(f"　4b. ★**nk_odds_bulk と同時に走らせない**（今: {why}）"
+    print(f"　4b. ★**他の取得と同時に走らせない**（{' / '.join(FETCHERS)}／今: {why}）"
           + ("　⚠**確認できない環境**" if b is None else ""))
     print(f"　5. **キャッシュを使わない・残さない**（鍵に時刻を入れ、生JSONは読んだら {CACHE} から消す）")
     ok &= OUT != "data/nk_odds" and not OUT.rstrip("/").endswith("nk_odds")
@@ -210,22 +220,36 @@ def main():
     # ★★★叩く前に必ず: nk_odds_bulk と同時に走らせない（枠連側の回答【4】）
     busy, why = bulk_running()
     if busy:
-        print(f"⚠⚠**`nk_odds_bulk` が走っている（{why}）。同時実行はしない**"
+        print(f"⚠⚠**他の取得プロセスが走っている（{why}）。同時実行はしない**"
               "　★**止まるのを待つか、`--force` で押し切る（★推奨しない）**")
         if "--force" not in sys.argv:
             return 2
     elif busy is None:
         print(f"⚠**同時実行の確認ができなかった（{why}）**"
-              "　★**手で `pgrep -f nk_odds_bulk` を見てから `--force` で実行すること**")
+              f"　★**手で `pgrep -f '{'|'.join(FETCHERS)}'` を見てから `--force` で実行すること**")
         if "--force" not in sys.argv:
             return 2
     else:
-        print(f"★同時実行の確認: `nk_odds_bulk` は{why}")
+        print(f"★同時実行の確認（{' / '.join(FETCHERS)}）: {why}")
 
-    ids = race_ids_of_day(ymd)
+    ids = race_ids_of_day(ymd, refresh="--refresh" in sys.argv)
     if not ids:
         print("⚠レース一覧が取れなかった（**当日でないか、まだ一覧が出ていない**）")
         return 1
+    # ★★一覧はキャッシュされる（`rlist_<日付>.html`）。⚠**開催途中に取った欠けた一覧が
+    # 　残っていると、こちらも欠けたまま集めてしまう**（2026-08-09 に 13/36 で固まった前例）。
+    # 　→ ★**場ごとに12レース揃っているかを見て、欠けていたら止める**。
+    per = {}
+    for i in ids:
+        per[i[4:6]] = per.get(i[4:6], 0) + 1
+    short = {k: v for k, v in per.items() if v < 12}
+    print(f"　場ごとのレース数: " + " / ".join(f"{k}:{v}" for k, v in sorted(per.items())))
+    if short:
+        print(f"⚠⚠**12レースに満たない場がある {short}**"
+              "　★**開催途中に取った一覧がキャッシュに残っている疑い**"
+              "　→ ★**`--refresh` を付けて取り直すこと**")
+        if "--refresh" not in sys.argv and "--force" not in sys.argv:
+            return 2
     print(f"★{ymd}: **{len(ids)}レース**"
           + ("　⚠**--dry: 先頭1レースだけ・保存しない**" if dry else ""))
     if dry:

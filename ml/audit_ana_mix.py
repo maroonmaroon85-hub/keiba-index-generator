@@ -1,396 +1,286 @@
-"""(205) ★★★**混合** — 「小さいズレは残差モデル、大きいズレは現行」は成り立つか
+"""(241) ★★★★**④の動きは「帯の中身が重くなったから」か** —— 構成を固定して測り直す
 
-★★**動機（2026-09-06・(204)の◇post-hoc）**:
-　★**λ=1.0 は小さいズレで現行を上回った**（**+9.1 vs +5.7円（ズレ0.030）/ +10.3 vs +8.1（0.050）**）。
-　★**現行は大きいズレで上**（**+16.5円（0.186）vs +10.9円（0.239）**）。
-　→ ★★**役割分担が成り立つなら、混ぜれば両方取れるはず**。
-　⚠**(100)(102)で「容量の違うモデルの混合」は採用実績がある**（+0.0025）。
-　　★**「容量の違う相手がいて初めて目標の違いが活きる」**——**今回は「市場への寄り方が違う相手」**。
+★★**動機（2026-09-10・(240)で自分が残した未測定）**:
+　★**(240)で ④（市場の校正ずれ）が −0.006 → −0.008 と出た**（**主判定は「近づかない」**）。
+　⚠**だが同時に ⑨ 帯の中央オッズが 46.7 → 50.6（+8%）で、帯の中身が重くなっていた**。
+　★★**重い馬ほど過大評価が強いなら、★中身が動いただけで④は広がる**。★**これを切り分ける**。
 
-⚠⚠**これはpost-hoc由来の仮説**。★**同じデータで同じマスを測り直しても検証にならない**。
-　★★**だから (201) の設計を使う**——**前半で重みを選び、後半で1回だけ試す**。
-　**そうすれば「post-hocで見つけた」ことによる下駄が、後半には持ち込まれない**。
+■ ★★**やること: 構成を2016年に固定して④を測り直す**
+　★**帯（単勝10倍以上）を★固定のオッズ小帯に割る**。**小帯ごとに④を出す**。
+　★**各年の④を「2016年の小帯構成」で重みづけし直す**（★**構成調整後の④**）。
+　→ ★**構成が原因なら、調整後の④は年で動かなくなる**。
 
 ────────────────────────────────────────────────────────────
-★★★ 事前登録（2026-09-06・**結果を見る前にコミットする**）
+★★★ 事前登録（2026-09-10・**結果を見る前にコミットする**）
 ────────────────────────────────────────────────────────────
 
-■ ★経路（判定基準25）: **q = 各腕のモデル / q_pool = 複勝の板**。⚠**q側は弱い**。
-■ ★手続き: **(204)の学習キャッシュ（`data/cache/form_pred.npz`）をそのまま使う**
-　＝**ウォークフォワード・3シード。★再学習しないので腕Aは厳密に再現するはず**。
+■ ★**小帯の境目（★先に決める・以後変えない）**: **[10,20) / [20,40) / [40,80) / [80,∞)**
+　⚠**この4分割は恣意的**。★**だが結果を見る前に決めており、以後変えない**。
+　★**中央オッズが46.7〜50.6なので、境目40と80が中央をまたぐように置いた**。
 
-■ ★★★**混合の作り方**
-　**pn_mix = w × pn_A + (1−w) × pn_E1**（**どちらもレース内で合計3に正規化済みなので、
-　　混ぜても合計3のまま**）。**w は「現行モデルの重み」**。
-| 腕 | w |
+■ ★★★★**主判定（★先に決める・これ1つ）**
+　★★**2016年の構成で重みづけした④（調整後）が、2016→2026 でどう動くか**。
+| ★**返り値** | ★**読み** |
 |---|---|
-| ★**A 現行** | **1.00**（★**内部対照**） |
-| **混合 0.75** | 0.75 |
-| **混合 0.50** | 0.50 |
-| **混合 0.25** | 0.25 |
-| **E λ=1.0** | **0.00** |
+| ★**調整後も −0.006→−0.008 のまま** | ★**構成のせいではない**。**(240)の④はそのまま読める** |
+| ★**調整後は横ばい（差が0.001未満）になる** | ★★**(240)の④の動きは構成のせいだった** |
 
-■ ★★★家族A（**5比較**）: **全期間・帯[0.15,∞) の「軸 − 乱」対応差**（**(204)と同じ物差し**）
-　⚠**これは記述に近い**（**post-hocのデータを含む**）。★**判定はするが、主判定ではない**。
+■ ★★ゲート2（判定基準42）——**この測定は何を返せば「構成は関係ない」か**
+　★**構成が関係ないなら、★各年で「生の④」と「調整後の④」がほぼ一致する（差 < 0.001）**。
+　★**両方を年別に併記する**。★**小帯ごとの④と構成比も全部出す**。
 
-■ ★★★家族B（**2比較・★主判定**）: ★**前半(2016-2020)で腕を選び、後半(2021-)で1回だけ試す**
-　★**選ぶ基準は前半の対応差のみ**。**後半は1回だけ見る**。**① 本 ② プラセボ（乱）**。
-　★★**「混合が本物なら、前半で選ばれた腕は後半でも現行を上回るはず」**。
-| ★**後半で現行を上回る** | ⚠**上回らない** |
-|---|---|
-| **役割分担は本物**。**混合を採る** | ⚠**post-hocの下駄だった**。**現行のまま** |
-　★**この表を先に書いておく**（判定基準42）。
+■ ★★★**ばらつきも同時に出す（★(240)で出していなかった）**
+　★**④のse をレース単位のブートストラップで出す**（**同一レースの馬は独立でない**）。
+　★**200回・seed固定**。→ ★**−0.006 と −0.008 の差が se の何倍かを見る**。
+　⚠**(240)で「広がった」と書いたが、se を出していなかった**。★**ここで補う**。
 
-■ ★★家族C（**記述**）: ★**対応差 vs 軸の平均ズレ の曲線**（**各腕 × 5帯**）。
-　★**混合の曲線が現行の曲線より上に来るか**を目で確認する。
+■ ★★★内部対照（**決定的・最初に見る**）
+　★**① 年別レース数が (236)(235)(240) と一致**:
+　　**2842 / 2807 / 2773 / 2767 / 2786 / 2813 / 2791 / 2780 / 2723 / 2758 / 1630**
+　★**② 帯の頭数 2016=10.377 / 2026=9.696（±0.02）**
+　★**③ 生の④が (240) と一致: 2016 −0.006 / 2026 −0.008（±0.001）**
+　⚠**3つとも立たなければ読まない**（判定基準32）。
 
-■ ★★ゲート2（判定基準42）——**仮説が偽なら何を返すか**
-　★**モデルに残余情報が無いなら、どの腕でも対応差は0**（**乱は同じオッズ帯**）。
-　★**w=1.00 は腕Aそのもの**——**(204)の +16.5円 / 97.1% / 3,677R を厳密に返すはず**。
+■ ⚠★**先に書いておく限界**
+　★**小帯の中でも構成は動きうる**（**[80,∞)の中で200倍が増える等**）。★**この測定は4分割の粒度でしか切れない**。
+　★**qp の定義（複勝板の調和平均・Σ=3）依存**。**2026は1,630レース＝途中まで**。
+　⚠**これは探索ではない。マスも軸も買い目も動かさない。運用は変えない**。
 
-■ ⚠ゲート1: (88)③④を再現（±3pt）／ ★ゲート板: 復元R 0.800±0.020 ／
-　★陽性対照: 腕Aで三連複BOX上位4 81.9%±1.5pt。
-■ ★★★内部対照（**決定的**）: **w=1.00 が (204) の 複勝ROI 97.1% ±0.2pt かつ 3,677R ±5**。
-　⚠**(204)で内部対照を3回外している**（**母集団の取り違え**）。★**今回は同じ条件・同じ
-　　キャッシュなので、厳密一致を要求する**。
-
-■ ★★★探索を守る（**7比較・Bonferroni α=0.01/7**）
-　⚠**標本300レース未満は判定しない**（判定基準5）。
-　★**採用条件に「wについて単調」**——**孤立した1点は採らない**。
-
-■ ★採用条件
-　1. ★**家族Bで、前半に選ばれた腕の後半対応差が、後半の腕Aの対応差を明確に上回る**
-　2. **本の縮み幅がプラセボの縮み幅より小さい**
-　3. **家族Aで w について単調**
-　4. **家族Cで混合の曲線が現行の曲線より上**
-
-■ 予想（⚠**当てにしない**・判定基準24。★**私は(198)(201)(203)で3回連続外した**）
-　★**混合は現行をわずかに上回るが、有意にはならないと見る**——
-　　**(204)で差が出たのは小さいズレの帯で、そこは対応差自体が小さいから**。
-　⚠**(100)(102)の混合の効果も +0.0025 と小さかった**。
-　★**「後半で現行を上回らない」なら、post-hocの下駄だったと結論する**。
+■ 予想（⚠**当てにしない**・★**私は12回外した**）
+　★**調整後もほとんど変わらないと見る**（**構成のせいではない**）。
+　★★**そしてそもそも④には trend が無く、−0.006 と −0.008 の差は se 1〜2本分だと見る**。
 
 ────────────────────────────────────────────────────────────
-★★★★ 実測（2026-09-06）—— **混合は採らない。post-hocの下駄だった**
+★★★★ 結果（2026-09-10・**事前登録をコミットしたあとに走らせた**）
 ────────────────────────────────────────────────────────────
+★★★**内部対照は3つとも立った**（年別レース数・帯の頭数・生の④が(240)と一致）。
+★**2016年の構成**: [10,20) 22.5% / [20,40) 22.8% / [40,80) 19.5% / [80,∞) 35.2%
 
-■ ゲート1 ／ ゲート板 0.8009 ／ 陽性対照 BOX4 81.9% ／
-　★★★内部対照（決定的）: **w=1.00・帯[0.15,∞) = 97.1%（3,677R）** → **(204)と厳密一致**
-
-■ ★★★★家族B（**主判定**）: ★**前半で選ばれたのは「現行そのもの」**
-| 腕 | 前半R | 後半R | ★前半の差 | ★**後半の差** | 前半ROI | ★**後半ROI** | 乱後半 |
-|---|---|---|---|---|---|---|---|
-| ★**w=1.00（現行）** | 2,353 | 1,324 | ★**+16.2円** | **+17.1円** | 96.7% | 97.9% | 80.8% |
-| **w=0.75** | 2,336 | 1,697 | +13.9円 | ★**+20.9円** | 98.0% | ★**99.2%** | 78.4% |
-| w=0.50 | 2,801 | 2,492 | +14.4円 | +17.2円 | 96.7% | 97.1% | 79.9% |
-| w=0.25 | 3,492 | 3,486 | +12.3円 | +13.3円 | 92.9% | 93.5% | 80.2% |
-| w=0.00（残差） | 4,120 | 4,428 | +10.9円 | +10.9円 | 91.5% | 90.8% | 79.9% |
-★★**前半で最良だったのは w=1.00（現行）**＝**混合は前半の時点で現行に負けている**。
-→ **後半の判定は「現行 vs 現行」で差 +0.0円**。⚠**採用条件1は満たされない**。
-⚠**w=0.75 の後半（+20.9円・ROI 99.2%）は目を引くが、前半では現行に2.3円負けている**
-　＝**再現性がない**。★**後半を見てから選び直したら設計が無意味になるので拾わない**。
-
-■ ★★★家族A（**全期間・post-hocのデータを含む**）
-| 腕 | R数 | 買う率 | 軸オッズ | 平均ズレ | 複勝ROI | ★**対応差** |
+| | 2016 | 2018 | 2020 | 2022 | 2024 | 2026 |
 |---|---|---|---|---|---|---|
-| w=1.00 | 3,677 | 12.5% | 10.4倍 | 0.186 | 97.1% | **+16.5円** |
-| ★**w=0.75** | 4,033 | 13.7% | 7.3倍 | 0.190 | ★**98.5%** | ★**+16.9円** |
-| w=0.50 | 5,293 | 18.0% | 5.7倍 | 0.202 | 96.9% | +15.7円 |
-| w=0.25 | 6,978 | 23.7% | 5.1倍 | 0.218 | 93.2% | +12.8円 |
-| w=0.00 | 8,548 | 29.0% | 5.0倍 | 0.239 | 91.1% | +10.9円 |
-★**5腕とも有意**。⚠**山型（w=0.75が頂点）で単調ではない**＝**採用条件3も満たさない**。
+| 構成比 [10,20) | 22.5% | 22.2% | 24.2% | 22.2% | 21.7% | 22.4% |
+| 構成比 [20,40) | 22.8% | 21.4% | 23.3% | 21.8% | 20.9% | 21.0% |
+| 構成比 [40,80) | 19.5% | 19.2% | 20.1% | 20.0% | 19.3% | 18.6% |
+| 構成比 **[80,∞)** | **35.2%** | 37.2% | 32.4% | 36.1% | 38.0% | **38.0%** |
+| ★④ [10,20) | −.0027 | −.0169 | −.0092 | −.0013 | −.0045 | **+.0062** |
+| ★④ [20,40) | −.0067 | −.0039 | +.0000 | −.0122 | −.0120 | −.0123 |
+| ★④ [40,80) | −.0059 | −.0064 | −.0017 | −.0115 | −.0123 | −.0181 |
+| ★④ **[80,∞)** | −.0073 | −.0083 | −.0071 | −.0078 | −.0088 | −.0100 |
+| ★★**生の④** | **−.0058** | −.0089 | −.0049 | −.0080 | −.0092 | **−.0084** |
+| ★★★**調整後の④** | **−.0058** | −.0089 | −.0049 | −.0080 | −.0093 | **−.0085** |
+| **差（調整後−生）** | +.0000 | +.0000 | −.0000 | −.0000 | −.0000 | **−.0001** |
+| ★**④のse** | .0013 | .0014 | .0014 | .0014 | .0015 | .0017 |
 
-■ ★★家族C: **(204)と同じ形が再現した**
-| 軸の平均ズレ | w=1.00（現行） | w=0.75 | w=0.00（残差） |
-|---|---|---|---|
-| 0.030 | +5.7円 | ★**+9.3円** | ★**+9.1円** |
-| 0.050 | +8.1円 | +9.9円 | ★**+10.3円** |
-| 0.078 | +9.2円 | +9.0円 | +8.4円 |
-| 0.122 | +13.0円 | +13.9円 | +13.4円 |
-| ★**最大帯** | ★**+16.5円**(0.186) | **+16.9円**(0.190) | +10.9円(0.239) |
-★**小さいズレでは残差側が上、大きいズレでは現行が上**＝**役割分担の形自体は再現した**。
-⚠**しかし混ぜても、前半→後半で再現する利得にはならなかった**。
+■ ★★★★**主判定の返り値: 構成のせいではない**
+　★**生の④ −0.0058 → −0.0084（−0.0025）／ 調整後 −0.0058 → −0.0085（−0.0026）**
+　★★**構成で説明できる分 = +0.0001（生の動きの −4%）＝★実質ゼロ**。
+　★**11年すべてで「調整後 − 生」が ±0.0001 以内**（**ゲート2の「差<0.001なら構成は関係ない」を満たす**）。
+　→ ★★**(240)の④は構成の影響を受けていない。そのまま読める**。
 
-■ ★★★結論（**採用条件 0/4・主判定で不合格**）
-　★★**(204)の◇post-hoc は post-hoc の下駄だった**。⚠**混合は採らない**。
-　★**この線で「モデルの形を変える」道は、残差学習(204)・混合(205)の両方で閉じた**。
-　⚠**測っていない形はまだある**（**別目的の学習・容量の違う相手との混合など**）。
-　　★**だが(100)(102)で測った混合の効果は +0.0025 と小さく、期待値は低い**。
+■ ★★★★**そして、そもそも④は動いていない（★(240)の書き方の訂正）**
+　★**2016と2026の差 −0.0025 / 差のse 0.0022 = ★1.16倍** → ★**seの2倍未満**。
+　⚠★★**(240)で「絶対値 0.006 → 0.008・むしろ広がった」と書いたのは言い過ぎだった**
+　　（**seを出していなかった**）。★**正しくは「動いていない」**（判定基準43）。
+　★**(240)の主判定「ゼロに近づいたか → 近づいていない」は変わらない**。
+　　★**変わるのは「広がった」の部分だけ**。→ ★★**11年ずっと −0.005〜−0.009 の横ばい**。
 
-■ ◇**post-hoc・未検定（拾わない）**: **w=0.75 の全期間 複勝ROI 98.5%**（買う率13.7%）
-　＝**この線の複勝の最高値**（**従来の最高は(192)の97.6% / (203)の97.3%**）。
-　⚠**前半で現行に負けているので採らない**。★**再開条件: 別の年で前半検証を繰り返し、
-　　w=0.75 が2期以上で現行を上回ったとき**。
+■ ★★**小帯ごとに見ると（★これは事前登録に無い記述・結論にしない）**
+| 小帯 | ★**11年の振れ** | ★**読み** |
+|---|---|---|
+| **[10,20)** | ⚠**−.0169 〜 +.0062（符号が変わる）** | ★**軽い穴は年でばらつく。2026は逆に過小評価** |
+| **[20,40)** | −.0133 〜 +.0000 | — |
+| **[40,80)** | −.0181 〜 −.0017 | — |
+| ★**[80,∞)** | ★**−.0115 〜 −.0071（11年すべて負・幅が最も狭い）** | ★★**重い穴の過大評価だけが一貫している** |
+　⚠**これは4つの小帯を後から見比べた記述**。★**主判定ではない**。
 
+■ ⚠**先に書いた限界のとおり**
+　★**小帯の中でも構成は動きうる**（**[80,∞)の中で200倍が増える等は切れていない**）。
+　★**qp の定義依存。2026は1,630レース＝途中まで**。
+
+■ ★**予想は2つとも当たった**（「調整後もほとんど変わらない」「④に trend は無く se 1〜2本分」）。
+　⚠**外し回数は12のまま**。
 
 実行: python3 ml/audit_ana_mix.py    自己テスト: python3 ml/audit_ana_mix.py --selftest
 """
-import math
-import os
 import sys
-from itertools import combinations
-from zlib import crc32
 
 import numpy as np
-import pandas as pd
 
 sys.path.insert(0, "ml")
 import features as F
-from audit_crosspool import load_races, payoff, zq
-from audit_ana_odds import BANDS, MIN_HORSES, band_of, gate1, roi_of
-from audit_ana_marg import WF_BOX4, WF_TOL
-from audit_ana_board import BOARD_R, BOARD_TOL, NPLACE, load_fuku_boards, qpool
-from audit_ana_band import GBANDS, PN_FLOOR
-from audit_ana_form import CACHE, EPS, NRAND, SEED
+from audit_crosspool import load_races
+from audit_ana_odds import MIN_HORSES
+from audit_ana_board import NPLACE, load_fuku_boards, qpool
+from audit_ana_fix import LFIX
+from audit_ana_marg import wf_predict
 from train_prod import add_odds_features
 
-WS = [1.00, 0.75, 0.50, 0.25, 0.00]
-ARMS = [f"w={w:.2f}" for w in WS]
-SPLIT = 2021
-MINCELL = 300
-KNOWN_ROI, KNOWN_N, ROI_TOL, N_TOL = 97.1, 3677, 0.2, 5
-NCMP = len(WS) + 2          # 5 + 2
-ALPHA = 0.01
-TOPB = GBANDS[-1]
+KNOWN_R = [2842, 2807, 2773, 2767, 2786, 2813, 2791, 2780, 2723, 2758, 1630]
+KNOWN_N = {2016: 10.377, 2026: 9.696}
+KNOWN_B = {2016: -0.006, 2026: -0.008}      # ★(240)の生の④
+NTOL, BTOL = 0.02, 0.001
+EDGES = [10.0, 20.0, 40.0, 80.0, float("inf")]   # ★小帯（先に決めた・変えない）
+NBOOT, SEED = 200, 20260910
+REF = 2016                                        # ★構成を固定する基準年
+
+
+def sub_of(o):
+    """★そのオッズがどの小帯か"""
+    for i in range(len(EDGES) - 1):
+        if EDGES[i] <= o < EDGES[i + 1]:
+            return i
+    return -1
+
+
+def boot_se(per_race, n):
+    """★レース単位のブートストラップで④のse（★同一レースの馬は独立でない）"""
+    if not per_race:
+        return float("nan")
+    s = np.array([x[0] for x in per_race], float)
+    c = np.array([x[1] for x in per_race], float)
+    g = np.random.default_rng(SEED)
+    out = []
+    for _ in range(n):
+        i = g.integers(0, len(s), len(s))
+        tc = c[i].sum()
+        out.append(s[i].sum() / tc if tc > 0 else np.nan)
+    return float(np.nanstd(out, ddof=1))
 
 
 def selftest():
     ok = True
-    z = zq(ALPHA / NCMP)
-    print(f"★腕 {len(ARMS)}本（w＝現行モデルの重み）: " + " / ".join(ARMS))
-    print(f"　**w=1.00 は現行そのもの（★内部対照） / w=0.00 は残差モデル λ=1.0**")
-    print(f"★家族A {len(WS)}比較（全期間・帯[0.15,∞)）＋ ★家族B 2比較"
-          f"（**前半で選び後半で1回・主判定**）→ **{NCMP}比較**・z = {z:.3f}")
-    # ★混合が合計3を保つこと
-    a = np.array([1.2, 0.9, 0.6, 0.3])
-    b = np.array([0.4, 1.1, 1.0, 0.5])
-    for w in WS:
-        m = w * a + (1 - w) * b
-        ok &= abs(m.sum() - 3.0) < 1e-9
-    print(f"★混合が合計3を保つ: {'★OK（全wで）' if ok else '⚠NG'}")
-    rng = np.random.default_rng(0)
-    n = 120_000
-    pay = rng.choice([0.0, 250.0, 900.0], size=n, p=[0.62, 0.30, 0.08])
-    m2 = float(np.mean([(pay[rng.permutation(n)] - pay[rng.permutation(n)]).mean()
-                        for _ in range(200)]))
-    print(f"★ゲート2（対応差）: **偽なら0** → {m2:+.3f}円　"
-          f"{'★OK' if abs(m2) < 2 else '⚠NG'}")
-    ok &= abs(m2) < 2
-    print(f"★★★内部対照（決定的）: **w=1.00 が (204)の 複勝ROI {KNOWN_ROI}% ±{ROI_TOL}pt "
-          f"かつ {KNOWN_N:,}R ±{N_TOL}**")
-    print("　⚠**(204)で内部対照を3回外している（母集団の取り違え）**。"
-          "★**今回は同じキャッシュ・同じ条件なので厳密一致を要求する**")
-    print("★★主判定の読み方: **後半で現行を上回る→役割分担は本物 / "
-          "上回らない→post-hocの下駄だった**")
+    print(f"★小帯（先に決めた）: " + " / ".join(
+        f"[{EDGES[i]:.0f},{'∞' if EDGES[i+1] == float('inf') else f'{EDGES[i+1]:.0f}'})"
+        for i in range(len(EDGES) - 1)))
+    ok &= sub_of(10.0) == 0 and sub_of(19.9) == 0 and sub_of(20.0) == 1
+    ok &= sub_of(79.9) == 2 and sub_of(80.0) == 3 and sub_of(9.9) == -1
+    print(f"　★割り当ての検算: 10.0→{sub_of(10.0)} / 19.9→{sub_of(19.9)} / 20.0→{sub_of(20.0)}"
+          f" / 79.9→{sub_of(79.9)} / 80.0→{sub_of(80.0)} / 9.9→{sub_of(9.9)}（帯の外）"
+          f"　{'★OK' if ok else '⚠NG'}")
+    print(f"★★★★主判定: **{REF}年の構成で重みづけした④が 2016→2026 でどう動くか**")
+    print("　★調整後も動く → **構成のせいではない** ／ ★横ばいになる → **構成のせいだった**")
+    print("★★ゲート2: **生の④と調整後の④を年別に併記。差<0.001なら構成は関係ない**")
+    print(f"★★★内部対照（**最初に見る**）: 年別レース数・帯の頭数・"
+          f"**生の④が(240)と一致（2016 {KNOWN_B[2016]} / 2026 {KNOWN_B[2026]}・±{BTOL}）**")
+    # ★ブートストラップの検算: 1頭1レース・ずれ0.05固定なら se は 0 に近い
+    pr = [(0.05, 1.0)] * 500
+    se0 = boot_se(pr, 50)
+    print(f"★seの検算: 全レース同じずれ0.05 → se {se0:.6f}（0に近いはず）"
+          f"　{'★OK' if se0 < 1e-9 else '⚠NG'}")
+    ok &= se0 < 1e-9
+    print("⚠**探索ではない。マスも軸も買い目も動かさない。運用は変えない**")
     print("★自己テスト: " + ("全部OK" if ok else "⚠NG"))
     return 0 if ok else 1
 
 
 def main():
-    z = zq(ALPHA / NCMP)
-    print("(205) ★★★**混合** — 「小さいズレは残差モデル、大きいズレは現行」は成り立つか")
-    print("⚠**post-hoc由来なので、★前半で選び後半で1回だけ試す**\n")
-
+    print("(241) ★★★★**④の動きは「帯の中身が重くなったから」か**\n")
     races = {r["rid"]: r for r in load_races()}
-    rows, bad = gate1(list(races.values()))
-    print("⚠**ゲート1**: (88)③④を別パーサで再現・許容±3pt")
-    for nm, n, roi, known, dd, okg in rows:
-        print(f"　{nm:<12}{roi:>7.1f}% vs {known:>5.1f}%　差 {dd:+.1f}pt"
-              f"　{'★立った' if okg else '⚠落ちた'}")
-    if bad:
-        print("\n⚠⚠**ゲート1が落ちた。読まない**。")
-        return
-
-    print("\n★複勝の板(type=2)を読む…")
     boards = load_fuku_boards()
-    print(f"　**{len(boards):,}レース分**")
-
     d = F.to_model(F.load_files())
     f = F.build_features(d)
     keep = (f["n_prior"] >= 1) & d["odds"].notna() & (d["odds"] > 0)
     d, f = d[keep].reset_index(drop=True), f[keep].reset_index(drop=True)
-    fx0, _ = F.encode_categoricals(f)
-    odds = d["odds"].to_numpy(float)
-    rid_arr = d["raceid"].to_numpy()
-    inv = 1.0 / odds
-    mkt = inv / pd.Series(inv).groupby(rid_arr).transform("sum").to_numpy()
-    pmk = np.clip(NPLACE * mkt, EPS, 1 - EPS)
-    init = np.log(pmk / (1 - pmk))
+    y = (d["finish"] <= 3).astype(int).to_numpy()
+    fx, _ = F.encode_categoricals(f)
+    fx = add_odds_features(fx, d["odds"].to_numpy(float), d["raceid"].to_numpy())
+    pred = wf_predict(d, fx, y, 3)
+    m = ~np.isnan(pred)
+    sub = d.loc[m, ["raceid", "umaban", "odds", "date", "finish"]].copy()
+    sub["p"] = pred[m]
 
-    if not os.path.exists(CACHE):
-        print(f"⚠⚠**学習キャッシュ {CACHE} が無い。(204)を先に走らせること**")
-        return
-    z0 = np.load(CACHE, allow_pickle=True)
-    if int(z0["n"]) != len(d):
-        print("⚠⚠**キャッシュの行数が合わない。読まない**")
-        return
-    print(f"★学習キャッシュを使う: {CACHE}")
-    pA, mE = z0["pA"], z0["mE"]
-    pE = 1.0 / (1.0 + np.exp(-(init + 1.0 * mE)))
-    msk = ~np.isnan(pA) & ~np.isnan(mE)
-    sub = d.loc[msk, ["raceid", "umaban", "odds", "date"]].copy()
-    sub["pA"] = pA[msk]
-    sub["pE"] = pE[msk]
-    print(f"★予測できた行 **{msk.sum():,}**")
-
-    K = {(a, b): {"fa": [], "fr": [], "gap": [], "od": [], "yr": []}
-         for a in ARMS for b in GBANDS}
-    Rs, box4, nall = [], [], 0
+    NS = len(EDGES) - 1
+    A = {}
     for rid, g in sub.groupby("raceid"):
-        r = races.get(str(rid))
-        bd = boards.get(str(rid))
+        rid = str(rid)
+        r, bd = races.get(rid), boards.get(rid)
         if r is None or bd is None:
             continue
         nums = {u for u, _, _ in r["horses"]}
-        if len(nums) < MIN_HORSES:
-            continue
         gg = g[g["umaban"].astype(int).isin(nums)]
         ub = gg["umaban"].astype(int).to_numpy()
         if len(gg) < MIN_HORSES or not all(int(u) in bd for u in ub):
             continue
         od = gg["odds"].to_numpy(float)
-        if not np.isfinite(od).all() or (od <= 0).any():
+        pv = gg["p"].to_numpy(float)
+        if not np.isfinite(od).all() or (od <= 0).any() or pv.sum() <= 0:
             continue
-        va = gg["pA"].to_numpy(float); ve = gg["pE"].to_numpy(float)
-        if va.sum() <= 0 or ve.sum() <= 0:
-            continue
-        nall += 1
-        qp, Rb = qpool([bd[int(u)] for u in ub], "harm")
-        Rs.append(Rb)
-        pnA = va / va.sum() * NPLACE
-        pnE = ve / ve.sum() * NPLACE
-        bx = [payoff(r, "三連複", list(c))
-              for c in combinations(sorted(int(u) for u in ub[np.argsort(-va)[:4]]), 3)]
-        if not any(x is None for x in bx):
-            box4.append(sum(bx) - 400.0)
-        bi = np.array([band_of(float(o), BANDS) for o in od])
+        qp, _ = qpool([bd[int(u)] for u in ub], "harm")
+        hit = (gg["finish"].astype(int).to_numpy() <= 3).astype(int)
         yr = int(gg["date"].iloc[0].year)
-        picks = {}
-        for sd in range(NRAND):
-            picks[sd] = np.random.default_rng([SEED + sd, crc32(str(rid).encode())])
-        for w, a in zip(WS, ARMS):
-            pn = w * pnA + (1 - w) * pnE
-            gap = pn - qp
-            for b in GBANDS:
-                lo, hi = b
-                cand = np.where((pn >= PN_FLOOR) & (gap >= lo) & (gap < hi))[0]
-                if not len(cand):
-                    continue
-                ai = int(cand[int(np.argmax(pn[cand]))])
-                fa = payoff(r, "複勝", [int(ub[ai])])
-                if fa is None:
-                    continue
-                vr, okall = [], True
-                for sd in range(NRAND):
-                    g2 = np.random.default_rng([SEED + sd, crc32(str(rid).encode())])
-                    pl = [int(ub[q]) for q in range(len(ub))
-                          if bi[q] == bi[ai] and q != ai]
-                    if not pl:
-                        okall = False
-                        break
-                    v = payoff(r, "複勝", [int(g2.choice(pl))])
-                    if v is None:
-                        okall = False
-                        break
-                    vr.append(v)
-                if not okall:
-                    continue
-                c = K[(a, b)]
-                c["fa"].append(fa); c["fr"].append(float(np.mean(vr)))
-                c["gap"].append(float(gap[ai])); c["od"].append(float(od[ai]))
-                c["yr"].append(yr)
-    print(f"★対象 **{nall:,}レース**")
+        a = A.setdefault(yr, {"R": 0, "n": 0, "pr": [],
+                              "sb": [[0.0, 0, []] for _ in range(NS)]})
+        a["R"] += 1
+        sel = np.where(od >= LFIX)[0]
+        a["n"] += len(sel)
+        dv = hit[sel] - qp[sel]
+        a["pr"].append((float(dv.sum()), float(len(sel))))
+        for k, i in enumerate(sel):
+            b = sub_of(float(od[i]))
+            if b < 0:
+                continue
+            a["sb"][b][0] += float(dv[k])
+            a["sb"][b][1] += 1
+            a["sb"][b][2].append((float(dv[k]), 1.0))
 
-    med = float(np.median(Rs))
-    okR = abs(med - BOARD_R) <= BOARD_TOL
-    print(f"■ ★ゲート板: 復元R = **{med:.4f}** → **{'★立った' if okR else '⚠⚠落ちた'}**")
-    box4 = np.asarray(box4, float)
-    g0 = 100.0 * (box4.sum() + 400.0 * len(box4)) / (400.0 * len(box4))
-    okb = abs(g0 - WF_BOX4) <= WF_TOL
-    print(f"■ ⚠**陽性対照（w=1.00）**: BOX上位4 **{g0:.1f}%** vs {WF_BOX4}%"
-          f" → **{'★立った' if okb else '⚠⚠落ちた'}**")
-    c1 = K[("w=1.00", TOPB)]
-    av = np.asarray(c1["fa"], float)
-    okc = abs(roi_of(av) - KNOWN_ROI) <= ROI_TOL and abs(len(av) - KNOWN_N) <= N_TOL
-    print(f"■ ★★★内部対照（決定的）: w=1.00・帯[0.15,∞) → **{roi_of(av):.1f}%**"
-          f"（{len(av):,}R） vs (204) {KNOWN_ROI}%（{KNOWN_N:,}R）"
-          f" → **{'★再現' if okc else '⚠⚠ズレた'}**")
-    if not (okR and okb and okc):
-        print("\n⚠⚠**ゲートが落ちた。読まない**（判定基準32）。")
+    ys = sorted(k for k in A if k >= 2016)
+    got = [A[u]["R"] for u in ys]
+    nn = {u: A[u]["n"] / A[u]["R"] for u in ys}
+    raw = {u: sum(x[0] for x in A[u]["pr"]) / sum(x[1] for x in A[u]["pr"]) for u in ys}
+    ok1 = got == KNOWN_R
+    ok2 = all(abs(nn[u] - v) <= NTOL for u, v in KNOWN_N.items() if u in nn)
+    ok3 = all(abs(raw[u] - v) <= BTOL for u, v in KNOWN_B.items() if u in raw)
+    print("★★★内部対照（**最初に見る**）")
+    print(f"　① 年別レース数 {'★一致' if ok1 else '⚠ずれた'}")
+    print(f"　② 帯の頭数 2016={nn.get(2016, float('nan')):.3f} / "
+          f"2026={nn.get(2026, float('nan')):.3f}　{'★一致' if ok2 else '⚠ずれた'}")
+    print(f"　③ 生の④ 2016={raw.get(2016, float('nan')):+.4f}（{KNOWN_B[2016]}） / "
+          f"2026={raw.get(2026, float('nan')):+.4f}（{KNOWN_B[2026]}）"
+          f"　{'★一致' if ok3 else '⚠ずれた'}")
+    if not (ok1 and ok2 and ok3):
+        print("⚠⚠**対照が落ちた。読まない**（判定基準32）。")
         return
 
-    print(f"\n{'='*112}")
-    print("■ ★★★家族A: **全期間・帯[0.15,∞)**（⚠**post-hocのデータを含む。主判定ではない**）")
-    print(f"\n{'腕':<10}{'R数':>8}{'買う率':>8}{'軸オッズ':>9}{'平均ズレ':>9}"
-          f"{'複勝ROI':>9}{'乱':>8}{'★対応差':>10}{'99%CI':>19}{'判定':>12}")
-    for a in ARMS:
-        c = K[(a, TOPB)]
-        av = np.asarray(c["fa"], float); rv = np.asarray(c["fr"], float)
-        if len(av) < MINCELL:
-            print(f"{a:<10}{len(av):>8,}　⚠**標本不足**")
-            continue
-        dd = av - rv
-        mu, se = dd.mean(), dd.std(ddof=1) / math.sqrt(len(dd))
-        print(f"{a:<10}{len(av):>8,}{100*len(av)/nall:>7.1f}%"
-              f"{np.mean(c['od']):>8.1f}倍{np.mean(c['gap']):>9.3f}"
-              f"{roi_of(av):>8.1f}%{roi_of(rv):>7.1f}%{mu:>+9.1f}円"
-              f"{f'[{mu-z*se:+.1f},{mu+z*se:+.1f}]':>19}"
-              f"{('★★有意' if mu - z*se > 0 else '⚠通らない'):>12}")
+    lab = [f"[{EDGES[i]:.0f},{'∞' if EDGES[i+1] == float('inf') else f'{EDGES[i+1]:.0f}'})"
+           for i in range(NS)]
+    wref = np.array([A[REF]["sb"][b][1] for b in range(NS)], float)
+    wref = wref / wref.sum()
+    print(f"\n★**{REF}年の構成（これで固定する）**: "
+          + " / ".join(f"{lab[b]} {100*wref[b]:.1f}%" for b in range(NS)))
 
-    print(f"\n{'='*112}")
-    print("■ ★★★★家族B（**主判定**）: ★**前半で腕を選び、後半で1回だけ試す**")
-    tbl = []
-    for a in ARMS:
-        c = K[(a, TOPB)]
-        yr = np.asarray(c["yr"], int)
-        h = yr < SPLIT
-        if h.sum() < MINCELL or (~h).sum() < MINCELL:
-            continue
-        av = np.asarray(c["fa"], float); rv = np.asarray(c["fr"], float)
-        dd = av - rv
-        tbl.append({"a": a, "n1": int(h.sum()), "n2": int((~h).sum()),
-                    "d1": dd[h].mean(), "d2": dd[~h].mean(),
-                    "r1": 100 * rv[h].mean() / 100.0, "v2": dd[~h],
-                    "roi1": roi_of(av[h]), "roi2": roi_of(av[~h]),
-                    "rr1": roi_of(rv[h]), "rr2": roi_of(rv[~h])})
-    print(f"\n{'腕':<10}{'前半R':>8}{'後半R':>8}{'★前半の差':>11}{'★後半の差':>11}"
-          f"{'縮み':>9}{'前半ROI':>9}{'後半ROI':>9}{'乱後半':>9}")
-    for x in tbl:
-        print(f"{x['a']:<10}{x['n1']:>8,}{x['n2']:>8,}{x['d1']:>+10.1f}円"
-              f"{x['d2']:>+10.1f}円{x['d1']-x['d2']:>+8.1f}円"
-              f"{x['roi1']:>8.1f}%{x['roi2']:>8.1f}%{x['rr2']:>8.1f}%")
-    base = [x for x in tbl if x["a"] == "w=1.00"]
-    b2 = base[0]["d2"] if base else float("nan")
-    best = max(tbl, key=lambda x: x["d1"])
-    v = np.asarray(best["v2"], float)
-    mu, se = v.mean(), v.std(ddof=1) / math.sqrt(len(v))
-    print(f"\n★**本（モデル）**: 前半で選ばれた腕 **{best['a']}**（前半 {best['d1']:+.1f}円）")
-    print(f"　★★**後半（1回だけ）**: **{mu:+.1f}円**　99%CI [{mu-z*se:+.1f},{mu+z*se:+.1f}]")
-    print(f"　★★**後半の現行(w=1.00) は {b2:+.1f}円** → **差 {mu-b2:+.1f}円**"
-          f"　→ **{'★★現行を上回った' if mu > b2 else '⚠上回らなかった'}**")
-    print(f"　★**縮み {best['d1']-mu:+.1f}円** ／ **全腕の後半平均 "
-          f"{np.mean([x['d2'] for x in tbl]):+.1f}円**")
+    print("\n" + " " * 26 + "".join(f"{u:>8}" for u in ys))
+    for b in range(NS):
+        print(f"{'構成比 ' + lab[b]:<26}"
+              + "".join(f"{100*A[u]['sb'][b][1]/max(A[u]['n'],1):>7.1f}%" for u in ys))
+    for b in range(NS):
+        print(f"{'★④ ' + lab[b]:<26}"
+              + "".join(f"{(A[u]['sb'][b][0]/A[u]['sb'][b][1] if A[u]['sb'][b][1] else float('nan')):>+8.4f}"
+                        for u in ys))
+    print(f"{'★★生の④':<24}" + "".join(f"{raw[u]:>+8.4f}" for u in ys))
+    adj = {}
+    for u in ys:
+        v = np.array([(A[u]["sb"][b][0] / A[u]["sb"][b][1]) if A[u]["sb"][b][1] else np.nan
+                      for b in range(NS)], float)
+        adj[u] = float(np.nansum(v * wref) / np.nansum(wref * ~np.isnan(v)))
+    print(f"{'★★★調整後の④':<22}" + "".join(f"{adj[u]:>+8.4f}" for u in ys))
+    print(f"{'　差（調整後−生）':<22}" + "".join(f"{adj[u]-raw[u]:>+8.4f}" for u in ys))
+    se = {u: boot_se(A[u]["pr"], NBOOT) for u in ys}
+    print(f"{'★④のse（レース単位）':<21}" + "".join(f"{se[u]:>8.4f}" for u in ys))
 
-    print(f"\n{'='*112}")
-    print("■ ★★家族C（**記述**）: **対応差 vs 軸の平均ズレ の曲線**")
-    print(f"\n{'帯':<14}" + "".join(f"{a:>20}" for a in ARMS))
-    for b in GBANDS:
-        lo, hi = b
-        nm2 = f"[{lo:.2f},{hi:.2f})" if hi < 9 else f"[{lo:.2f},∞)"
-        cells = []
-        for a in ARMS:
-            c = K[(a, b)]
-            av = np.asarray(c["fa"], float); rv = np.asarray(c["fr"], float)
-            if len(av) < MINCELL:
-                cells.append(f"{'—':>20}")
-                continue
-            cells.append(f"{np.mean(c['gap']):>6.3f}→{(av-rv).mean():>+6.1f}円({len(av):>5,})")
-        print(f"{nm2:<14}" + "".join(cells))
-
-    print("\n■ ★採用条件: **1.後半で現行を上回る（主判定） / 2.縮みがプラセボより小 / "
-          "3.wについて単調 / 4.曲線が上**")
-    print("⚠**後半を見てから w を変えない**——**変えたらこの設計は無意味になる**。")
-    print("\n⚠**枠連の運用には触れない**。**設定変更は提案しない**。")
+    y0, y1 = ys[0], ys[-1]
+    dr, da = raw[y1] - raw[y0], adj[y1] - adj[y0]
+    sd = float(np.hypot(se[y0], se[y1]))
+    print(f"\n■ ★★★★**主判定: {REF}年の構成で固定した④の動き**")
+    print(f"　★**生の④　　 {raw[y0]:+.4f} → {raw[y1]:+.4f}（{dr:+.4f}）**")
+    print(f"　★**調整後の④ {adj[y0]:+.4f} → {adj[y1]:+.4f}（{da:+.4f}）**")
+    print(f"　→ ★**構成で説明できる分 = {dr - da:+.4f}**"
+          f"（**生の動きの {100*(dr-da)/dr if dr else float('nan'):.0f}%**）")
+    print(f"\n■ ★★**そもそも動いているのか（se との比較）**")
+    print(f"　★**2016と2026の差 {dr:+.4f} / 差のse {sd:.4f} = ★{abs(dr)/sd if sd else float('nan'):.2f}倍**")
+    print(f"　→ ★**{'seの2倍未満＝ばらつきと区別がつかない' if abs(dr) < 2*sd else '⚠seの2倍以上'}**")
+    print(f"\n⚠**小帯の中でも構成は動きうる（4分割の粒度でしか切れない）**。"
+          f"**2026は1,630レース＝途中まで**。")
+    print("⚠**枠連の運用には触れない**。**設定変更は提案しない**。")
 
 
 if __name__ == "__main__":

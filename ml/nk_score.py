@@ -13,6 +13,7 @@ tidy形式（raceid, kind, combo, payout）には対応していない。こち�
 import csv
 import glob
 import json
+import os
 import sys
 
 
@@ -32,16 +33,39 @@ def load_pays(pattern="data/nk/pay*.csv"):
 
 
 def main():
-    pat = sys.argv[1] if len(sys.argv) > 1 else "data/reco/reco_*.json"
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    pat = args[0] if args else "data/reco/reco_*.json"
     files = sorted(glob.glob(pat))
     if not files:
         sys.exit(f"{pat} に推奨JSONがありません")
+    # ★★同じ開催日に複数の推奨ファイルがあれば**最後の1つだけ**使う（2026-08-16）。
+    #   例: 朝の `reco_20260816.json` と取り直しの `reco_20260816_pm.json`。
+    #   ⚠**両方数えると同じ日が二重計上される**（実際にそうなっていた）。
+    #   ★**「最後」＝ファイル名の辞書順で最後**＝取り直したほうが残る（判定が確定に近い側）。
+    by_day, dropped = {}, []
+    for f in files:
+        import re as _re
+        m = _re.search(r"(\d{8})", os.path.basename(f))
+        k = m.group(1) if m else f
+        if k in by_day:
+            dropped.append(by_day[k])
+        by_day[k] = f
+    files = [by_day[k] for k in sorted(by_day)]
+    if dropped:
+        print("⚠同じ開催日に複数の推奨ファイルがあったので**新しいほうだけ**使う（二重計上の防止）:")
+        for f in dropped:
+            print(f"　　除外 {os.path.basename(f)}")
+        print()
     pays = load_pays()
     print(f"払戻: {len(pays)}レース読込\n")
 
     # (表示名, 推奨JSONのキー, 1点の金額, 着順どおりか)
-    BETS = [("枠連", "wakuren", 100, False), ("三連複", "sanrenpuku_box", 100, False),
-            ("三連単", "sanrentan_2nd", 100, True)]
+    # ★三連単は**買わない**（(54)でROI79.3%＝三連複BOX4の84.5%に届かない）。
+    # 　推奨JSONには常に入っているが、合計に混ぜると「買ってもいない券種の負け」が
+    # 　成績に載って読み違える。--sanrentan を付けたときだけ集計する。
+    BETS = [("枠連", "wakuren", 100, False), ("三連複", "sanrenpuku_box", 100, False)]
+    if "--sanrentan" in sys.argv:
+        BETS.append(("三連単", "sanrentan_2nd", 100, True))
     # ★並行運用((83))。--dual で予測したJSONには "l5" が入っているので、同じ集計を別枠で回す。
     #   ⚠これは**決着には使えない**。1.6ptの差を実測で捉えるには約68,000レース＝43年かかる。
     #   目的は「L5が実際に動くか」「的中率が実際に下がるか」の確認と、重大な異常の検出。
@@ -49,18 +73,24 @@ def main():
     tot = {k: [0, 0, 0] for k, _, _, _ in BETS}
     tot.update({k: [0, 0, 0] for k, _, _, _ in ALT})
     n_diff = n_dual = 0     # 購入, 払戻, 的中本数
+    soft = [0, 0, 0, []]    # ★甘い軸の三連複1点: 購入, 払戻, 的中, 明細
     for fp in files:
         reco = json.load(open(fp, encoding="utf-8"))
         print(f"=== {reco['date']}（{fp}）")
         for rc in reco["races"]:
-            if rc.get("excluded"):
-                continue
+            # ★除外レースでも**甘い軸だけは採点する**。
+            # 　以前はここで `continue` していたので、除外レースに買い目が出ると
+            # 　**実際に買った1点が成績に入らない**（9頭未満で同じ穴を踏んでいる）。
+            # 　(117)で除外を20%→40%にしたぶん、該当する確率はちょうど2倍になった。
+            skip_bets = bool(rc.get("excluded"))
             p = pays.get(rc["raceid"] if "raceid" in rc else "")
             if p is None:      # 推奨JSONにraceidが無い版のため場所+Rから引けない場合がある
                 p = next((v for k, v in pays.items()
                           if k.endswith(f"{rc['r']:02d}")and rc["label"][:2] in k), None)
-            line = f"  {rc['label']:8s} 軸{rc['axis']:>2}番"
-            for name, key, unit, ordered in BETS:
+            line = f"  {'×除外' if skip_bets else '    '}{rc['label']:8s} 軸{rc['axis']:>2}番"
+            # ★枠連が発売されないレース（9頭未満）は、甘い軸の三連複だけを記録している。
+            # 　枠連・三連複BOXの「払戻データなし」を出しても意味が無いので飛ばす。
+            for name, key, unit, ordered in ([] if (rc.get("waku_na") or skip_bets) else BETS):
                 combos = rc.get(key) or []
                 if not combos or not p or name not in p:
                     if key != "sanrentan_2nd":   # 三連単は既定で買わないので「なし」を出さない
@@ -77,7 +107,21 @@ def main():
                 tot[name][1] += ret
                 tot[name][2] += len(hits)
                 line += f"  {name}: {bet}円→{ret:,}円" + (f" 的中{hits[0][0]}" if hits else "")
-            l5 = rc.get("l5")
+            # ★甘い軸の三連複1点（(112)運用）。**これが実際に買っている買い目**なのに
+            # 　採点されていなかった（8/8の中京5Rが記録から漏れていた）。
+            # 　★`buy` が真のレースだけ数える。年間60レースしか出ない水準なので、
+            # 　　緩い裾のものを混ぜると別の戦略の成績になってしまう。
+            sa = rc.get("soft_axis")
+            if sa and sa.get("buy") and p and "三連複" in p:
+                c = sa["sanrenpuku"]
+                k = tuple(sorted(int(x) for x in c.split("-")))
+                v = p["三連複"].get(k, 0)
+                soft[0] += 100
+                soft[1] += v
+                soft[2] += v > 0
+                soft[3].append((reco["date"], rc["label"], c, v))
+                line += f"  ★甘い軸{c}: 100円→{v:,}円"
+            l5 = None if skip_bets else rc.get("l5")
             if l5:
                 n_dual += 1
                 n_diff += 0 if l5.get("same_as_current") else 1
@@ -93,7 +137,9 @@ def main():
                     tot[name][1] += sum(v for _, v in hits)
                     tot[name][2] += len(hits)
                 line += ("  L5:同" if l5.get("same_as_current") else "  L5:違")
-            print(line)
+            # 除外レースで甘い軸も無いなら、何も足されていないので出さない
+            if not skip_bets or "★甘い軸" in line:
+                print(line)
 
     print()
     for name, _, _, _ in BETS + (ALT if n_dual else []):
@@ -106,6 +152,37 @@ def main():
         print(f"\n※L5併記 {n_dual}レース中 {n_diff}レース（{n_diff/n_dual*100:.0f}%）で買い目が現行と違う。"
               "★この比較で優劣は決着しない（1.6ptの差には約68,000レース＝43年必要）。"
               "見ているのは『L5が動くか』『的中率が実際に下がるか』だけ")
+    # ★甘い軸の三連複（(112)運用）。**現在ほんとうに買っているのはこれだけ**
+    if soft[0]:
+        bet, ret, hit, rows = soft
+        print(f"\n★甘い軸の三連複1点（裾2%・買うと判定した分だけ）")
+        for d, lab, c, v in rows:
+            print(f"   {d} {lab:8s} {c:10s} {'的中 ' + format(v, ',') + '円' if v else '外れ'}")
+        print(f"   購入{bet:,}円 / 払戻{ret:,}円 / 収支{ret-bet:+,}円 / "
+              f"回収率{ret/bet*100:.1f}% / 的中{hit}/{bet//100}本")
+        print("   ⚠**年間60レースしか出ない**。(111)の実測は656レースで99%CI[76.0,116.0]＝"
+              "判定不能。**数年かけて積む標本**であって、今の数字は読まないこと。")
+    else:
+        print("\n★甘い軸の三連複: 買うと判定したレースはまだ無い"
+              "（年間60レース程度なので、出ない週が正常）")
+
+        # ★★開催日ごとの一覧（**どの設定で出した推奨か**が後から分かるように・2026-08-16）
+    print("\n■ ★推奨の記録（**推奨レースを全部買った場合**。実際に買った分ではない）")
+    print(f"{'開催日':>10}{'紐':>4}{'除外率':>7}{'判定時刻':>18}{'R数':>6}{'枠連の購入':>11}")
+    for f in files:
+        try:
+            d = json.load(open(f, encoding="utf-8"))
+        except Exception:
+            continue
+        rs = [r for r in d.get("races", []) if not r.get("excluded")]
+        pt = d.get("partners")
+        if pt is None:      # 古いファイルは買い目の点数から推定する
+            pt = max((len(r.get("wakuren") or []) for r in rs), default=0)
+        print(f"{str(d.get('date','?')):>10}{pt:>4}{str(d.get('excl_pct') or '-'):>7}"
+              f"{str(d.get('odds_at') or '-'):>18}{len(rs):>6}{sum(len(r.get('wakuren') or []) for r in rs)*100:>10,}円")
+    print("⚠**紐が1と2で混ざっている**（2026-08-16に紐1へ変更）。**購入額が倍違うので合計は割り引いて読む**。")
+    print("⚠**この記録は「推奨どおり全部買った場合」**であって、**実際に買った分ではない**。")
+    print("　★**(112)の標本として使うのはこちらが正しい**（買う/買わないの判断が入らないので）。\n")
     print("\n※1日の結果に意味は無い（枠連の的中率は30%、三連複BOX4は20%）。"
           "長期の目安は両方とも84.5%。数十レース積んでから読むこと。")
 

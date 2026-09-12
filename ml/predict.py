@@ -276,13 +276,14 @@ def main():
             print(f"      三連複BOX {' '.join(trio)}（4点 400円）")
             if args.sanrentan:
                 print(f"      三連単 2着固定 {' '.join(tan)}（6点 600円 / ROI79.3%・非推奨）")
-            # ★各馬のスコア。列は `ml/score_table.py` の9列固定（predict_nk.py と同じ）。
+            # ★各馬のスコア。列は `ml/score_table.py` の10列固定（predict_nk.py と同じ）。
             #   順位だけでは「どのくらい推奨されているか」「市場とどこがズレているか」が分からない。
             print(ST.header("     "))
+            pop = ST.pop_ranks({u: info[(ri, u)]["odds"] for u in nums})
             for i, u in enumerate(nums):
                 print(ST.row(i + 1, u, info[(ri, u)]["name"], wk[u], float(praw[i]),
                              float(share[i]), mkt[u] / msum, info[(ri, u)]["odds"],
-                             indent="     "))
+                             pop[u], indent="     "))
         out_races.append({
             "track": m["track"], "r": m["r"], "label": lab, "fieldsize": n,
             "surface": m["surface"], "distance": m["distance"], "cls": m["cls"],

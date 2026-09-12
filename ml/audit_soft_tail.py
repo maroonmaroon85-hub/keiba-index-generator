@@ -41,7 +41,7 @@ from audit_crosspool2 import realized
 from audit_lbs import build_matrix, fit_lambda
 from audit_soft_combo import combo_q
 
-LINE = {"複勝": 0.800, "ワイド": 0.775, "馬連": 0.775, "馬単": 0.775,
+LINE = {"複勝": 0.800, "ワイド": 0.775, "馬連": 0.775, "馬単": 0.750,   # ★馬単は(162)で訂正
         "三連複": 0.750, "三連単": 0.725}
 TAILS = [0.20, 0.10, 0.05, 0.02, 0.01]        # ★事前登録。後から増やさない
 MAIN = ("三連複", "複勝")                       # ★本命はこの2つ（(105)で事前に絞った）

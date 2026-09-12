@@ -2,7 +2,9 @@
 
 ★何をする道具か
 　(111)(112)で見つけた買い方を実運用で出すための部品。
-　　**軸＝1番人気（単勝オッズ最小）／ 紐＝2・3番人気 → 三連複1点**
+　　**人気上位3頭（1・2・3番人気）ちょうどで三連複1点**
+　　★「軸→流し」ではない。**3頭固定＝組み合わせは1通り＝1点100円**。
+　　　（(111)では「軸→上位3頭」と書いていたが流しに読めるので改名した。中身は同じ）
 　　買うのは「**軸の複勝の期待払戻 E が小さいレース**」だけ。
 　E は **単勝オッズだけから計算できる**ので、Mac でもクラウドでも同じ値が出る。
 　　　E = 複勝の払戻率(0.8) ÷ (軸の3着以内確率) × 100 [円]
@@ -15,7 +17,7 @@
 　★λは(96)で各年ウォークフォワード推定した値の最新年。11年間 0.846〜0.876 / 0.720〜0.744 で安定。
 
 ★★実測（(111)(112)・2015年以降・11年）— **どの数字を信じるべきか**
-| 裾 | E の閾値 | 年間R数 | 三連複 軸→上位3頭 ROI | 99%CI | E[d｜S]（枠連） |
+| 裾 | E の閾値 | 年間R数 | 三連複 人気上位3頭 ROI | 99%CI | E[d｜S]（枠連） |
 |---|---|---|---|---|---|
 | 20% | ≤100円 | 596 | 81.4% | — | +0.0217 |
 | 10% | ≤94円 | 298 | 79.3% | — | +0.0197 |
@@ -37,6 +39,11 @@ FUKU_PAYBACK = 0.80
 
 # (裾, Eの閾値[円], 年間R数の目安) — (111)の実測から
 TIERS = [(0.02, 86.0, 60), (0.05, 90.0, 149), (0.10, 94.0, 298), (0.20, 100.0, 596)]
+
+# ★「買う」と判定する既定の水準。**最も絞る(2%・≤86円)** を既定にする。
+# 　理由: 三連複のROI 96.0% は**この水準でしか出ていない**（≤90円で83.2% / ≤100円で81.4%）。
+# 　既定を緩くすると「96.0%を見て買ったつもりが、実際には81.4%の買い目だった」が起きる。
+DEFAULT_TIER = 0.02
 
 
 def win_probs(odds):
@@ -80,6 +87,41 @@ def top3_probs(p, lam2=LAM2, lam3=LAM3):
     return out
 
 
+def trio_prob(p, idx, lam2=LAM2, lam3=LAM3):
+    """3頭の組が1〜3着を占める確率（λ補正Harville・6通りの順序を足す）。"""
+    w2 = [x ** lam2 for x in p]
+    w3 = [x ** lam3 for x in p]
+    W2, W3 = sum(w2), sum(w3)
+    a, b, c = idx
+    tot = 0.0
+    for x, y, z in ((a, b, c), (a, c, b), (b, a, c), (b, c, a), (c, a, b), (c, b, a)):
+        d1 = W2 - w2[x]
+        d2 = W3 - w3[x] - w3[y]
+        if d1 > 1e-12 and d2 > 1e-12:
+            tot += p[x] * (w2[y] / d1) * (w3[z] / d2)
+    return tot
+
+
+def detail(umabans, odds, tier=DEFAULT_TIER):
+    """1レースの中身を全部出す。**すべて単勝オッズだけから計算している**（モデル不使用）。"""
+    r = recommend(umabans, odds, tier)
+    if r is None:
+        return None
+    p = win_probs(odds)
+    t3 = top3_probs(p)
+    order = sorted(range(len(odds)), key=lambda i: odds[i])
+    idx = [umabans.index(x) for x in r["trio"]]
+    q = trio_prob(p, idx)
+    r["trio_prob"] = q
+    r["trio_expect"] = (0.75 / q * 100.0) if q > 0 else None      # 三連複の払戻率は75%
+    r["horses"] = [{"umaban": umabans[i], "odds": odds[i],
+                    "win": p[i], "top3": t3[i],
+                    "role": ("買" if i in order[:3] else ""),
+                    "pop": order.index(i) + 1}
+                   for i in order]
+    return r
+
+
 def axis_expect(odds):
     """→ (軸のindex, 軸の複勝の期待払戻E[円], 軸の3着以内確率)。**発走前に計算できる**。"""
     p = win_probs(odds)
@@ -88,12 +130,6 @@ def axis_expect(odds):
     k = max(range(len(p)), key=lambda i: p[i])       # 軸＝1番人気
     t3 = top3_probs(p)
     return k, FUKU_PAYBACK / t3[k] * 100.0, t3[k]
-
-
-# ★「買う」と判定する既定の水準。**最も絞る(2%・≤86円)** を既定にする。
-# 　理由: 三連複のROI 96.0% は**この水準でしか出ていない**（≤90円で83.2% / ≤100円で81.4%）。
-# 　既定を緩くすると「96.0%を見て買ったつもりが、実際には81.4%の買い目だった」が起きる。
-DEFAULT_TIER = 0.02
 
 
 def tier_of(e):
@@ -115,7 +151,7 @@ def threshold_of(tier):
 def recommend(umabans, odds, tier=DEFAULT_TIER):
     """→ dict。買い目は**オッズ順**（モデルではない）で決める。
 
-    軸＝1番人気 / 紐＝2・3番人気 → 三連複1点。
+    人気上位3頭ちょうどで三連複1点（流しではない）。
     `tier` を緩めると買うレースは増えるが、**実測ROIは下がる**（96.0→83.2→79.3→81.4）。
     """
     if len(umabans) < 3:

@@ -1,7 +1,7 @@
 """
 記録した買い目（`data/reco/reco_*.json`）を**表**で出す。
 
-列は `ml/score_table.py` の9列固定（順/馬番/馬名/枠/複勝圏内確率/レース内シェア/市場/差/単勝）で、
+列は `ml/score_table.py` の10列固定（順/馬番/馬名/枠/複勝圏内確率/レース内シェア/市場/差/単勝/人気）で、
 `ml/predict_nk.py` のコンソール出力と同じ定義・同じ並び。列の意味は score_table.py を見ること。
 
 ★標準ライブラリだけで動く（pandas/lightgbm 不要）。手元のMacでも回せるようにするため。
@@ -22,12 +22,13 @@ import score_table as ST
 
 
 def rows_of(rc):
-    """(順, 馬番, 馬名, 枠, 複勝圏内確率, レース内シェア, 市場, 単勝) を上位から。"""
+    """(順, 馬番, 馬名, 枠, 複勝圏内確率, レース内シェア, 市場, 単勝, 人気) を上位から。"""
     sc = rc.get("scores") or []
     mkt = ST.market_shares(sc)
+    pop = ST.pop_ranks({s["umaban"]: s.get("odds") for s in sc})
     for i, s in enumerate(sc, 1):
         yield (i, s["umaban"], s["name"], s["waku"], s["p"], s["share"],
-               mkt[s["umaban"]], s["odds"])
+               mkt[s["umaban"]], s["odds"], pop[s["umaban"]])
 
 
 def main():

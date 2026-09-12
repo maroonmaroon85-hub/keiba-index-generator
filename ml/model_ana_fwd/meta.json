@@ -1,0 +1,30 @@
+{
+ "purpose": "穴馬の前向き運用（当日の推奨）専用。wf_predict の2026年ぶんと同じ作り方",
+ "target": "top3 (finish<=3)",
+ "odds_features": [
+  "log_odds",
+  "mkt_prob"
+ ],
+ "train_filter": "year < 2026 かつ n_prior>=1 かつ odds>0",
+ "capacity": "l2",
+ "params": {
+  "n_estimators": 400,
+  "learning_rate": 0.03,
+  "num_leaves": 31,
+  "subsample": 0.8,
+  "colsample_bytree": 0.8,
+  "min_child_samples": 100,
+  "verbose": -1
+ },
+ "n_seed": 3,
+ "models": [
+  "model_0.txt",
+  "model_1.txt",
+  "model_2.txt"
+ ],
+ "rows_train": 562075,
+ "date_from": "2013-01-12",
+ "date_to": "2025-12-28",
+ "panel_rows": 591658,
+ "note": "⚠これは凍結値(113.4%/128.8%)を引き継がない。wf_predict と同じ作り方だが同じ予測ではない（ANA_RULE.md §6）"
+}

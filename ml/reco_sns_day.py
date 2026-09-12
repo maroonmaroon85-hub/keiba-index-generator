@@ -33,6 +33,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 SNS_GAP = 0.10
 
 
+def is_jump(rc):
+    """★★(243sns) 障害戦か（★距離だけで見る・判定は事前に決めたもの）
+
+    ★**障害 = 距離が100の倍数でない、または 3600m超**。
+    ★**JRAの平地は100mの倍数で最長3,600m**（ステイヤーズS）。
+    ⚠**障害にも切りの良い距離があるので、この判定は取りこぼす方向に外れる**。
+    """
+    try:
+        dist = float(rc.get("distance") or 0)
+    except (TypeError, ValueError):
+        return False
+    return dist > 0 and (dist % 100 != 0 or dist > 3600)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not args:
@@ -43,8 +57,23 @@ def main():
             gap_v = float(sys.argv[i + 1])
 
     import reco_ana_day as D
-    frozen = D.GAP
+    frozen, frozen_le = D.GAP, D.load_entries
     D.GAP = gap_v          # ★ここだけ差し替える（⚠ファイルは1行も書き換えない）
+
+    # ★★(243sns) 障害戦を★入口で落とす（⚠これも D のファイルは書き換えない）
+    #   ★**理由はROIではない**——**モデルが障害を「芝」として学習しているため
+    #   （生データに『障』が無い）。★障害では軸が2倍立つのに複勝は来ない
+    #   （24.0→14.3% / 22.0→17.4%）＝★ズレは妙味ではなくモデルの誤差**。
+    dropped = []
+
+    def _load_entries_flat(path):
+        rs = frozen_le(path)
+        keep = []
+        for rc in rs:
+            (dropped if is_jump(rc) else keep).append(rc)
+        return keep
+
+    D.load_entries = _load_entries_flat
 
     print(f"(242sns) ★★★**SNS用**：★**ズレの下限 {frozen} → {gap_v}**"
           f"（**(240sns)で選んだ水準・1日1.22本→4.63本**）")
@@ -55,9 +84,19 @@ def main():
     try:
         # ★★向こうの main() をそのまま呼ぶ（★スコアリングを複製しない）
         #   ⚠**役割欄に「★軸（穴馬）／紐1／紐2／紐3」が出るので、そこから印を作る**
-        return D.main()
+        rc0 = D.main()
     finally:
-        D.GAP = frozen     # ★呼び出し後に必ず戻す（★他が import しても汚さない）
+        D.GAP, D.load_entries = frozen, frozen_le   # ★必ず戻す（★他を汚さない）
+    if dropped:
+        print(f"\n⚠★**障害戦を {len(dropped)}レース除外した**（(243sns)）:")
+        for rc in dropped:
+            print(f"　　{rc['place']}{rc['r']:>2}R {rc.get('name','')[:16]}"
+                  f"　{rc.get('surface','')}{rc.get('distance','')}m")
+        print("　★**理由はROIではない**——**モデルが障害を「芝」として学習しているため**"
+              "（**生データに『障』が無い**）。")
+        print("　★**障害では軸が約2倍立つのに複勝は来ない**"
+              "（**24.0→14.3% / 22.0→17.4%**）＝★**ズレは妙味ではなくモデルの誤差**。")
+    return rc0
 
 
 if __name__ == "__main__":

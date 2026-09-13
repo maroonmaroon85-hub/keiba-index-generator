@@ -8,6 +8,8 @@ import glob
 import numpy as np
 import pandas as pd
 
+from nk_parse import norm_horse   # ★標準ライブラリ側に置いてある（nk_link がpandas無しで読むため）
+
 CAT_COLS = ["sex", "cond", "course", "sire", "damsire", "jockey", "trainer"]
 
 def _classcode(s):
@@ -39,7 +41,7 @@ def to_model(raw):
     d["surface"] = (raw[9].str.strip() == "ダ").astype(int)
     d["distance"] = pd.to_numeric(raw[11], errors="coerce")
     d["cond"] = raw[12].str.strip()
-    d["horse"] = raw[37].str.strip()
+    d["horse"] = raw[37].str.strip().map(norm_horse)   # ★8桁に揃える（上の norm_horse を読むこと）
     d["sex"] = raw[14].str.strip()
     d["age"] = pd.to_numeric(raw[15], errors="coerce")
     d["wtcarry"] = pd.to_numeric(raw[17], errors="coerce")

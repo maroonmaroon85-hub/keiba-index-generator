@@ -204,7 +204,11 @@ def main():
         # 　　（実際、2026-08-08に買った1本目の中京5Rが8頭立てで、記録から漏れた）。
         soft = soft_of(rc)
         if soft and soft["buy"]:
+            # ⚠この行は head を印字する**前**に出る（continue する分岐が下にあるため）。
+            # 　レース名を入れておかないと**1つ上のレースの行に付いて見える**。
+            # 　（2026-09-12: 阪神2Rの 2-5-6 が阪神1R=障害戦の行に付いた。JSONは正しかった）
             print(f"       ★甘い軸 三連複 {soft['sanrenpuku']}（人気上位3頭・1点100円）"
+                  f"  ＠{rc['place']}{rc['r']}R"
                   f"  軸{soft['axis']}番・複勝の期待払戻{soft['e_axis']:.0f}円"
                   f"（裾{int(soft['tier']*100)}%）")
         if len(rc["horses"]) < MIN_FIELD:

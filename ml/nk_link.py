@@ -31,6 +31,9 @@ import os
 import glob
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from nk_parse import norm_horse   # ★標準ライブラリのみ（features は pandas を引くので読まない）
+
 
 # ★netkeiba由来の成績も名寄せ表に入れる（2026-08-29のバグ修正）。
 #   これが無いと「初出走がDSnkにしかない馬」は永久に繋がらない（下記）。
@@ -51,6 +54,9 @@ def build_map(pattern="*.CSV", extra=(NK_PATTERN,)):
     　`d["horse"]` は同じ col37 を見るので、**10桁のままでも履歴側とは一致する**。
     　**足りなかったのは「名前→10桁ID」の対応表のほうだけ**だった。
     ⚠**アーカイブを先に読み `setdefault` で保持する**ので、既存の登録番号が上書きされることはない。
+    ⚠★**2026-09-06 追記**: **返す値も `features.norm_horse` で8桁に揃える**。
+    　**`to_model` 側を揃えたので、対応表だけ10桁のままだと今度はそちらが引けなくなる**
+    　（**アーカイブに無い新馬**は DSnk 由来の10桁が入るため）。★**両側を同じ規則で揃える**。
     """
     mp = {}
     files = sorted(glob.glob(pattern))
@@ -66,7 +72,8 @@ def build_map(pattern="*.CSV", extra=(NK_PATTERN,)):
                     birth = int("20" + r[0].strip().zfill(2)) - int(r[15])
                 except ValueError:
                     continue
-                mp.setdefault(f"{r[13].strip()}|{r[14].strip()}|{birth}", r[37].strip())
+                mp.setdefault(f"{r[13].strip()}|{r[14].strip()}|{birth}",
+                              norm_horse(r[37].strip()))
         if i % 200 == 0:
             print(f"  読込 {i}/{len(files)}ファイル…")
     return mp

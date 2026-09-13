@@ -25,8 +25,9 @@
 ```
 data/raceday/<日付>/brief.txt     ★人が読むぶん（画面に出したものそのまま）
 data/raceday/<日付>/tickets.json  ★機械が読むぶん（★夜の採点の唯一の入力）
-data/raceday/<日付>/waku.json     ★predict_nk.py の生JSON
+data/reco/reco_<日付>.json        ★★枠連側の正典（`ml/nk_score.py` が読む）
 ```
+⚠★**`data/reco/reco_<日付>.json` を止めないこと**。★**そこが (112) の標本の入口**。
 
 ■ ⚠★**朝に一本化できないもの＝甘い軸の三連複の「確定」**
 　★**穴馬・SNSは朝9時で凍結**（`ANA_RULE.md` §3。★変えたら標本が切れる）。
@@ -60,6 +61,23 @@ sys.path.insert(0, HERE)
 OUTDIR = "data/raceday"
 ENTRIES = "data/nk/entries{ymd}.json"
 MORN = "data/nk_odds_morn/place{ymd}.jsonl"
+
+# ★★板の取得時刻の上限（`ANA_MERGE_HANDOFF.md` Q1-b・穴馬側の案をそのまま採用・2026-09-13）
+#   ⚠**§3 は「朝9時」で凍結**。**(219) は「遅いほど確定に近い＝数字が良く出る方向」**なので、
+#   　★**無制限のドリフトは標本を静かに甘くする**。
+#   ⚠**年32本では、あとから時刻で層別して読むことは不可能**。★**入口で切るしかない**。
+#   → ★**超えた日は `in_sample=0` にする。★記録は残す**（捨てない）。
+BOARD_CUTOFF = "10:30"
+
+# ★★障害戦は穴馬側でも除外する（`ANA_MERGE_HANDOFF.md` Q2・穴馬側の推奨をそのまま採用）
+#   ★**生データのトラック種別は 芝/ダ の2値で「障」が無い**（`features.py`）
+#   　＝★**モデルは障害を芝として学習・予測している**。
+#   ★**実測（穴馬側1,398本）**: **障害は軸が約2倍立つ（4.6→8.5%）のに複勝的中は 24.0→14.3%**
+#   　＝★**ズレが妙味ではなくモデルの誤差**。
+#   ★**識別は `entries` の `surface == "障"` で完全**（⚠SNS側の距離推定より正確）。
+#   ⚠**前向き標本は切れない**——**2026-09-13 時点の標本1本（9/12 中山1R）は平地**で、
+#   　**障害から軸が立った行は1本も無い**。★**最も安いタイミングで入れた**。
+DROP_JUMP = True
 
 # ★取り込み元（★研究は各セッションのまま。★ここは「読んで取り込む」だけ）
 UPSTREAM = [
@@ -130,8 +148,15 @@ def need(ymd, lines):
 
 # ---------------------------------------------------------------- ①本命
 def run_waku(ymd, outdir):
-    """`predict_nk.py` をそのまま呼ぶ。→ (画面出力, 構造化した買い目)"""
-    wj = os.path.join(outdir, "waku.json")
+    """`predict_nk.py` をそのまま呼ぶ。→ (画面出力, 構造化した買い目)
+
+    ⚠★★**出力先は `data/reco/reco_<日付>.json`**（★**枠連側の統計の正典**）。
+    　★`ml/nk_score.py` が `data/reco/reco_*.json` を読んで (112) の標本を数えるので、
+    　**ここに書かないと記録が静かに止まる**。
+    　⚠**2026-09-13 に実際に止めた**——`data/raceday/<日付>/waku.json` にだけ書いていて、
+    　　**9/13 が正典に入っていなかった**（**枠連側の指摘で発覚・同日に埋め戻した**）。
+    """
+    wj = f"data/reco/reco_{ymd}.json"
     r = subprocess.run([sys.executable, "ml/predict_nk.py", ENTRIES.format(ymd=ymd),
                         "--out", wj], cwd=ROOT, capture_output=True, text=True)
     text = r.stdout + (("\n" + r.stderr) if r.returncode else "")
@@ -162,20 +187,44 @@ def run_ana(ymd, sns, gap=None):
       `tickets`          → 確定した買い目（軸・紐・組）を拾う
     ⚠**SNS側は `reco_sns_day` に `GAP` と障害戦の除外をやらせる**（★こちらでは真似しない）。
     """
+    import numpy as np
     import reco_ana_day as D
     rec, cur = {"races": []}, {"rid": None}
+    st = {"boards": {}, "ctx": {}}          # ★板の時刻 と 軸判定の材料（★記録用・値は変えない）
     by_kind = {k: name for name, _hk, k, _n in D.BUY}
 
     orig_lmb, orig_t = D.load_morn_boards, D.tickets
+    orig_ax, orig_le = D.axis_and_himo, D.load_entries
 
     def lmb(y):
         boards, p = orig_lmb(y)
+        st["boards"] = boards               # ★{rid: (板, fetched_at)}
 
         class B(dict):
             def get(self, k, *a):
                 cur["rid"] = k
                 return dict.get(self, k, *a)
         return B(boards), p
+
+    def le_nojump(path):
+        """★障害戦を入口で落とす（⚠`reco_ana_day.py` は1行も書き換えない）。"""
+        rs = orig_le(path)
+        if not DROP_JUMP:
+            return rs
+        keep = [rc for rc in rs if (rc.get("surface") or "") != "障"]
+        st["dropped"] = [f"{rc['place']}{rc['r']}R" for rc in rs
+                         if (rc.get("surface") or "") == "障"]
+        return keep
+
+    def hook_ax(ub, od, pv, board):
+        """⚠**値は一切変えない**。★G紐（ズレ降順）とQ紐（単勝昇順）を作る材料を控えるだけ。"""
+        r = orig_ax(ub, od, pv, board)
+        ax, _op, _X, _pn, _qp, gap = r
+        if ax is not None:
+            st["ctx"][cur["rid"]] = {"ub": [int(u) for u in ub],
+                                     "od": [float(x) for x in od],
+                                     "gap": [float(x) for x in gap], "ax": int(ax)}
+        return r
 
     def hook(kind, npt, ax, himo):
         out = orig_t(kind, npt, ax, himo)
@@ -198,6 +247,7 @@ def run_ana(ymd, sns, gap=None):
         return out
 
     D.load_morn_boards, D.tickets = lmb, hook
+    D.axis_and_himo, D.load_entries = hook_ax, le_nojump
     argv, buf = sys.argv, io.StringIO()
     try:
         if sns:
@@ -217,6 +267,42 @@ def run_ana(ymd, sns, gap=None):
     finally:
         sys.argv = argv
         D.load_morn_boards, D.tickets = orig_lmb, orig_t
+        D.axis_and_himo, D.load_entries = orig_ax, orig_le
+
+    # ---- ★板の時刻（`ANA_MERGE_HANDOFF.md` Q1-a・★今は復元できないので必ず残す）
+    for r in rec["races"]:
+        b = st["boards"].get(r["raceid"])
+        r["board_at"] = b[1] if b else ""
+        # ★板が上限を過ぎた日は標本に入れない（★記録は残す）
+        hhmm = r["board_at"][11:16] if len(r["board_at"]) >= 16 else ""
+        r["in_sample"] = bool(hhmm) and hhmm <= BOARD_CUTOFF
+        r["board_cutoff"] = BOARD_CUTOFF
+    rec["dropped_jump"] = st.get("dropped", [])
+
+    # ---- ★「記録だけ」の G馬単M4点 / Q三連単A4点（`ANA_MERGE_HANDOFF.md` Q3）
+    #   ⚠**買い目も軸も変えない**。★`ANA_RULE.md` §4-2 が「記録対象は6本」と書いているのに
+    #   　当日モードが P紐 と X紐 しか作らないため、G と Q が記録できていなかった。
+    #   ★**軸は `reco_ana_day` が決めたものをそのまま使い、紐の並べ替えだけここで作る**。
+    if not sns:
+        for r in rec["races"]:
+            c = st["ctx"].get(r["raceid"])
+            if not c:
+                continue
+            ub, od, gap, ax = (np.array(c["ub"]), np.array(c["od"]),
+                               np.array(c["gap"]), c["ax"])
+            G = [int(u) for u in ub[np.argsort(-gap, kind="mergesort")] if int(u) != ax]
+            Q = [int(u) for u in ub[np.argsort(od, kind="mergesort")] if int(u) != ax]
+            r["record_only"] = []
+            for label, kind, npt, himo in (("G馬単M4点", "馬単M", 4, G),
+                                           ("Q三連単A4点", "三連単A", 4, Q)):
+                t = orig_t(kind, npt, ax, himo)
+                if not t:
+                    continue
+                r["record_only"].append({
+                    "label": label, "kind": kind, "n": npt, "himo": himo[:3],
+                    "combos": [[int(x) for x in sel] for _, sel in t],
+                    "cost": 100 * len(t), "buy": False})
+
     rec["gap"] = gap if sns else D.GAP
     return buf.getvalue(), rec
 
@@ -286,22 +372,22 @@ def label_map(ymd):
 
 
 def marks(race):
-    """★印（◎○▲△）。★`reco_ana_day` が役割欄に出しているものをそのまま写す。
+    """★印（◎○▲△）。**◎＝軸 ／ ○▲△＝P紐（モデルの pv 降順）の1・2・3頭目**。
 
-    ◎＝軸 ／ ○▲＝紐P（モデル順の1・2位）／ △＝紐X の3頭目（人気順）
-    ⚠`ANA_SNS_RULE.md` §2 は「○▲△は全部P（モデル順）」と書いている。
-      ★**△だけ食い違う**（`reco_ana_day` の役割欄は「紐3（人気順）」）。
-      ★**ここは画面に出ている役割に合わせてある**。**どちらが正かはSNS側の判断**。
+    ★**`ANA_SNS_RULE.md` §2「紐はPで統一」に合わせてある**（**2026-09-13 変更**）。
+    ⚠**それ以前は △ だけ X紐の3頭目＝人気順だった**（`reco_ana_day` の役割欄に合わせていた）。
+    ★**SNSセッションの判断で §2 側に寄せた**（`ANA_SNS_HANDOFF.md` §0-1）。**理由3つ**:
+      ① **§2は測定を根拠にしている**（**P紐の朝9時一致率100% / Q(人気順)は75%**）
+      ② **役割欄は `ANA_RULE.md` の買い目（X三連単A4点）のために在り、目的が違う**
+      ③ **SNSの買い目は△を使わない**＝**買い目上の制約が無い**
+    ⚠**2026-09-12・09-13 に出した印は変更前のもの**。★**記録は書き換えていない**（投稿済みのため）。
     """
     p = next((t for t in race["tickets"] if t["kind"] == "馬単M"), None)
-    x = next((t for t in race["tickets"] if t["kind"] == "三連単A"), None)
     m = {"◎": race["axis"]}
-    if p:
-        for k, i in (("○", 0), ("▲", 1)):
-            if len(p["himo"]) > i:
-                m[k] = p["himo"][i]
-    if x and len(x["himo"]) > 2:
-        m["△"] = x["himo"][2]
+    rank = (p or {}).get("himo_rank") or []      # ★P紐の上位（モデル順）
+    for k, i in (("○", 0), ("▲", 1), ("△", 2)):
+        if len(rank) > i:
+            m[k] = rank[i]
     return m
 
 
@@ -341,6 +427,11 @@ def main():
         r["label"] = lab.get(r["raceid"], r["raceid"])
     for r in sns["races"]:
         r["marks"] = marks(r)
+    sns["note"] = ("★印の導出用。⚠**この tickets は買わない**——"
+                   "`reco_ana_day` の買い目（P馬単M4点＋X三連単A4点＝800円）がそのまま入っているが、"
+                   "`ANA_SNS_RULE.md` §3 のSNS用は 複勝1＋単勝1＋P馬連2＝400円で別物。"
+                   "★夜の採点も SNS は ◎の複勝・単勝・着順しか見ない")
+    sns["marks_rule"] = "◎=軸 / ○▲△=P紐(モデル順)1・2・3頭目（ANA_SNS_RULE.md §2・2026-09-13から）"
 
     # ---- まとめ
     n_waku = len(waku["wakuren"]) if waku else 0
@@ -430,9 +521,10 @@ def main():
     }
     json.dump(tickets, open(os.path.join(outdir, "tickets.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
-    print(f"★保存: {OUTDIR}/{ymd}/tickets.json ・ brief.txt ・ sns_post.txt ・ waku.json")
+    print(f"★保存: {OUTDIR}/{ymd}/tickets.json ・ brief.txt ・ sns_post.txt"
+          f" ／ ★正典 data/reco/reco_{ymd}.json")
     print("⚠★**買う前にコミットすること**（★結果を見る前に凍結した証拠になる）:")
-    print(f"　　git add {OUTDIR}/{ymd} data/nk data/nk_odds_morn && "
+    print(f"　　git add {OUTDIR}/{ymd} data/reco data/nk data/nk_odds_morn && "
           f"git commit -m '{d} の朝の買い目（結果を見る前）'")
     return 0
 

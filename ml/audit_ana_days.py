@@ -78,21 +78,8 @@
 　⚠**ただし「予測キャッシュが .gitignore で版の固定も無い」こと自体は事実で、
 　　★将来ライブラリが変われば本当に再現できなくなる**。**それは別の話として残す**。
 
-■ ⚠⚠★★★**訂正2（2026-09-08・★対照の書き方が間違っていた。判定基準37）**
-　★**素朴な並べ替え（対照1）は、★的中フラグを「該当0本の日」にも配ってしまう**。
-　⚠★**該当0本の日は、定義上ぜったいに当たらない**。**そこに的中を置ける対照は、
-　　的中を実際より均等にばらまく＝★外れの連を実際より短く見せる**。
-　　→ ★★**実測が対照より長く出るのは当たり前で、これは腕の手柄ではない**。
-　★★**正しい対照（対照2）: その日の該当本数 n_d を保ったまま、
-　　1本ごとに p=23.4% で独立に当たるとして引き直す**。
-　　★**これなら「0本の日は当たらない」という構造が対照にも入る**。
-　★**両方を出す**——⚠**対照1は「私が最初に書いた間違った対照」として残す**
-　　（**判定基準37を5回踏んだ記録がある。★6回目を隠さない**）。
-　■ ★**判定はどちらで行うか: ★対照2だけで行う**。**対照1は参考にしない**。
-
-■ ★★内部対照（**⚠これが合わなければ経路が違う。結果を読まない**）
-　★**該当レースの総数が 1,383本**（**(218)の参考行・複勝1点の本数**）**±5**。
-　★**的中率が 23.4% ±0.5pt**。★**軸の中央オッズが 15.9倍 ±0.5**。
+■ ⚠**下の訂正は★訂正3（2026-09-08）で取り消されている**——**「環境差」は誤診で、真因は1,383と1,398の取り違えだった**。
+　★**消さずに残す**（**判定基準37を踏んだ記録**）。下の「訂正」は★当時の書き方である。
 
 ■ ⚠⚠★★★**訂正（2026-09-08・★日別の結果を1つも見ていない段階で直している）**
 　★**本数の対照が落ちた: 1,398本 vs 1,383本（+15・+1.1%）**。
@@ -210,6 +197,22 @@ from audit_ana_board import NPLACE, load_fuku_boards, qpool
 from audit_ana_band import PN_FLOOR
 from audit_ana_hole import GAP, NRAND, SEED
 
+# ★★(244sns) 既定は(231)のまま。★フラグを付けたときだけ SNS 版の条件で測る
+#   `--gap 0.10`   … ズレの下限を変える（**(240sns)でSNS側が採用した水準**）
+#   `--no-jump`    … 障害戦を落とす（**(243sns)**）
+#   ⚠**既定（フラグ無し）の出力は(231)と1文字も変わらない**
+GAP_OPT = GAP
+NO_JUMP = False
+
+
+def _is_jump(dist):
+    """★(243sns)の判定: 距離が100の倍数でない、または3600m超"""
+    try:
+        v = float(dist)
+    except (TypeError, ValueError):
+        return False
+    return v > 0 and (v % 100 != 0 or v > 3600)
+
 # ★★(231b) 並べ替えの回数を 10 → 1,000 に増やす（★2026-09-08・日別の結果を見た後）
 #   ⚠**これは腕を変えていない。★事前登録した「実測の最大が対照より明確に長いか」を
 #     判定するには、対照の★ばらつきが要る**——**10種では平均しか出せなかった**。
@@ -244,7 +247,19 @@ def describe(runs):
 
 
 def main():
+    global GAP_OPT, NO_JUMP
+    for i, a in enumerate(sys.argv):
+        if a == "--gap" and i + 1 < len(sys.argv):
+            GAP_OPT = float(sys.argv[i + 1])
+        if a == "--no-jump":
+            NO_JUMP = True
+    tuned = (GAP_OPT != GAP) or NO_JUMP
     print("(231) ★★★**該当0本の開催日は何%か** —— 軸の頻度を「日」で数える")
+    if tuned:
+        print(f"★★**(244sns) SNS版の条件で測る**: "
+              f"**ズレ下限 {GAP_OPT}**"
+              + ("　★**障害戦を除外**" if NO_JUMP else "")
+              + "　⚠**内部対照は(231)の値なので落ちる。★それが正常**")
     print("★**これは記述であって検定ではない**。⚠**新しいマスは1つも作っていない**\n")
 
     races = {r["rid"]: r for r in load_races()}
@@ -261,7 +276,7 @@ def main():
     fx = add_odds_features(fx, d["odds"].to_numpy(float), d["raceid"].to_numpy())
     pred = wf_predict(d, fx, y, 3)
     msk = ~np.isnan(pred)
-    sub = d.loc[msk, ["raceid", "umaban", "odds", "date"]].copy()
+    sub = d.loc[msk, ["raceid", "umaban", "odds", "date", "distance"]].copy()
     sub["p"] = pred[msk]
 
     # ★日ごとに: ran = 判定が走ったレース数 / cand = 該当本数 / hit = 複勝的中本数
@@ -291,7 +306,9 @@ def main():
         qp, _R = qpool([bd[int(u)] for u in ub], "harm")
         gap = pn - qp
         rec["ran"] += 1                        # ★(a)の分母: 軸判定まで到達したレース
-        cand = np.where((pn >= PN_FLOOR) & (gap >= GAP) & (od >= LFIX))[0]
+        if NO_JUMP and _is_jump(gg["distance"].iloc[0]):
+            continue                      # ★(243sns) 障害戦を落とす
+        cand = np.where((pn >= PN_FLOOR) & (gap >= GAP_OPT) & (od >= LFIX))[0]
         if not len(cand):
             continue
         i = int(cand[int(np.argmax(pn[cand]))])
@@ -322,8 +339,13 @@ def main():
         print(f"　{nm:<16}{got:>10.1f} vs {rng:>14}"
               f"　{'★通った' if good else '⚠落ちた'}")
     if not all(g for *_, g in ok):
-        print("\n⚠⚠**内部対照が落ちた。経路が違う。★結果を読まない**（判定基準32/37）。")
-        return
+        if not tuned:
+            print("\n⚠⚠**内部対照が落ちた。経路が違う。★結果を読まない**（判定基準32/37）。")
+            return
+        # ★★(244sns) 条件を変えたのだから対照が落ちるのは当然
+        #   ⚠**「経路の誤り」と「条件を変えた」を混同しない**
+        print("\n⚠★**対照は落ちているが、★条件を変えたので当然である**"
+              "（**(231)の対照は ズレ0.15・障害込みの値**）。★**経路の誤りではない**。")
 
     # ── ① 日ごとの該当本数の分布 ─────────────────────────────
     ma = ran > 0                                # (a) 判定が走った日

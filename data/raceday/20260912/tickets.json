@@ -187,10 +187,15 @@
       "cost": 400,
       "buy": false
      }
-    ]
+    ],
+    "in_sample": true,
+    "board_cutoff": "10:30"
    }
   ],
-  "gap": 0.15
+  "gap": 0.15,
+  "dropped_jump": [
+   "阪神1R"
+  ]
  },
  "sns": {
   "races": [

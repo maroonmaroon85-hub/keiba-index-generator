@@ -62,6 +62,23 @@ OUTDIR = "data/raceday"
 ENTRIES = "data/nk/entries{ymd}.json"
 MORN = "data/nk_odds_morn/place{ymd}.jsonl"
 
+# ★★板の取得時刻の上限（`ANA_MERGE_HANDOFF.md` Q1-b・穴馬側の案をそのまま採用・2026-09-13）
+#   ⚠**§3 は「朝9時」で凍結**。**(219) は「遅いほど確定に近い＝数字が良く出る方向」**なので、
+#   　★**無制限のドリフトは標本を静かに甘くする**。
+#   ⚠**年32本では、あとから時刻で層別して読むことは不可能**。★**入口で切るしかない**。
+#   → ★**超えた日は `in_sample=0` にする。★記録は残す**（捨てない）。
+BOARD_CUTOFF = "10:30"
+
+# ★★障害戦は穴馬側でも除外する（`ANA_MERGE_HANDOFF.md` Q2・穴馬側の推奨をそのまま採用）
+#   ★**生データのトラック種別は 芝/ダ の2値で「障」が無い**（`features.py`）
+#   　＝★**モデルは障害を芝として学習・予測している**。
+#   ★**実測（穴馬側1,398本）**: **障害は軸が約2倍立つ（4.6→8.5%）のに複勝的中は 24.0→14.3%**
+#   　＝★**ズレが妙味ではなくモデルの誤差**。
+#   ★**識別は `entries` の `surface == "障"` で完全**（⚠SNS側の距離推定より正確）。
+#   ⚠**前向き標本は切れない**——**2026-09-13 時点の標本1本（9/12 中山1R）は平地**で、
+#   　**障害から軸が立った行は1本も無い**。★**最も安いタイミングで入れた**。
+DROP_JUMP = True
+
 # ★取り込み元（★研究は各セッションのまま。★ここは「読んで取り込む」だけ）
 UPSTREAM = [
     ("研究（枠連・本命）", "claude/handoff-env-check-2kexpo"),
@@ -176,7 +193,8 @@ def run_ana(ymd, sns, gap=None):
     st = {"boards": {}, "ctx": {}}          # ★板の時刻 と 軸判定の材料（★記録用・値は変えない）
     by_kind = {k: name for name, _hk, k, _n in D.BUY}
 
-    orig_lmb, orig_t, orig_ax = D.load_morn_boards, D.tickets, D.axis_and_himo
+    orig_lmb, orig_t = D.load_morn_boards, D.tickets
+    orig_ax, orig_le = D.axis_and_himo, D.load_entries
 
     def lmb(y):
         boards, p = orig_lmb(y)
@@ -187,6 +205,16 @@ def run_ana(ymd, sns, gap=None):
                 cur["rid"] = k
                 return dict.get(self, k, *a)
         return B(boards), p
+
+    def le_nojump(path):
+        """★障害戦を入口で落とす（⚠`reco_ana_day.py` は1行も書き換えない）。"""
+        rs = orig_le(path)
+        if not DROP_JUMP:
+            return rs
+        keep = [rc for rc in rs if (rc.get("surface") or "") != "障"]
+        st["dropped"] = [f"{rc['place']}{rc['r']}R" for rc in rs
+                         if (rc.get("surface") or "") == "障"]
+        return keep
 
     def hook_ax(ub, od, pv, board):
         """⚠**値は一切変えない**。★G紐（ズレ降順）とQ紐（単勝昇順）を作る材料を控えるだけ。"""
@@ -218,7 +246,8 @@ def run_ana(ymd, sns, gap=None):
                 "combos": combos, "cost": 100 * len(out)})
         return out
 
-    D.load_morn_boards, D.tickets, D.axis_and_himo = lmb, hook, hook_ax
+    D.load_morn_boards, D.tickets = lmb, hook
+    D.axis_and_himo, D.load_entries = hook_ax, le_nojump
     argv, buf = sys.argv, io.StringIO()
     try:
         if sns:
@@ -237,12 +266,18 @@ def run_ana(ymd, sns, gap=None):
             buf.write(f"\n⚠{e.code}\n")
     finally:
         sys.argv = argv
-        D.load_morn_boards, D.tickets, D.axis_and_himo = orig_lmb, orig_t, orig_ax
+        D.load_morn_boards, D.tickets = orig_lmb, orig_t
+        D.axis_and_himo, D.load_entries = orig_ax, orig_le
 
     # ---- ★板の時刻（`ANA_MERGE_HANDOFF.md` Q1-a・★今は復元できないので必ず残す）
     for r in rec["races"]:
         b = st["boards"].get(r["raceid"])
         r["board_at"] = b[1] if b else ""
+        # ★板が上限を過ぎた日は標本に入れない（★記録は残す）
+        hhmm = r["board_at"][11:16] if len(r["board_at"]) >= 16 else ""
+        r["in_sample"] = bool(hhmm) and hhmm <= BOARD_CUTOFF
+        r["board_cutoff"] = BOARD_CUTOFF
+    rec["dropped_jump"] = st.get("dropped", [])
 
     # ---- ★「記録だけ」の G馬単M4点 / Q三連単A4点（`ANA_MERGE_HANDOFF.md` Q3）
     #   ⚠**買い目も軸も変えない**。★`ANA_RULE.md` §4-2 が「記録対象は6本」と書いているのに

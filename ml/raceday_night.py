@@ -18,6 +18,12 @@ data/raceday/ledger.csv           ★通算（1行＝1レース1券種）★こ�
 data/reco/ana_forward.csv         ★穴馬の前向き標本（`ANA_RULE.md` §4-2 の形）
 ```
 
+■ ★★`in_sample` 列（**2026-09-13 から**）
+　★**板の取得時刻が上限（既定 10:30）を過ぎた開催日は `in_sample=0`**。★**行は残す**。
+　⚠**主判定を読むときは `in_sample=1` だけを使う**（`ANA_MERGE_HANDOFF.md` Q1-b）。
+　★**理由**: **(219) は「遅いほど確定オッズに近い＝数字が良く出る方向」**と測っている。
+　　⚠**年32本では、あとから時刻で層別して読むことは不可能**。★**入口で切るしかない**。
+
 ■ ★`ana_forward.csv` の列の意味（**`ANA_RULE.md` §4-2 に合わせてある**）
 | 列 | 中身 |
 |---|---|
@@ -209,7 +215,10 @@ def main():
                 "axis_finish": f if f is not None else "",
                 # ★時点を必ず残す（`ANA_MERGE_HANDOFF.md` Q1-a。★あとから復元できない）
                 "board_at": rc.get("board_at", ""),
-                "odds_at": (T.get("waku") or {}).get("odds_at", "")}
+                "odds_at": (T.get("waku") or {}).get("odds_at", ""),
+                # ★板が上限(既定10:30)を過ぎた日は 0。★行は残す（`ANA_MERGE_HANDOFF.md` Q1-b）
+                "in_sample": int(rc.get("in_sample", True)),
+                "board_cutoff": rc.get("board_cutoff", "")}
         print(f"　　{rc['label']}　軸 {ax}番"
               + (f"　→ ★**{f}着**" if f is not None else "　（着順不明）"))
         for t in rc["tickets"]:
@@ -243,7 +252,10 @@ def main():
               + "".join(f" / {t['label']} {line[t['label'] + '_ret']:,}円"
                         for t in rc.get("record_only", [])))
         if rc.get("board_at"):
-            print(f"　　　　（時点）板 {rc['board_at'][:16]}")
+            ok = rc.get("in_sample", True)
+            print(f"　　　　（時点）板 {rc['board_at'][:16]}"
+                  + ("" if ok else f"　⚠★**上限{rc.get('board_cutoff','')}を過ぎている"
+                                   f"→ in_sample=0（★記録は残す・標本には入れない）**"))
         ana_rows.append(line)
     if not T.get("ana", {}).get("races"):
         print("　　（朝の時点で該当0本）")

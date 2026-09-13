@@ -25,8 +25,9 @@
 ```
 data/raceday/<日付>/brief.txt     ★人が読むぶん（画面に出したものそのまま）
 data/raceday/<日付>/tickets.json  ★機械が読むぶん（★夜の採点の唯一の入力）
-data/raceday/<日付>/waku.json     ★predict_nk.py の生JSON
+data/reco/reco_<日付>.json        ★★枠連側の正典（`ml/nk_score.py` が読む）
 ```
+⚠★**`data/reco/reco_<日付>.json` を止めないこと**。★**そこが (112) の標本の入口**。
 
 ■ ⚠★**朝に一本化できないもの＝甘い軸の三連複の「確定」**
 　★**穴馬・SNSは朝9時で凍結**（`ANA_RULE.md` §3。★変えたら標本が切れる）。
@@ -130,8 +131,15 @@ def need(ymd, lines):
 
 # ---------------------------------------------------------------- ①本命
 def run_waku(ymd, outdir):
-    """`predict_nk.py` をそのまま呼ぶ。→ (画面出力, 構造化した買い目)"""
-    wj = os.path.join(outdir, "waku.json")
+    """`predict_nk.py` をそのまま呼ぶ。→ (画面出力, 構造化した買い目)
+
+    ⚠★★**出力先は `data/reco/reco_<日付>.json`**（★**枠連側の統計の正典**）。
+    　★`ml/nk_score.py` が `data/reco/reco_*.json` を読んで (112) の標本を数えるので、
+    　**ここに書かないと記録が静かに止まる**。
+    　⚠**2026-09-13 に実際に止めた**——`data/raceday/<日付>/waku.json` にだけ書いていて、
+    　　**9/13 が正典に入っていなかった**（**枠連側の指摘で発覚・同日に埋め戻した**）。
+    """
+    wj = f"data/reco/reco_{ymd}.json"
     r = subprocess.run([sys.executable, "ml/predict_nk.py", ENTRIES.format(ymd=ymd),
                         "--out", wj], cwd=ROOT, capture_output=True, text=True)
     text = r.stdout + (("\n" + r.stderr) if r.returncode else "")
@@ -435,9 +443,10 @@ def main():
     }
     json.dump(tickets, open(os.path.join(outdir, "tickets.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
-    print(f"★保存: {OUTDIR}/{ymd}/tickets.json ・ brief.txt ・ sns_post.txt ・ waku.json")
+    print(f"★保存: {OUTDIR}/{ymd}/tickets.json ・ brief.txt ・ sns_post.txt"
+          f" ／ ★正典 data/reco/reco_{ymd}.json")
     print("⚠★**買う前にコミットすること**（★結果を見る前に凍結した証拠になる）:")
-    print(f"　　git add {OUTDIR}/{ymd} data/nk data/nk_odds_morn && "
+    print(f"　　git add {OUTDIR}/{ymd} data/reco data/nk data/nk_odds_morn && "
           f"git commit -m '{d} の朝の買い目（結果を見る前）'")
     return 0
 

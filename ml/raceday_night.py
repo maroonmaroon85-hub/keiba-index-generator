@@ -33,8 +33,11 @@ data/reco/ana_forward.csv         ★穴馬の前向き標本（`ANA_RULE.md` §
 　　 　当日モード（`reco_ana_day.py`）が出していないので、ここでも記録できない**。
 　　 ★**軸の単勝・複勝は記録する**ので P単勝1点・P複勝1点は復元できるが、
 　　 　**G紐・Q紐は当日モードが計算していない**。★**足すかどうかは穴馬セッションの判断**。
-　3. ⚠**②甘い軸の三連複は「朝の候補」で採点している**。★**直前に `nk_race.py` で
-　　 　確定させた結果と食い違うことがある**。→ `--soft-actual 阪神2R,見送り` で上書きできる。
+　3. ★★**②甘い軸の三連複は「朝の候補」で採点する。★直前の判定で外さない**。
+　　 ★**既存6本と同じ規則（朝のオッズで E≤86）で数え続けるため**——**混ぜると (112) の
+　　 　本数として数えられなくなり、★外れた本が後から外されて上振れる**（枠連側の指摘）。
+　　 → `--soft-actual "阪神2R,見送り"` は★**別行（section「甘い軸(直前)」）を足すだけ**。
+　　 　★**朝 vs 直前を後から対応のある差で比べられる**。⚠**集計には朝の行だけを使う**。
 
 実行: python3 ml/raceday_night.py 20260913 [--soft-actual "阪神2R,見送り"] [--no-write]
 """
@@ -123,7 +126,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("ymd")
     ap.add_argument("--soft-actual", default="",
-                    help="甘い軸を直前判定で変えた場合。例 '阪神2R,見送り' / '阪神2R,2-5-7'（カンマ区切り・;で複数）")
+                    help="甘い軸の★直前判定を★別行として足す（★朝の行は消さない）。"
+                         "例 '阪神2R,見送り' / '阪神2R,2-5-7'（カンマ区切り・;で複数）")
     ap.add_argument("--no-write", action="store_true", help="台帳に書かず画面に出すだけ")
     a = ap.parse_args()
     ymd = a.ymd
@@ -163,19 +167,36 @@ def main():
               f"　{c:>5}円 → {r:>7,}円 {'★的中' if r else ''}{'' if k else '  ⚠配当未取得'}")
 
     # ---- ② 甘い軸の三連複
-    print("\n■ ② 甘い軸の三連複　⚠**朝の候補で採点している**")
+    # ⚠★★**朝の候補で採点する。★直前の判定で「外す」ことはしない**（枠連側の指摘・2026-09-13）
+    #   ★既存の6本は全部「朝のオッズで E≤86 と判定したもの」（`nk_score.py` が reco JSON の
+    #   　`soft_axis` を読むため）。**そこに「直前に見送ったので外す」を混ぜると
+    #   　標本が2つの規則の混合になり、(112) の本数として数えられなくなる**。
+    #   ⚠**さらに、人が後から見た情報で標本から抜く操作になる**——(168)(170) と同じ形で、
+    #   　**外れた本が外されがちなので上振れる**。
+    #   → ★**朝の行は必ず残し、直前の判定は★別の行（section「甘い軸(直前)」）に足す**。
+    #     ★**両方あれば「朝 vs 直前」を対応のある差で後から比べられる。捨てると復元できない**。
+    print("\n■ ② 甘い軸の三連複　★朝の候補で採点（★既存6本と同じ規則）")
     for x in T["waku"]["soft_sanrenpuku"] if T.get("waku") else []:
-        act = override.get(x["label"], x["combo"])
-        if act in ("見送り", "見送", "skip", "-"):
-            print(f"　　{x['label']:>9}　★**直前判定で見送り**（--soft-actual 指定）— 記録しない")
-            continue
-        note = "" if act == x["combo"] else f"直前に {x['combo']}→{act} へ変更"
-        combos = [[int(n) for n in act.split("-")]]
+        combos = [[int(n) for n in x["combo"].split("-")]]
         c, r, h, k = score_set(pays, x["raceid"], "三連複", combos)
         unknown += (not k)
-        rows.append(row(date, x["label"], x["raceid"], "甘い軸", "三連複", c, r, h, k, note))
-        print(f"　　{x['label']:>9}　{act:<12}　{c:>5}円 → {r:>7,}円 "
-              f"{'★的中' if r else ''}{'' if k else '  ⚠配当未取得'}{'　' + note if note else ''}")
+        rows.append(row(date, x["label"], x["raceid"], "甘い軸", "三連複", c, r, h, k))
+        print(f"　　{x['label']:>9}　{x['combo']:<12}　{c:>5}円 → {r:>7,}円 "
+              f"{'★的中' if r else ''}{'' if k else '  ⚠配当未取得'}")
+        act = override.get(x["label"])
+        if act is None:
+            continue
+        if act in ("見送り", "見送", "skip", "-"):
+            rows.append(row(date, x["label"], x["raceid"], "甘い軸(直前)", "三連複", 0, 0,
+                            [], True, "直前判定で見送り"))
+            print(f"　　　　└ ★直前判定: **見送り**（★朝の行は上に残してある）")
+        else:
+            combos2 = [[int(n) for n in act.split("-")]]
+            c2, r2, h2, k2 = score_set(pays, x["raceid"], "三連複", combos2)
+            rows.append(row(date, x["label"], x["raceid"], "甘い軸(直前)", "三連複",
+                            c2, r2, h2, k2, f"朝 {x['combo']} → 直前 {act}"))
+            print(f"　　　　└ ★直前判定: {act}　{c2}円 → {r2:,}円"
+                  f"{' ★的中' if r2 else ''}")
 
     # ---- ③ 穴馬（自分用）
     print("\n■ ③ 穴馬（自分用）　★8点800円/レース")
@@ -229,6 +250,7 @@ def main():
         print("　　（朝の時点で該当0本＝「見送り」を投稿した日）")
 
     # ---- まとめ
+    # ⚠**「甘い軸(直前)」は集計に入れない**（★朝の行と同じレースなので二重になる）
     buy = [r for r in rows if r["section"] in ("本命", "甘い軸", "穴馬")]
     c, r_ = sum(x["cost"] for x in buy), sum(x["ret"] for x in buy)
     print("\n" + "=" * 78)
@@ -238,6 +260,38 @@ def main():
               "をMacで叩いてから、もう一度この採点を走らせること")
     print("⚠★**1日の数字には意味が無い**。★**穴馬の主判定は「読むのは年1回」**"
           "（`ANA_RULE.md` §5-2・判定基準43）")
+
+    # ---- ★正典との照合（枠連側の指摘・2026-09-13）
+    #   ★`ml/nk_score.py` が統計の正典（入力は凍結済みJSONと払戻CSVだけ＝いつ誰が回しても同じ）。
+    #   ★`ledger.csv` は運用の道具で、手で維持する状態なのでずれても気づけない。
+    #   → ★**毎晩ここで突き合わせ、ずれたら ledger 側を疑う**。
+    print("\n■ ★正典（ml/nk_score.py）との照合")
+    reco = os.path.join(ROOT, f"data/reco/reco_{ymd}.json")
+    if not os.path.exists(reco):
+        print(f"　⚠**data/reco/reco_{ymd}.json が無い**。★**朝の一括がここに書いていない**＝"
+              "**(112) の標本の入口が塞がっている**。★`ml/raceday.py` の出力先を確かめること")
+    else:
+        import subprocess
+        rr = subprocess.run([sys.executable, "ml/nk_score.py", reco], cwd=ROOT,
+                            capture_output=True, text=True)
+        got = None
+        for ln in rr.stdout.splitlines():
+            if ln.strip().startswith("枠連"):
+                import re
+                m = re.search(r"購入([\d,]+)円 / 払戻([\d,]+)円", ln)
+                if m:
+                    got = (int(m.group(1).replace(",", "")), int(m.group(2).replace(",", "")))
+        mine = (sum(x["cost"] for x in rows if x["section"] == "本命"),
+                sum(x["ret"] for x in rows if x["section"] == "本命"))
+        if got is None:
+            print(f"　⚠**nk_score.py から枠連の行を読めなかった**（★手で `python3 ml/nk_score.py "
+                  f"{reco}` を確かめること）")
+        elif got == mine:
+            print(f"　★**一致**　枠連 購入{mine[0]:,}円 / 払戻{mine[1]:,}円")
+        else:
+            print(f"　⚠★★**食い違い**　正典 購入{got[0]:,}円/払戻{got[1]:,}円 vs "
+                  f"台帳 購入{mine[0]:,}円/払戻{mine[1]:,}円")
+            print("　　★**正典（nk_score.py）が正。★台帳側を疑うこと**")
 
     if a.no_write:
         print("\n（--no-write なので台帳に書いていない）")

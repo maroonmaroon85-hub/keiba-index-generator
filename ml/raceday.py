@@ -221,6 +221,59 @@ def run_ana(ymd, sns, gap=None):
     return buf.getvalue(), rec
 
 
+def entries_index(ymd):
+    """→ {raceid: {場・R・レース名・馬場距離・馬番→(馬名, 単勝), 馬番→人気}}。★投稿の materials。"""
+    p = os.path.join(ROOT, ENTRIES.format(ymd=ymd))
+    if not os.path.exists(p):
+        return {}
+    d = json.load(open(p, encoding="utf-8"))
+    out = {}
+    for rc in (d.get("races", []) if isinstance(d, dict) else d):
+        hs = rc.get("horses") or []
+        name, odds = {}, {}
+        for h in hs:
+            try:
+                u = int(h["umaban"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            name[u] = h.get("name", "")
+            try:
+                odds[u] = float(h["odds"])
+            except (KeyError, TypeError, ValueError):
+                pass
+        pop = {u: i + 1 for i, u in enumerate(sorted(odds, key=lambda k: odds[k]))}
+        out[rc["raceid"]] = {"place": rc["place"], "r": rc["r"], "name": rc.get("name", ""),
+                             "surface": rc.get("surface", ""), "distance": rc.get("distance", ""),
+                             "name_of": name, "odds_of": odds, "pop_of": pop}
+    return out
+
+
+def sns_post(races, idx, ymd):
+    """★そのまま貼れる投稿文。★ハッシュタグは #<場><YYMMDD>。
+
+    ⚠**数字は◎の人気だけ**（`ANA_SNS_RULE.md` §8「買い目の羅列は出さない」「凍結値を添えない」）。
+    """
+    out = []
+    for rc in races:
+        e = idx.get(rc["raceid"])
+        if not e:
+            continue
+        blk = [f"【{e['place']}{e['r']}R {e['name']}】{e['surface']}{e['distance']}m"]
+        for k in ("◎", "○", "▲", "△"):
+            u = rc["marks"].get(k)
+            if u is None:
+                continue
+            line = f"{k} {u} {e['name_of'].get(u, '')}"
+            if k == "◎":
+                pop = e["pop_of"].get(u)
+                line += f"  {pop}番人気" if pop else ""
+            blk.append(line)
+        blk.append("")
+        blk.append(f"#{e['place']}{ymd[2:]}")
+        out.append("\n".join(blk))
+    return "\n\n".join(out)
+
+
 def label_map(ymd):
     p = os.path.join(ROOT, ENTRIES.format(ymd=ymd))
     if not os.path.exists(p):
@@ -283,7 +336,7 @@ def main():
     waku_txt, waku = run_waku(ymd, os.path.join(OUTDIR, ymd))
     ana_txt, ana = run_ana(ymd, sns=False)
     sns_txt, sns = run_ana(ymd, sns=True, gap=a.sns_gap)
-    lab = label_map(ymd)
+    lab, eidx = label_map(ymd), entries_index(ymd)
     for r in ana["races"] + sns["races"]:
         r["label"] = lab.get(r["raceid"], r["raceid"])
     for r in sns["races"]:
@@ -342,6 +395,12 @@ def main():
     if not sns["races"]:
         s.append("　　（該当なし＝★「見送り」を投稿する。`ANA_SNS_RULE.md` §8）")
     s.append("")
+    if sns["races"]:
+        s.append("■ ④ 投稿文（★そのまま貼れる）")
+        s.append("")
+        for ln in sns_post(sns["races"], eidx, ymd).splitlines():
+            s.append("    " + ln if ln else "")
+        s.append("")
     s.append("■ ⚠投稿に添えてはいけない数字")
     s.append("　　★**11年の凍結値（113.4% / 128.8% / 複勝23.5%）は当てはまらない**"
              "——**朝9時の板＋固定モデル＋ズレ下限の変更で別の量**（`ANA_SNS_RULE.md` §8）")
@@ -360,6 +419,8 @@ def main():
     print(detail)
 
     open(os.path.join(outdir, "brief.txt"), "w", encoding="utf-8").write(brief + detail)
+    post = sns_post(sns["races"], eidx, ymd) if sns["races"] else "今日は該当0本。見送りです。"
+    open(os.path.join(outdir, "sns_post.txt"), "w", encoding="utf-8").write(post + "\n")
     tickets = {
         "date": ymd,
         "generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -369,7 +430,7 @@ def main():
     }
     json.dump(tickets, open(os.path.join(outdir, "tickets.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
-    print(f"★保存: {OUTDIR}/{ymd}/tickets.json ・ brief.txt ・ waku.json")
+    print(f"★保存: {OUTDIR}/{ymd}/tickets.json ・ brief.txt ・ sns_post.txt ・ waku.json")
     print("⚠★**買う前にコミットすること**（★結果を見る前に凍結した証拠になる）:")
     print(f"　　git add {OUTDIR}/{ymd} data/nk data/nk_odds_morn && "
           f"git commit -m '{d} の朝の買い目（結果を見る前）'")

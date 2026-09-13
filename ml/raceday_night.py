@@ -29,10 +29,11 @@ data/reco/ana_forward.csv         ★穴馬の前向き標本（`ANA_RULE.md` §
 
 ■ ⚠★★**先に書いておく限界（★数字を読む前に）**
 　1. ★**`ANA_RULE.md` §5-2 の主判定は「読むのは年1回」**。⚠**開催日ごとにROIを読まないこと**（判定基準5・43）。
-　2. ⚠**穴馬の「記録だけ4本」（P複勝1点・P単勝1点・G馬単M4点・Q三連単A4点）は
-　　 　当日モード（`reco_ana_day.py`）が出していないので、ここでも記録できない**。
-　　 ★**軸の単勝・複勝は記録する**ので P単勝1点・P複勝1点は復元できるが、
-　　 　**G紐・Q紐は当日モードが計算していない**。★**足すかどうかは穴馬セッションの判断**。
+　2. ★**穴馬の「記録だけ4本」は4本とも記録している**（**2026-09-13 から**）。
+　　 **P複勝1点・P単勝1点＝軸から復元／G馬単M4点・Q三連単A4点＝`ml/raceday.py` が
+　　 　G紐（ズレ降順）・Q紐（単勝昇順）を作って控える**（`ANA_MERGE_HANDOFF.md` Q3）。
+　　 ⚠**買い目も軸も変えていない**＝`ANA_RULE.md` §5-2 規則4 には当たらない。
+　　 ⚠**9/12 の1本目だけは G・Q が無い**（★仕組みを足す前だったため）。
 　3. ★★**②甘い軸の三連複は「朝の候補」で採点する。★直前の判定で外さない**。
 　　 ★**既存6本と同じ規則（朝のオッズで E≤86）で数え続けるため**——**混ぜると (112) の
 　　 　本数として数えられなくなり、★外れた本が後から外されて上振れる**（枠連側の指摘）。
@@ -205,7 +206,10 @@ def main():
         rid, ax = rc["raceid"], rc["axis"]
         f = fin.get((rid, ax))
         line = {"date": date, "raceid": rid, "label": rc["label"], "axis": ax,
-                "axis_finish": f if f is not None else ""}
+                "axis_finish": f if f is not None else "",
+                # ★時点を必ず残す（`ANA_MERGE_HANDOFF.md` Q1-a。★あとから復元できない）
+                "board_at": rc.get("board_at", ""),
+                "odds_at": (T.get("waku") or {}).get("odds_at", "")}
         print(f"　　{rc['label']}　軸 {ax}番"
               + (f"　→ ★**{f}着**" if f is not None else "　（着順不明）"))
         for t in rc["tickets"]:
@@ -225,8 +229,21 @@ def main():
             line[f"{col}_cost"], line[f"{col}_ret"], line[f"{col}_pay"] = 100, v, float(v)
             rows.append(row(date, rc["label"], rid, "穴馬(記録だけ)", col, 100, v,
                             [(str(ax), v)] if v else [], k))
+        # ★「記録だけ」の G馬単M4点 / Q三連単A4点（`ANA_MERGE_HANDOFF.md` Q3）
+        #   ⚠**買っていない**。★`ANA_RULE.md` §4-2 の「記録は6本」を満たすため。
+        for t in rc.get("record_only", []):
+            kind = KIND_OF.get(t["kind"], t["kind"])
+            c, r, h, k = score_set(pays, rid, kind, t["combos"])
+            rows.append(row(date, rc["label"], rid, "穴馬(記録だけ)", t["label"], c, r, h, k))
+            line[f"{t['label']}_cost"] = c
+            line[f"{t['label']}_ret"] = r
+            line[f"{t['label']}_pay"] = round(r / (c / 100.0), 1) if c else 0
         print(f"　　　　（記録だけ）軸の単勝 {line['P単勝1点_ret']:,}円 / "
-              f"複勝 {line['P複勝1点_ret']:,}円")
+              f"複勝 {line['P複勝1点_ret']:,}円"
+              + "".join(f" / {t['label']} {line[t['label'] + '_ret']:,}円"
+                        for t in rc.get("record_only", [])))
+        if rc.get("board_at"):
+            print(f"　　　　（時点）板 {rc['board_at'][:16]}")
         ana_rows.append(line)
     if not T.get("ana", {}).get("races"):
         print("　　（朝の時点で該当0本）")

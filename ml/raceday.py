@@ -170,20 +170,33 @@ def run_ana(ymd, sns, gap=None):
       `tickets`          → 確定した買い目（軸・紐・組）を拾う
     ⚠**SNS側は `reco_sns_day` に `GAP` と障害戦の除外をやらせる**（★こちらでは真似しない）。
     """
+    import numpy as np
     import reco_ana_day as D
     rec, cur = {"races": []}, {"rid": None}
+    st = {"boards": {}, "ctx": {}}          # ★板の時刻 と 軸判定の材料（★記録用・値は変えない）
     by_kind = {k: name for name, _hk, k, _n in D.BUY}
 
-    orig_lmb, orig_t = D.load_morn_boards, D.tickets
+    orig_lmb, orig_t, orig_ax = D.load_morn_boards, D.tickets, D.axis_and_himo
 
     def lmb(y):
         boards, p = orig_lmb(y)
+        st["boards"] = boards               # ★{rid: (板, fetched_at)}
 
         class B(dict):
             def get(self, k, *a):
                 cur["rid"] = k
                 return dict.get(self, k, *a)
         return B(boards), p
+
+    def hook_ax(ub, od, pv, board):
+        """⚠**値は一切変えない**。★G紐（ズレ降順）とQ紐（単勝昇順）を作る材料を控えるだけ。"""
+        r = orig_ax(ub, od, pv, board)
+        ax, _op, _X, _pn, _qp, gap = r
+        if ax is not None:
+            st["ctx"][cur["rid"]] = {"ub": [int(u) for u in ub],
+                                     "od": [float(x) for x in od],
+                                     "gap": [float(x) for x in gap], "ax": int(ax)}
+        return r
 
     def hook(kind, npt, ax, himo):
         out = orig_t(kind, npt, ax, himo)
@@ -205,7 +218,7 @@ def run_ana(ymd, sns, gap=None):
                 "combos": combos, "cost": 100 * len(out)})
         return out
 
-    D.load_morn_boards, D.tickets = lmb, hook
+    D.load_morn_boards, D.tickets, D.axis_and_himo = lmb, hook, hook_ax
     argv, buf = sys.argv, io.StringIO()
     try:
         if sns:
@@ -224,7 +237,37 @@ def run_ana(ymd, sns, gap=None):
             buf.write(f"\n⚠{e.code}\n")
     finally:
         sys.argv = argv
-        D.load_morn_boards, D.tickets = orig_lmb, orig_t
+        D.load_morn_boards, D.tickets, D.axis_and_himo = orig_lmb, orig_t, orig_ax
+
+    # ---- ★板の時刻（`ANA_MERGE_HANDOFF.md` Q1-a・★今は復元できないので必ず残す）
+    for r in rec["races"]:
+        b = st["boards"].get(r["raceid"])
+        r["board_at"] = b[1] if b else ""
+
+    # ---- ★「記録だけ」の G馬単M4点 / Q三連単A4点（`ANA_MERGE_HANDOFF.md` Q3）
+    #   ⚠**買い目も軸も変えない**。★`ANA_RULE.md` §4-2 が「記録対象は6本」と書いているのに
+    #   　当日モードが P紐 と X紐 しか作らないため、G と Q が記録できていなかった。
+    #   ★**軸は `reco_ana_day` が決めたものをそのまま使い、紐の並べ替えだけここで作る**。
+    if not sns:
+        for r in rec["races"]:
+            c = st["ctx"].get(r["raceid"])
+            if not c:
+                continue
+            ub, od, gap, ax = (np.array(c["ub"]), np.array(c["od"]),
+                               np.array(c["gap"]), c["ax"])
+            G = [int(u) for u in ub[np.argsort(-gap, kind="mergesort")] if int(u) != ax]
+            Q = [int(u) for u in ub[np.argsort(od, kind="mergesort")] if int(u) != ax]
+            r["record_only"] = []
+            for label, kind, npt, himo in (("G馬単M4点", "馬単M", 4, G),
+                                           ("Q三連単A4点", "三連単A", 4, Q)):
+                t = orig_t(kind, npt, ax, himo)
+                if not t:
+                    continue
+                r["record_only"].append({
+                    "label": label, "kind": kind, "n": npt, "himo": himo[:3],
+                    "combos": [[int(x) for x in sel] for _, sel in t],
+                    "cost": 100 * len(t), "buy": False})
+
     rec["gap"] = gap if sns else D.GAP
     return buf.getvalue(), rec
 

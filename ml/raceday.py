@@ -286,22 +286,22 @@ def label_map(ymd):
 
 
 def marks(race):
-    """★印（◎○▲△）。★`reco_ana_day` が役割欄に出しているものをそのまま写す。
+    """★印（◎○▲△）。**◎＝軸 ／ ○▲△＝P紐（モデルの pv 降順）の1・2・3頭目**。
 
-    ◎＝軸 ／ ○▲＝紐P（モデル順の1・2位）／ △＝紐X の3頭目（人気順）
-    ⚠`ANA_SNS_RULE.md` §2 は「○▲△は全部P（モデル順）」と書いている。
-      ★**△だけ食い違う**（`reco_ana_day` の役割欄は「紐3（人気順）」）。
-      ★**ここは画面に出ている役割に合わせてある**。**どちらが正かはSNS側の判断**。
+    ★**`ANA_SNS_RULE.md` §2「紐はPで統一」に合わせてある**（**2026-09-13 変更**）。
+    ⚠**それ以前は △ だけ X紐の3頭目＝人気順だった**（`reco_ana_day` の役割欄に合わせていた）。
+    ★**SNSセッションの判断で §2 側に寄せた**（`ANA_SNS_HANDOFF.md` §0-1）。**理由3つ**:
+      ① **§2は測定を根拠にしている**（**P紐の朝9時一致率100% / Q(人気順)は75%**）
+      ② **役割欄は `ANA_RULE.md` の買い目（X三連単A4点）のために在り、目的が違う**
+      ③ **SNSの買い目は△を使わない**＝**買い目上の制約が無い**
+    ⚠**2026-09-12・09-13 に出した印は変更前のもの**。★**記録は書き換えていない**（投稿済みのため）。
     """
     p = next((t for t in race["tickets"] if t["kind"] == "馬単M"), None)
-    x = next((t for t in race["tickets"] if t["kind"] == "三連単A"), None)
     m = {"◎": race["axis"]}
-    if p:
-        for k, i in (("○", 0), ("▲", 1)):
-            if len(p["himo"]) > i:
-                m[k] = p["himo"][i]
-    if x and len(x["himo"]) > 2:
-        m["△"] = x["himo"][2]
+    rank = (p or {}).get("himo_rank") or []      # ★P紐の上位（モデル順）
+    for k, i in (("○", 0), ("▲", 1), ("△", 2)):
+        if len(rank) > i:
+            m[k] = rank[i]
     return m
 
 
@@ -341,6 +341,11 @@ def main():
         r["label"] = lab.get(r["raceid"], r["raceid"])
     for r in sns["races"]:
         r["marks"] = marks(r)
+    sns["note"] = ("★印の導出用。⚠**この tickets は買わない**——"
+                   "`reco_ana_day` の買い目（P馬単M4点＋X三連単A4点＝800円）がそのまま入っているが、"
+                   "`ANA_SNS_RULE.md` §3 のSNS用は 複勝1＋単勝1＋P馬連2＝400円で別物。"
+                   "★夜の採点も SNS は ◎の複勝・単勝・着順しか見ない")
+    sns["marks_rule"] = "◎=軸 / ○▲△=P紐(モデル順)1・2・3頭目（ANA_SNS_RULE.md §2・2026-09-13から）"
 
     # ---- まとめ
     n_waku = len(waku["wakuren"]) if waku else 0

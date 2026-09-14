@@ -391,6 +391,51 @@ def marks(race):
     return m
 
 
+def check_frozen(outdir, ymd, force):
+    """★★既に凍結済みの日なら止める（★`--force` のときだけ通す）。
+
+    ⚠★**`tickets.json` は「朝に凍結した買い目」で、★夜の採点の唯一の入力**。
+    　**`RACEDAY.md`: 「結果を見る前に凍結した」の唯一の根拠になる**。
+    ⚠⚠**ところが `main()` は3ファイルとも無条件に `"w"` で開いていた**——
+    　★**過去日で叩き直すと、凍結した記録が★黙って上書きされる**。
+    ★**2026-09-13 に△の規則を変えたので、この危険は★現実のものになった**
+    　（**再実行すると 9/13 の △ が 12→15 / 8→1 に変わる**）。
+    ★**守っているのが git のコミット規律だけ、という状態をやめる**。
+
+    ★**戻り値**: **既存の `tickets.json`（無ければ None）**。
+    　★**`--force` のときは「何が変わるか」を表示してから通す**。
+    """
+    tp = os.path.join(outdir, "tickets.json")
+    if not os.path.exists(tp):
+        return None
+    try:
+        old = json.load(open(tp, encoding="utf-8"))
+    except (OSError, ValueError):
+        old = None
+    if not force:
+        print(f"⚠⚠**{ymd} は既に凍結済み**（`{OUTDIR}/{ymd}/tickets.json`）。")
+        if old:
+            print(f"　★**凍結した時刻: {old.get('generated_at','?')}"
+                  f" / git {str(old.get('git_head',''))[:8]}**")
+            for r in old.get("sns", {}).get("races", []):
+                m = r.get("marks", {})
+                print(f"　　SNS {r.get('label','')[:16]}　"
+                      + " ".join(f"{k}{m[k]}" for k in ("◎", "○", "▲", "△") if k in m))
+        print("★**上書きしない**——**投稿済み・採点済みの記録を書き換えると、"
+              "「結果を見る前に凍結した」根拠が消える**。")
+        print(f"⚠**どうしても上書きするなら**: `python3 ml/raceday.py {ymd} --force`")
+        sys.exit(2)
+    print(f"⚠⚠★**--force: {ymd} の凍結記録を上書きする**")
+    if old:
+        print(f"　★**上書き前**（凍結 {old.get('generated_at','?')}）:")
+        for r in old.get("sns", {}).get("races", []):
+            m = r.get("marks", {})
+            print(f"　　SNS {r.get('label','')[:16]}　"
+                  + " ".join(f"{k}{m[k]}" for k in ("◎", "○", "▲", "△") if k in m))
+        print("　⚠**上書き後の印が上と違う場合、★投稿した内容と記録が食い違う**")
+    return old
+
+
 # ---------------------------------------------------------------- 束ねる
 def main():
     ap = argparse.ArgumentParser()
@@ -398,10 +443,13 @@ def main():
     ap.add_argument("--no-sync", action="store_true", help="3ブランチの取り込みを飛ばす")
     ap.add_argument("--sns-gap", type=float, default=None,
                     help="SNSのズレ下限（既定は reco_sns_day.SNS_GAP＝0.10）")
+    ap.add_argument("--force", action="store_true",
+                    help="⚠★既に凍結済みの日を上書きする（★何が変わるかを表示してから）")
     a = ap.parse_args()
     ymd = a.ymd
     d = datetime.date(int(ymd[:4]), int(ymd[4:6]), int(ymd[6:8]))
     outdir = os.path.join(ROOT, OUTDIR, ymd)
+    frozen = check_frozen(outdir, ymd, a.force)   # ★★凍結済みなら止める
     os.makedirs(outdir, exist_ok=True)
 
     head = [f"{'='*78}",
@@ -517,6 +565,12 @@ def main():
         "generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "git_head": sh("git", "rev-parse", "HEAD").stdout.strip(),
         "note": "★朝に凍結した買い目。★夜の採点（ml/raceday_night.py）はこれだけを読む",
+        **({"overwrote": {
+            "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+            "prev_generated_at": frozen.get("generated_at"),
+            "prev_git_head": frozen.get("git_head"),
+            "why": "⚠--force で凍結記録を上書きした。★前の内容は git 履歴にある",
+        }} if frozen else {}),
         "waku": waku, "ana": ana, "sns": sns,
     }
     json.dump(tickets, open(os.path.join(outdir, "tickets.json"), "w", encoding="utf-8"),

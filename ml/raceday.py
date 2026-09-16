@@ -7,7 +7,7 @@
 |---|---|---|
 | ① | **本命（枠連 軸枠×紐枠1）＋甘い軸の三連複の候補** | `ml/predict_nk.py` |
 | ② | **穴馬（自分用・P馬単M4点＋X三連単A4点＝8点800円）** | `ml/reco_ana_day.py` |
-| ③ | **SNS（印・ズレ下限0.10）** | `ml/reco_sns_day.py` |
+| ③ | **SNS（印・★ズレ下限0.10 / 単勝下限8.0倍）** | `ml/reco_sns_day.py` |
 
 ■ ⚠★★**判定ロジックには一切触らない**
 　★**このファイルは「呼ぶ・束ねる・記録する」だけ**。**軸も紐も買い目も閾値も上の3本のまま**。
@@ -249,10 +249,12 @@ def run_ana(ymd, sns, gap=None):
     D.load_morn_boards, D.tickets = lmb, hook
     D.axis_and_himo, D.load_entries = hook_ax, le_nojump
     argv, buf = sys.argv, io.StringIO()
+    lfix_used = D.LFIX                  # ★穴馬側の既定（★SNSのときだけ下で差し替わる）
     try:
         if sns:
             import reco_sns_day as S
-            gap = S.SNS_GAP if gap is None else gap   # ★既定はSNS側が持っている値
+            gap = S.SNS_GAP if gap is None else gap
+            lfix_used = S.SNS_LFIX   # ★既定はSNS側が持っている値
         sys.argv = ["reco_sns_day.py" if sns else "reco_ana_day.py", ymd]
         if sns:
             sys.argv += ["--gap", str(gap)]
@@ -303,7 +305,10 @@ def run_ana(ymd, sns, gap=None):
                     "combos": [[int(x) for x in sel] for _, sel in t],
                     "cost": 100 * len(t), "buy": False})
 
+    # ★SNSは2つの下限を緩めている（`ANA_SNS_HANDOFF.md`・2026-09-15に単勝を 10.0→8.0）
+    #   ⚠**穴馬側（規則）は 0.15 / 10.0倍 のまま**。★`reco_sns_day` が差し替えて finally で戻す。
     rec["gap"] = gap if sns else D.GAP
+    rec["lfix"] = lfix_used
     return buf.getvalue(), rec
 
 
@@ -495,8 +500,8 @@ def main():
     s.append(f"　② 甘い軸の三連複（候補）       {n_soft:>2}レース  {c_soft:>6,}円"
              "　⚠**直前に再判定が要る**")
     s.append(f"　③ 穴馬（自分用・8点/レース）   {len(ana['races']):>2}レース  {c_ana:>6,}円")
-    s.append(f"　④ SNS（印・ズレ下限{sns['gap']}）    {len(sns['races']):>2}レース"
-             "　　　　投稿だけ（買わない）")
+    s.append(f"　④ SNS（印・ズレ{sns['gap']} / 単勝{sns['lfix']}倍）"
+             f"  {len(sns['races']):>2}レース　　　　投稿だけ（買わない）")
     s.append("　" + "-" * 60)
     s.append(f"　★**自分で買う合計  {c_waku + c_soft + c_ana:,}円**"
              "（⚠②は直前の再判定で消えることがある）")

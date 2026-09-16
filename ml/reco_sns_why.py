@@ -132,15 +132,13 @@ def phrase(name, val):
     return ja
 
 
-def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if not args:
-        sys.exit("日付が要る: python3 ml/reco_sns_why.py 20260913 [--top 5]")
-    top = 5
-    for i, a in enumerate(sys.argv):
-        if a == "--top" and i + 1 < len(sys.argv):
-            top = int(sys.argv[i + 1])
+def capture(ymd):
+    """★★印を出すついでに、★中の材料を捕まえて返す（⚠**向こうのファイルは書き換えない**）。
 
+    → **(cap, picks)**。`cap` に **d2（過去走＋今日）/ X（特徴量行列）/ cols / boosters**、
+    `picks` に **(そのレースの馬番配列, 軸の馬番)** が★軸の立った順に入る。
+    ★**(251sns) と (252sns) が同じ捕まえ方を共有する**——**二重に書くと別物になるため**。
+    """
     import features as F
     import reco_ana_day as D
     import reco_sns_day as S
@@ -185,14 +183,44 @@ def main():
         S.main()                         # ★印はこれまでどおり出る（★出力は変えない）
     finally:
         F.build_features, D.load_model, D.axis_and_himo = frozen_bf, frozen_lm, frozen_ah
+    return cap, picks
+
+
+def axis_rows(cap, picks):
+    """★軸の行番号を、★今日の行の中から引く（⚠**軸を再計算しない**）。→ (sub, rows)"""
+    import numpy as np
+    d2 = cap["d2"]
+    sub = d2[d2["date"].eq(d2["date"].max())].reset_index(drop=True)
+    umab = sub["umaban"].astype(int).to_numpy()
+    rids = sub["raceid"].astype(str).to_numpy()
+    rows = []
+    for ub, ax in picks:
+        for rid in dict.fromkeys(rids):
+            m = np.where(rids == rid)[0]
+            if len(m) == len(ub) and (umab[m] == ub).all():
+                w = m[np.where(ub == ax)[0]]
+                if len(w):
+                    rows.append(int(w[0]))
+                break
+    return sub, rows
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if not args:
+        sys.exit("日付が要る: python3 ml/reco_sns_why.py 20260913 [--top 5]")
+    top = 5
+    for i, a in enumerate(sys.argv):
+        if a == "--top" and i + 1 < len(sys.argv):
+            top = int(sys.argv[i + 1])
+    cap, picks = capture(args[0])
 
     if "X" not in cap or "d2" not in cap:
         print("\n⚠**寄与を出せなかった**（**該当0本、または途中で落ちている**）")
         return 0
 
-    d2, X, cols = cap["d2"], np.asarray(cap["X"], float), cap["cols"]
-    today = d2["date"].max()
-    sub = d2[d2["date"].eq(today)].reset_index(drop=True)
+    X, cols = np.asarray(cap["X"], float), cap["cols"]
+    sub, rows = axis_rows(cap, picks)
     if len(sub) != len(X):
         print(f"\n⚠⚠**行数が合わない（{len(sub)} vs {len(X)}）。読まない**（判定基準32）")
         return 2
@@ -207,22 +235,11 @@ def main():
     print("★**44個の特徴量のうち、★オッズ由来は2個だけ**"
           "（`log_odds` / `mkt_prob`）。★**残り42個を「オッズ以外」として並べる**。\n")
 
-    # ★◎の行番号を引く（★ub の並びが一致するレースを探す＝★軸を再計算しない）
-    umab = sub["umaban"].astype(int).to_numpy()
-    rids = sub["raceid"].astype(str).to_numpy()
-    rows = []
-    for ub, ax in picks:
-        for rid in dict.fromkeys(rids):
-            m = np.where(rids == rid)[0]
-            if len(m) == len(ub) and (umab[m] == ub).all():
-                w = m[np.where(ub == ax)[0]]
-                if len(w):
-                    rows.append(int(w[0]))
-                break
     if not rows:
         print("⚠**◎が1頭も立っていない（または行を引けなかった）。★何も出さない**")
         return 0
 
+    import reco_ana_day as D
     nm = {}
     try:
         for rc in D.load_entries(f"data/nk/entries{args[0]}.json"):

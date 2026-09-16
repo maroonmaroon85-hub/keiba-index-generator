@@ -23,6 +23,30 @@
 
 実行: python3 ml/reco_sns_last.py 20260913 [--n 3]
 
+■ ★★★★**(253sns) コーナーごとの通過順を足した（2026-09-16）—— ★取りに行っていない**
+
+★**利用者**: **「（短評が）あれば使えそうだけどね」**。
+⚠★**短評は取れない**——**`db.netkeiba` の結果ページに★列が無い**
+　（**着順/枠/馬番/馬名/性齢/斤量/騎手/タイム/着差/通過/上り/単勝/馬体重/調教師**）。
+　★**短評は netkeiba の有料側**。⚠**そこを取りに行くのは規約上も筋が悪いので勧めない**。
+
+★★**代わりに、★使っていない材料が手元にあった**——**生CSVの★28〜31列＝コーナーごとの通過順**。
+　⚠**`features.to_model` が4つを平均して `passavg` にしており、★形が消えていた**。
+　★**`features.py` は書き換えず、`to_model` を包んで生の入力から作り直した**。
+
+★**これが効いた実例**:
+| | 平均だけ | ★**コーナーごと** |
+|---|---|---|
+| **レッドホットの未勝利勝ち** | 「道中12番手」 | ★★**`12-11-14-12`＝4角12番手から1着まで差した** |
+| **ランウェイミューズ 8/15** | 「道中11番手」 | ★**`13-12-8`＝13番手から8番手まで押し上げ** |
+　★★**「4角で後方なのに上位で入った」は★平均に潰すと消える**。**そこが一番の売り**。
+　★**近走で何回それをやったかも数えた**（**レッドホットは近3走で2回**）。
+
+■ ⚠★**実装で踏んだもの**: **`astype(str)` を通しても要素が float で来た**
+　（**concat の中身がまちまちなため**）。★**`str(x)` で必ず文字にしてから判定する**。
+　⚠**最初は `except: pass` で握り潰していて、★「0行拾えた」と静かに壊れていた**。
+　★**握り潰さず理由を出すようにした**。
+
 ■ ★★★★**結果（2026-09-16・9/13の◎4頭）—— ★記事になる**
 　★**(251sns)の寄与では何も言えなかった4頭が、★前走の中身では全部書けた**:
 | ◎ | ★**書ける材料** |
@@ -65,7 +89,37 @@ def ordinal(v, arr, bigger_is_better=False):
     return r, int(ok.sum())
 
 
-def one_run(r, field):
+def corners_of(cs):
+    """"12-12-11-10" → [12,12,11,10]。⚠読めなければ空。"""
+    return [int(x) for x in (cs or "").split("-") if x.isdigit()]
+
+
+def corner_phrase(cs, n, fin=None):
+    """★★コーナーごとの通過順 → ★記事の言葉。⚠無ければ None。
+
+    ★★**いちばん効くのは「★最終コーナーで後方なのに上位で入った」**——
+    　**レッドホットの未勝利勝ちが `12-11-14-12` で、★4角12番手のまま差し切っている**。
+    　★**「道中11番手」では消えてしまう情報**。**平均に潰さない理由がこれ**。
+    """
+    v = corners_of(cs)
+    if not v or not n:
+        return None
+    lab = lambda p: "逃げ・先行" if p <= n * 0.25 else ("中団" if p <= n * 0.6 else "後方")
+    if len(v) == 1:
+        return f"道中{v[0]}番手（{lab(v[0])}）"
+    first, last = v[0], v[-1]
+    tail = f"{'-'.join(str(x) for x in v)}（{lab(first)}→{lab(last)}）"
+    corner_no = {2: "3角", 3: "4角", 4: "4角"}.get(len(v), "最終コーナー")
+    if fin and fin <= 3 and last > n * 0.55:
+        return f"★★{corner_no}{last}番手から{fin}着まで差した　{tail}"
+    if first - last >= 4:
+        return f"★{first}番手から{last}番手まで押し上げ　{tail}"
+    if last - first >= 4:
+        return f"⚠{first}番手から{last}番手まで下げた　{tail}"
+    return f"通過 {tail}"
+
+
+def one_run(r, field, corner=None):
     """★1走を日本語1行に。`field` は★そのレースの全馬（上がり順位を出すため）。"""
     d = r["date"]
     cls = CLS.get(int(r["raceclass"]) if pd.notna(r["raceclass"]) else -1, "")
@@ -83,7 +137,10 @@ def one_run(r, field):
     if pd.notna(r["margin"]):
         m = float(r["margin"])
         bits.append("先頭" if fin == 1 else f"{m:.1f}差")
-    if pd.notna(r["passavg"]) and n:
+    cp = corner_phrase(corner, n, fin)
+    if cp:
+        bits.append(cp)                 # ★★コーナーごとが取れたら★そちらを使う
+    elif pd.notna(r["passavg"]) and n:
         p = float(r["passavg"])
         pos = "逃げ・先行" if p <= n * 0.25 else ("中団" if p <= n * 0.6 else "★後方")
         bits.append(f"道中{p:.0f}番手（{pos}）")
@@ -103,7 +160,7 @@ def one_run(r, field):
     return head + "　" + " / ".join(bits)
 
 
-def readable(runs, today_row, agari_rank=None):
+def readable(runs, today_row, agari_rank=None, last_corners=None, n_deep=0):
     """★★「記事に書ける材料」を★事実として拾う（⚠解釈はしない）。
 
     `agari_rank` は★前走の上がり順位（**そのレースの全馬から出した実数**）。
@@ -121,8 +178,17 @@ def readable(runs, today_row, agari_rank=None):
         if int(last["finish"]) >= 4 and agari_rank <= 3:
             lab = "メンバー最速" if agari_rank == 1 else f"上がり{agari_rank}位"
             out.append(("AGARI", f"前走は掲示板を外しているが{lab}"))
-    if pd.notna(last["passavg"]) and n and float(last["passavg"]) > n * 0.6:
+    if last_corners and n:
+        lastpos, lfin = last_corners[-1], int(last["finish"]) if pd.notna(last["finish"]) else 99
+        if lfin <= 3 and lastpos > n * 0.55:
+            out.append(("POS", f"★前走は4角{lastpos}番手から{lfin}着まで差している"))
+        elif lastpos > n * 0.6:
+            out.append(("POS", "前走は後方からの競馬"))
+    elif pd.notna(last["passavg"]) and n and float(last["passavg"]) > n * 0.6:
         out.append(("POS", "前走は後方からの競馬"))
+    # ★★近走で「4角後方→3着以内」が複数あれば、★それが売りになる
+    if n_deep >= 2:
+        out.append(("DEEP", f"★近{len(runs)}走のうち{n_deep}回、4角後方から3着以内に来ている"))
     dd = float(today_row["distance"]) - float(last["distance"])
     if dd <= -200:
         out.append(("DIST", f"{abs(dd):.0f}m の距離短縮"))
@@ -171,6 +237,10 @@ def main():
         return 0
 
     d2 = cap["d2"]
+    corners = cap.get("corner") or {}
+    if not corners:
+        print("⚠**コーナーごとの通過順を拾えなかった**"
+              "——**道中の平均だけで書く（★情報が減る）**")
     today = d2["date"].max()
     past = d2[d2["date"].lt(today)]
     by_race = {k: v for k, v in past.groupby("raceid")}
@@ -198,13 +268,23 @@ def main():
             continue
         for _, run in runs.iterrows():
             fld = by_race.get(run["raceid"])
-            print("　" + one_run(run, fld if fld is not None else runs))
+            ck = f"{run['raceid']}{int(run['umaban']):02d}"
+            print("　" + one_run(run, fld if fld is not None else runs,
+                                 corners.get(ck)))
         lastrun = runs.iloc[-1]
         fld = by_race.get(lastrun["raceid"])
         arank = None
         if fld is not None and pd.notna(lastrun["agari"]):
             arank, _ = ordinal(float(lastrun["agari"]), fld["agari"].to_numpy(float))
-        mats = readable(runs, r, arank)
+        lc = corners_of(corners.get(f"{lastrun['raceid']}{int(lastrun['umaban']):02d}"))
+        n_deep = 0
+        for _, run in runs.iterrows():
+            vv = corners_of(corners.get(f"{run['raceid']}{int(run['umaban']):02d}"))
+            nn = int(run["fieldsize"]) if pd.notna(run["fieldsize"]) else 0
+            ff = int(run["finish"]) if pd.notna(run["finish"]) else 99
+            if vv and nn and ff <= 3 and vv[-1] > nn * 0.55:
+                n_deep += 1
+        mats = readable(runs, r, arank, lc, n_deep)
         if mats:
             print("　★**書ける材料**: " + " / ".join(m for _, m in mats))
         print()

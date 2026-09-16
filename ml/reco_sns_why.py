@@ -152,6 +152,30 @@ def capture(ymd):
         cap["d2"] = d2
         return frozen_bf(d2)
 
+    # ★★(253sns) ★生CSVの28〜31列＝★コーナーごとの通過順を拾う
+    #   ⚠**`to_model` は4つを平均して `passavg` にしてしまう**（**形が消える**）。
+    #   ★**「3角12番手→4角10番手」は記事になるが「道中11番手」はならない**。
+    #   ★**`features.py` は書き換えない**——**`to_model` を包んで、生の入力から作り直す**。
+    frozen_tm = F.to_model
+
+    def _tm(raw):
+        d = frozen_tm(raw)
+        try:
+            # ⚠**`astype(str)` を通しても要素が float で来ることがある**
+            #   （**concat の中身がまちまちなため**）。★**`str(x)` で必ず文字にする**。
+            k = raw[40].map(lambda x: str(x).strip())
+            cs = [raw[c].tolist() for c in (28, 29, 30, 31)]
+            corner = {}
+            for key, a1, a2, a3, a4 in zip(k, *cs):
+                v = [str(x).strip() for x in (a1, a2, a3, a4)]
+                v = [x for x in v if x.isdigit() and int(x) > 0]
+                if v:
+                    corner[key] = "-".join(v)
+            cap.setdefault("corner", {}).update(corner)
+        except Exception as e:
+            print(f"⚠**コーナー通過順を拾えなかった**: {e}")   # ★本体は止めない
+        return d
+
     # ★② boosterを包んで、★predictに渡る行列そのものを捕まえる
     frozen_lm = D.load_model
 
@@ -179,10 +203,12 @@ def capture(ymd):
         return r
 
     F.build_features, D.load_model, D.axis_and_himo = _bf, _lm, _ah
+    F.to_model = _tm
     try:
         S.main()                         # ★印はこれまでどおり出る（★出力は変えない）
     finally:
         F.build_features, D.load_model, D.axis_and_himo = frozen_bf, frozen_lm, frozen_ah
+        F.to_model = frozen_tm
     return cap, picks
 
 

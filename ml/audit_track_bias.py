@@ -126,19 +126,17 @@ def pcorr(x, y, Z, ncmp=1):
     return r, math.tanh(z - zc * se), math.tanh(z + zc * se)
 
 
-def main():
-    MODEL_DIR, PAR = CAPACITY["l2"]
-    raw = F.load_files()
-    raw = raw[raw[40].str.len() > 2]
+def build_bias(raw, d, f):
+    """★トラックバイアスの当てる量を作る。**定義はここ1か所**（(178)もこれを読む）。
+
+    返す DataFrame の列: A_draw/A_pace/B_draw/B_pace と、それぞれのプラセボ。
+    ★**A=当日累積（そのレースより前だけ）／B=前日（土→日・日付差1日）**。
+    ⚠**プラセボは「同じ日の別の場のバイアス」**（乱数を使わない決定的な対照）。
+    """
     # ★4角は to_model が平均に潰すので生から取る。★col40で突き合わせる（(176)で位置合わせを踏んだ）
     c4_raw = pd.to_numeric(raw[31], errors="coerce").where(lambda x: x > 0)
     c4map = pd.Series(c4_raw.to_numpy(), index=raw[40].str.strip().to_numpy())
     c4map = c4map[~c4map.index.duplicated(keep="first")]
-
-    d = F.to_model(raw)
-    f = F.build_features(d)
-    keep = (f["n_prior"] >= 1) & d["odds"].notna() & (d["odds"] > 0)
-    d, f = d[keep].reset_index(drop=True), f[keep].reset_index(drop=True)
     y = (d["finish"] <= 3).astype(int).to_numpy()
 
     key = d["raceid"].astype(str) + d["umaban"].astype(int).astype(str).str.zfill(2)
@@ -213,6 +211,19 @@ def main():
     b["B_pace"] = (b["lastp"] - 0.5) * b["prev_p"]
     b["Bplc_draw"] = (b["rd"] - 0.5) * b["prevplc_d"]
     b["Bplc_pace"] = (b["lastp"] - 0.5) * b["prevplc_p"]
+    return b
+
+
+def main():
+    MODEL_DIR, PAR = CAPACITY["l2"]
+    raw = F.load_files()
+    raw = raw[raw[40].str.len() > 2]
+    d = F.to_model(raw)
+    f = F.build_features(d)
+    keep = (f["n_prior"] >= 1) & d["odds"].notna() & (d["odds"] > 0)
+    d, f = d[keep].reset_index(drop=True), f[keep].reset_index(drop=True)
+    y = (d["finish"] <= 3).astype(int).to_numpy()
+    b = build_bias(raw, d, f)
 
     fx, _ = F.encode_categoricals(f)
     fx = add_odds_features(fx, d["odds"].to_numpy(float), d["raceid"].to_numpy())

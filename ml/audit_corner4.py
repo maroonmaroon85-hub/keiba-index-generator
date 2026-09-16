@@ -41,6 +41,14 @@
 
 ⚠**内部対照は最初に出す**: **検証行数**（母集団の取り違えを防ぐ・穴馬側は9回踏んだ）。
 
+★**参考列（2026-09-16 追加・★採用条件には使わない）**: **偶数年で学習し、奇数年で検証**。
+　★**利点**: **両側が11年に均等に散る**ので、**時代の変化が効果の推定に乗らない**。
+　⚠**主判定にできない理由**: **未来を見る**（2018年で学習して2017年を予測する）。
+　　★**このゲートでは特に厄介**——**`p` が未来を見て強くなると差し引かれる量が過大になり、
+　　「モデルが既に拾っている」側＝**線を閉じる方向に間違える**。
+　　★**判定基準46（前半で選び後半で1回だけ試す）も時間順が前提**。
+　→ ★**時間順を主判定に置き、偶奇は「時代の変化か本物か」の切り分けとして並べるだけ**。
+
 実行: python3 ml/audit_corner4.py
 """
 import math
@@ -82,15 +90,24 @@ def main():
     raw = F.load_files()
     raw = raw[raw[40].str.len() > 2]
     # ★4角の生値はここでしか取れない（to_model が平均に潰すため）
+    # ⚠★`to_model` は dropna と drop_duplicates で行を落とす（1,499,882 → 669,951）。
+    # 　**位置で対応づけると壊れる**（2026-09-16に実際に踏んだ）。★**col40（raceid+馬番）で突き合わせる**。
     p4 = raw[[28, 29, 30, 31]].apply(pd.to_numeric, errors="coerce").where(lambda x: x > 0)
+    key_raw = raw[40].str.strip()
+    c4_raw = p4[31]
     d = F.to_model(raw)
     f = F.build_features(d)
     keep = (f["n_prior"] >= 1) & d["odds"].notna() & (d["odds"] > 0)
 
     # ★4角比と「平均で説明できない成分」を作る（to_model と同じ行の並びで）
     fs = d["fieldsize"].to_numpy(float)
-    r4 = (p4[31].to_numpy(float)) / fs
+    # ★col40 で引き当てる。重複キーは to_model と同じく最初の1行を採る
+    c4map = pd.Series(c4_raw.to_numpy(), index=key_raw.to_numpy())
+    c4map = c4map[~c4map.index.duplicated(keep="first")]
+    key_d = d["raceid"].astype(str) + d["umaban"].astype(int).astype(str).str.zfill(2)
+    r4 = c4map.reindex(key_d.to_numpy()).to_numpy(float) / fs
     ra = d["passavg"].to_numpy(float) / fs
+    print(f"　4角が引けた行 {int(np.isfinite(r4).sum()):,} / {len(d):,}")
     ok = np.isfinite(r4) & np.isfinite(ra)
     X = np.c_[np.ones(ok.sum()), ra[ok]]
     b = np.linalg.lstsq(X, r4[ok], rcond=None)[0]
@@ -159,6 +176,22 @@ def main():
     same = max(sum(1 for s in sgn if s > 0), sum(1 for s in sgn if s < 0))
     cond2 = same >= NYEAR_OK
     print(f"　→ ②符号がそろった年 {same}/{len(sgn)} → **{'★満たす' if cond2 else '⚠満たさない'}**")
+
+    # ■ 参考: 偶数年で学習・奇数年で検証（★採用条件には使わない）
+    print("\n■ 参考（★採用条件には使わない）— 偶数年で学習・奇数年で検証")
+    print("　⚠**未来を見るので主判定にはできない**。時代の変化と本物を切り分けるためだけ。")
+    ev = (yr % 2 == 0)
+    ms2 = fit_seeds(fx[ev], y[ev], 3, PAR)
+    p2 = np.mean([mm.predict_proba(fx)[:, 1] for mm in ms2], axis=0)
+    m2 = (~ev) & aux["prev_res"].notna().to_numpy() & aux["prev_ra"].notna().to_numpy()
+    a2 = auc(y[m2], p2[m2])
+    pp2 = np.clip(p2[m2], 1e-6, 1 - 1e-6)
+    Z2 = np.c_[np.ones(int(m2.sum())), np.log(pp2 / (1 - pp2))]
+    print(f"　奇数年 {int(m2.sum()):,}行 / AUC {a2:.4f}")
+    for nm, v in (("★本 prev_res", aux["prev_res"].to_numpy()[m2]),
+                  ("対照 prev_ra", aux["prev_ra"].to_numpy()[m2])):
+        r, lo, hi = pcorr(v, y[m2].astype(float), Z2)
+        print(f"{nm:>22}{r:>+10.4f}{f'[{lo:+.4f}, {hi:+.4f}]':>24}")
 
     print("\n" + "=" * 78)
     if cond1 and cond2:

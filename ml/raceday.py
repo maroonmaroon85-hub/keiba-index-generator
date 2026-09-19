@@ -79,6 +79,15 @@ BOARD_CUTOFF = "10:30"
 #   　**障害から軸が立った行は1本も無い**。★**最も安いタイミングで入れた**。
 DROP_JUMP = True
 
+# ★★★**発走済みのレースは推奨から落とす**（2026-09-19 に実際に踏んだ）
+#   ⚠**11:05 に取得した日があった**（寝坊）。**6レースが既に走り終わっていた**のに
+#   　**①②③④とも推奨に入った**——★**確定オッズで作った推奨**である。
+#   ⚠⚠**特に②甘い軸は単勝オッズだけで決まる**ので、**確定オッズだと期待払戻が
+#   　小さく出やすく、(112) の標本を静かに甘くする**。★`in_sample` は穴馬しか守らない。
+#   ★**判定は `entries` の `post`（発走時刻）と、取得時刻（板の `fetched_at`）の比較**。
+#   　★**「取得した時点で既に発走していたレースは、そもそも買えない」**——★**ROIの話ではない**。
+DROP_STARTED = True
+
 # ★取り込み元（★研究は各セッションのまま。★ここは「読んで取り込む」だけ）
 UPSTREAM = [
     ("研究（枠連・本命）", "claude/handoff-env-check-2kexpo"),
@@ -163,6 +172,15 @@ def run_waku(ymd, outdir):
     if r.returncode or not os.path.exists(os.path.join(ROOT, wj)):
         return text, None
     d = json.load(open(os.path.join(ROOT, wj), encoding="utf-8"))
+    # ★★発走済みは正典から落とす（★そこが (112) の標本の入口なので、混ぜたら汚れる）
+    started, hhmm, labs = started_races(ymd) if DROP_STARTED else (set(), None, [])
+    if started:
+        d["races"] = [rc for rc in d["races"] if rc["raceid"] not in started]
+        d["dropped_started"] = {"fetched_at": hhmm, "races": labs,
+                                "why": "★取得した時点で既に発走していた＝買えない。"
+                                       "★確定オッズで作った推奨になるので標本に入れない"}
+        json.dump(d, open(os.path.join(ROOT, wj), "w", encoding="utf-8"),
+                  ensure_ascii=False, indent=1)
     waku, soft = [], []
     for rc in d["races"]:
         if rc.get("wakuren") and not rc.get("excluded"):
@@ -175,7 +193,8 @@ def run_waku(ymd, outdir):
                          "combo": s["sanrenpuku"], "e_axis": s["e_axis"],
                          "tier": s["tier"], "cost": 100})
     return text, {"odds_at": d.get("odds_at", ""), "model": d.get("model_dir", ""),
-                  "wakuren": waku, "soft_sanrenpuku": soft}
+                  "wakuren": waku, "soft_sanrenpuku": soft,
+                  "dropped_started": labs, "fetched_at": hhmm}
 
 
 # ---------------------------------------------------------------- ②③穴馬・SNS
@@ -206,14 +225,20 @@ def run_ana(ymd, sns, gap=None):
                 return dict.get(self, k, *a)
         return B(boards), p
 
+    started, _hh, started_labs = started_races(ymd) if DROP_STARTED else (set(), None, [])
+
     def le_nojump(path):
-        """★障害戦を入口で落とす（⚠`reco_ana_day.py` は1行も書き換えない）。"""
+        """★障害戦と★発走済みを入口で落とす（⚠`reco_ana_day.py` は1行も書き換えない）。"""
         rs = orig_le(path)
-        if not DROP_JUMP:
-            return rs
-        keep = [rc for rc in rs if (rc.get("surface") or "") != "障"]
-        st["dropped"] = [f"{rc['place']}{rc['r']}R" for rc in rs
-                         if (rc.get("surface") or "") == "障"]
+        keep, jump = [], []
+        for rc in rs:
+            if DROP_STARTED and rc["raceid"] in started:
+                continue                    # ★取得時点で既に発走＝買えない
+            if DROP_JUMP and (rc.get("surface") or "") == "障":
+                jump.append(f"{rc['place']}{rc['r']}R")
+                continue
+            keep.append(rc)
+        st["dropped"] = jump
         return keep
 
     def hook_ax(ub, od, pv, board):
@@ -280,6 +305,7 @@ def run_ana(ymd, sns, gap=None):
         r["in_sample"] = bool(hhmm) and hhmm <= BOARD_CUTOFF
         r["board_cutoff"] = BOARD_CUTOFF
     rec["dropped_jump"] = st.get("dropped", [])
+    rec["dropped_started"] = started_labs
 
     # ---- ★「記録だけ」の G馬単M4点 / Q三連単A4点（`ANA_MERGE_HANDOFF.md` Q3）
     #   ⚠**買い目も軸も変えない**。★`ANA_RULE.md` §4-2 が「記録対象は6本」と書いているのに
@@ -310,6 +336,49 @@ def run_ana(ymd, sns, gap=None):
     rec["gap"] = gap if sns else D.GAP
     rec["lfix"] = lfix_used
     return buf.getvalue(), rec
+
+
+def fetch_hhmm(ymd):
+    """★その日の取得時刻（HH:MM）。★板の `fetched_at` の最大値を採る（★自分の時計）。
+
+    ⚠**板が無ければ `entries` の `odds_at` の最大値**。★**どちらも無ければ None**。
+    """
+    best = ""
+    mp = os.path.join(ROOT, MORN.format(ymd=ymd))
+    if os.path.exists(mp):
+        for line in io.open(mp, encoding="utf-8"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                at = json.loads(line).get("fetched_at", "")
+            except ValueError:
+                continue
+            best = max(best, at[11:16])
+    if best:
+        return best
+    ep = os.path.join(ROOT, ENTRIES.format(ymd=ymd))
+    if os.path.exists(ep):
+        d = json.load(open(ep, encoding="utf-8"))
+        for rc in (d.get("races", []) if isinstance(d, dict) else d):
+            best = max(best, str(rc.get("odds_at", ""))[11:16])
+    return best or None
+
+
+def started_races(ymd):
+    """→ ({発走済みの raceid}, 取得時刻HH:MM, [表示用ラベル])。★`post` < 取得時刻 なら発走済み。"""
+    hhmm = fetch_hhmm(ymd)
+    ep = os.path.join(ROOT, ENTRIES.format(ymd=ymd))
+    if not (hhmm and os.path.exists(ep)):
+        return set(), hhmm, []
+    d = json.load(open(ep, encoding="utf-8"))
+    ids, labs = set(), []
+    for rc in (d.get("races", []) if isinstance(d, dict) else d):
+        post = str(rc.get("post") or "")
+        if len(post) == 5 and post < hhmm:
+            ids.add(rc["raceid"])
+            labs.append(f"{rc['place']}{rc['r']}R({post})")
+    return ids, hhmm, labs
 
 
 def entries_index(ymd):
@@ -506,6 +575,13 @@ def main():
     s.append(f"　★**自分で買う合計  {c_waku + c_soft + c_ana:,}円**"
              "（⚠②は直前の再判定で消えることがある）")
     s.append("")
+    if (waku or {}).get("dropped_started"):
+        s.append(f"■ ⚠★**取得({waku['fetched_at']})の時点で発走済みだった "
+                 f"{len(waku['dropped_started'])}レースを全部落とした**")
+        s.append("　　" + " ".join(waku["dropped_started"]))
+        s.append("　　★**買えないレースなので推奨にも正典にも入れない**"
+                 "（⚠確定オッズで作った推奨になるため）")
+        s.append("")
     s.append("■ ① 本命 枠連")
     for x in (waku["wakuren"] if waku else []):
         s.append(f"　　{x['label']:>9}　枠連 {' / '.join(x['combos'])}"

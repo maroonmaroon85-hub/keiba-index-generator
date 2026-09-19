@@ -554,6 +554,12 @@ def main():
         print("\n⚠★**足りないものがあるので止めた**。上のコマンドを先に叩くこと。")
         return 1
     head.append("　★揃っている")
+    # ★★結果CSVの穴を朝のうちに見せる（⚠止めはしない。取得は Mac 側なので今日は間に合わない）
+    import nk_gaps
+    gap_txt, gap_days = nk_gaps.lines()
+    head.append("")
+    head.append("■ 過去走データ")
+    head += gap_txt
 
     waku_txt, waku = run_waku(ymd, os.path.join(OUTDIR, ymd))
     ana_txt, ana = run_ana(ymd, sns=False)
@@ -660,6 +666,8 @@ def main():
         "generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "git_head": sh("git", "rev-parse", "HEAD").stdout.strip(),
         "note": "★朝に凍結した買い目。★夜の採点（ml/raceday_night.py）はこれだけを読む",
+        # ★★この日の推奨を作ったときに結果CSVが欠けていた日（★後から標本を読むときの但し書き）
+        "results_gaps": gap_days,
         **({"overwrote": {
             "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
             "prev_generated_at": frozen.get("generated_at"),

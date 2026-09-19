@@ -74,6 +74,12 @@ PYCHECK
 echo ""; echo "=== 名寄せ ==="
 python3 ml/nk_link.py
 
+# ★★結果CSVに穴があると、その日に走った馬は以後ずっと「過去走なし」で表から落ちる。
+#   ⚠**落ちた馬が勝つことがある**（2026-09-19 中山3R・単勝1.5倍の1番人気が落ちていた）。
+#   ★ここは netkeiba に届く唯一の場所なので、気づいたその場で埋められる。
+echo ""; echo "=== 結果CSVの穴 ==="
+python3 ml/nk_gaps.py || true
+
 echo ""; echo "=== commit / push ==="
 git add data/nk
 if git diff --cached --quiet; then

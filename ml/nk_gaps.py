@@ -40,6 +40,7 @@ import csv
 import datetime
 import glob
 import io
+import re
 import os
 import re
 import sys
@@ -64,40 +65,78 @@ def covered(nkdir=NKDIR):
     return out
 
 
-def gaps(have):
-    """→ [(YYYYMMDD, '土'/'日')]。★期間内で土日なのに無い日だけ。"""
-    if len(have) < 2:
+def entry_days(nkdir=NKDIR):
+    """→ 出馬表を取った日の集合。★**曜日に頼らずに開催日が分かる唯一の一次情報**。"""
+    out = set()
+    for p in glob.glob(os.path.join(nkdir, "entries*.json")):
+        m = re.search(r"(\d{8})", os.path.basename(p))
+        if m:
+            out.add(m.group(1))
+    return out
+
+
+def gaps(have, entries=None, today=None):
+    """→ [(YYYYMMDD, 曜日, 出どころ)]。★**3つの見方を足し合わせる**。
+
+    ⚠★**2026-09-22 に2つの穴を塞いだ**（**SNS側の指摘・`ANA_SNS_GAP_REPLY.md` §4**）:
+
+    | # | ⚠**見えなかったもの** | ★**直し方** |
+    |---|---|---|
+    | **1** | ⚠**末尾の穴**——★**窓の右端が「手元の最終日」なので、★最後に取り損ねた日は構造上絶対に出ない** | ★**右端を「今日」まで伸ばす** |
+    | **2** | ⚠**土日以外の開催**（★**振替・祝日**） | ★**`entries<日付>.json` があるのに結果が無い日**を穴にする |
+
+    ★**2 は曜日の推測ではなく一次情報**——**出馬表を取った日は、必ず開催日**。
+    　★**実際に 2026-09-22（火）がこれで見つかった**（⚠**土日だけ見ていたら永久に出なかった**）。
+    ⚠**今日ぶんは「まだ夜を回していないだけ」のことが多い**ので、★**出どころを添えて区別する**。
+    """
+    if not have:
         return []
-    lo, hi = min(have), max(have)
+    entries = entries if entries is not None else set()
+    lo = min(have)
+    hi = max(have | entries)
+    end_d = today or datetime.date.today()       # ★★右端は「今日」。⚠手元の最終日ではない
     d = datetime.date(int(lo[:4]), int(lo[4:6]), int(lo[6:]))
-    end = datetime.date(int(hi[:4]), int(hi[4:6]), int(hi[6:]))
+    end = max(datetime.date(int(hi[:4]), int(hi[4:6]), int(hi[6:])), end_d)
     out = []
     while d <= end:
-        if d.weekday() in (5, 6):
-            y = d.strftime("%Y%m%d")
-            if y not in have:
-                out.append((y, "土" if d.weekday() == 5 else "日"))
+        y = d.strftime("%Y%m%d")
+        if y not in have:
+            if y in entries:
+                out.append((y, "月火水木金土日"[d.weekday()], "出馬表あり"))
+            elif d.weekday() in (5, 6):
+                out.append((y, "土" if d.weekday() == 5 else "日", "土日"))
         d += datetime.timedelta(days=1)
     return out
 
 
-def lines(nkdir=NKDIR):
+def lines(nkdir=NKDIR, today=None):
     """→ (表示する行, 穴の日付リスト)。★raceday.py からも呼ぶ。"""
     have = covered(nkdir)
-    g = gaps(have)
+    ent = entry_days(nkdir)
+    g = gaps(have, ent, today)
     if not have:
         return [f"⚠**{nkdir}/DSnk*.CSV が1つも無い**"], []
     if not g:
         return [f"　★結果CSVに穴なし（{min(have)}〜{max(have)} / {len(have)}日）"], []
-    out = [f"⚠★★**結果CSVに穴が {len(g)}日ある**（{min(have)}〜{max(have)}）",
-           "　　" + " ".join(f"{y}({w})" for y, w in g),
-           "　⚠**この日に走った馬は「過去走なし」になり、モデルの表から落ちる**"
-           "（★落ちた馬が勝つことがある・9/19 中山3R）",
-           "　★**埋めるのは Mac 側**（⚠この順番で。`pedigree` を飛ばすと血統が消える）:"]
-    out += [f"　　　python3 ml/nk_fetch.py results {y}" for y, _w in g]
+    # ★★今日ぶんは「まだ夜を回していないだけ」。⚠取り損ねと混ぜない
+    tdy = (today or datetime.date.today()).strftime("%Y%m%d")
+    now = [x for x in g if x[0] == tdy]
+    g = [x for x in g if x[0] != tdy]
+    out = []
+    if now:
+        out += [f"　★{tdy} は今日ぶん（★夜に `sh raceday_results.sh {tdy}` を回せば埋まる）"]
+    if not g:
+        out.append(f"　★結果CSVに穴なし（{min(have)}〜{max(have)} / {len(have)}日）")
+        return out, []
+    out += [f"⚠★★**結果CSVに穴が {len(g)}日ある**（{min(have)}〜{max(have)}）",
+            "　　" + " ".join(f"{y}({w}・{src})" for y, w, src in g),
+            "　⚠**この日に走った馬は「過去走なし」になり、モデルの表から落ちる**"
+            "（★落ちた馬が勝つことがある・9/19 中山3R）",
+            "　★**埋めるのは Mac 側**（⚠この順番で。`pedigree` を飛ばすと血統が消える）:"]
+    out += [f"　　　python3 ml/nk_fetch.py results {y}" for y, _w, _s in g]
     out += ["　　　python3 ml/nk_fetch.py pedigree",
             "　　　python3 ml/nk_link.py"]
-    return out, [y for y, _w in g]
+    return out, [y for y, _w, _s in g]
 
 
 def archive_days(pattern=None):

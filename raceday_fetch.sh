@@ -61,6 +61,15 @@ else
   n=1
   until git push -u origin "HEAD:$BRANCH"; do
     [ "$n" -ge 4 ] && { echo "⚠ push に4回失敗した"; exit 1; }
+    # ★★拒否の原因が「リモートが進んでいる」ときは、★待っても永久に直らない。
+    #   ⚠**冒頭の早送りから push までの間に、クラウド側が答え合わせを push していると必ずこうなる**
+    #   　（★2026-09-22 の朝に実際に起きた。4回とも non-fast-forward で失敗）。
+    #   → ★**押し直す前に取り込む**。★ネットワーク障害のときは merge が空振りするだけで無害。
+    git fetch origin "$BRANCH" || true
+    if ! git merge --no-edit "origin/$BRANCH"; then
+      echo ""; echo "⚠★**取り込みで衝突した。★手で解決してから push すること**"
+      git status --short; exit 1
+    fi
     sleep $((1 << n)); n=$((n + 1))
   done
 fi

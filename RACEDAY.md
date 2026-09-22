@@ -213,3 +213,4 @@ claude/dreamy-keller-2p8bmf    ★運用ハブ（★開催日はここで走る�
 | ★**「血統がほとんど埋まっていない。名寄せの手前で止めた」** | ★**まだ取り返せる状態で止めてある**。`python3 ml/nk_fetch.py pedigree` を単体で流してから、もう一度 `sh raceday_results.sh <日付>`。⚠**無視して `nk_link.py` を叩かないこと** |
 | **`ml/model_prod` が無い** | ★**朝の一括が自動で作る**（約2分）。⚠`ml/model_ana_fwd` は**コミット済み。作り直さない**（標本が切れる） |
 | **取り込みがコンフリクトした** | ★画面に出る `git merge origin/<ブランチ>` を手で解く |
+| ⚠★**Macの push が4回とも `! [rejected] (fetch first)` で落ちた** | ★**ネットワークではない**——**冒頭の早送りから push までの間に、クラウド側が答え合わせを push した**（★**2026-09-22 の朝に実際に起きた**）。★**取れたデータはMacにコミット済みなので失われていない**。`git pull --no-rebase origin claude/dreamy-keller-2p8bmf` → `git push -u origin HEAD:claude/dreamy-keller-2p8bmf`。★**2026-09-22 に両スクリプトを直した**（★拒否されたら取り込んでから押し直す）ので、以後は自動で通る |

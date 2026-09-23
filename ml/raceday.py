@@ -223,7 +223,7 @@ def run_ana(ymd, sns, gap=None):
     import numpy as np
     import reco_ana_day as D
     rec, cur = {"races": []}, {"rid": None}
-    st = {"boards": {}, "ctx": {}}          # ★板の時刻 と 軸判定の材料（★記録用・値は変えない）
+    st = {"boards": {}, "ctx": {}, "nub": {}, "nrun": {}}  # ★板の時刻 / 軸判定の材料 / ★評価頭数（記録用・値は変えない）
     by_kind = {k: name for name, _hk, k, _n in D.BUY}
 
     orig_lmb, orig_t = D.load_morn_boards, D.tickets
@@ -252,13 +252,21 @@ def run_ana(ymd, sns, gap=None):
                 jump.append(f"{rc['place']}{rc['r']}R")
                 continue
             keep.append(rc)
+            # ★★入口を通ったレースの出走頭数を控える（⚠`axis_and_himo` は
+            #   　全馬が落ちたレースでは呼ばれないので、★ここで拾わないと漏れる）。
+            st["nrun"][rc["raceid"]] = len(rc.get("horses") or [])
         st["dropped"] = jump
         return keep
 
     def hook_ax(ub, od, pv, board):
-        """⚠**値は一切変えない**。★G紐（ズレ降順）とQ紐（単勝昇順）を作る材料を控えるだけ。"""
+        """⚠**値は一切変えない**。★G紐（ズレ降順）とQ紐（単勝昇順）を作る材料を控えるだけ。
+
+        ★**2026-09-22 に「評価頭数」も控えるようにした**（★穴馬側の依頼・形の指定どおり）:
+        　★**軸が立たないレースでも控える**——⚠**該当したレースだけだと曝露が測れない**。
+        """
         r = orig_ax(ub, od, pv, board)
         ax, _op, _X, _pn, _qp, gap = r
+        st["nub"][cur["rid"]] = len(ub)     # ★★全レース。⚠ax の有無に依らない
         if ax is not None:
             st["ctx"][cur["rid"]] = {"ub": [int(u) for u in ub],
                                      "od": [float(x) for x in od],
@@ -320,6 +328,20 @@ def run_ana(ymd, sns, gap=None):
         r["board_cutoff"] = BOARD_CUTOFF
     rec["dropped_jump"] = st.get("dropped", [])
     rec["dropped_started"] = started_labs
+
+    # ---- ★★落とした頭数を残す（★穴馬側の依頼・2026-09-22・形は先方の指定どおり）
+    #   ⚠**これは「買い目」ではなく★曝露の記録**。★`results_gaps` と同じ発想。
+    #   ★**単位はレースごと / 中身は {評価頭数, 出走頭数, 落とした頭数}**。
+    #   ★★**時点は朝の凍結時**（⚠夜に数え直した値ではない）。★**該当0本のレースも入れる**——
+    #   　⚠**該当したレースだけだと「落ちが多い日だったか」が測れない**（先方の指定）。
+    #   ★**落ちる理由は2つ**: **過去走に繋がらない**（大半は新馬）／**モデルが使えない行**。
+    #   　⚠**ここでは理由を分けない**（★`reco_ana_day` を書き換えないと分けられないため）。
+    #   ⚠★**母数は「入口を通った全レース」**（`st["nrun"]`）。★`st["nub"]`（評価できたレース）
+    #   　だけだと、⚠**全馬が落ちたレース＝いちばん落ちが多いレースが漏れる**
+    #   　（★2026-09-22 の試走で 中山5R(15頭全落ち) と 中山6R(8頭全落ち) が消えて発覚）。
+    rec["field"] = {rid: {"evaluated": st["nub"].get(rid, 0), "runners": n,
+                          "dropped": n - st["nub"].get(rid, 0)}
+                    for rid, n in sorted(st["nrun"].items()) if rid}
 
     # ---- ★「記録だけ」の G馬単M4点 / Q三連単A4点（`ANA_MERGE_HANDOFF.md` Q3）
     #   ⚠**買い目も軸も変えない**。★`ANA_RULE.md` §4-2 が「記録対象は6本」と書いているのに

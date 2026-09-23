@@ -207,6 +207,7 @@ def main():
 
     # ---- ③ 穴馬（自分用）
     print("\n■ ③ 穴馬（自分用）　★8点800円/レース")
+    posts = post_map(ymd)
     ana_rows = []
     for rc in T.get("ana", {}).get("races", []):
         rid, ax = rc["raceid"], rc["axis"]
@@ -218,7 +219,10 @@ def main():
                 "odds_at": (T.get("waku") or {}).get("odds_at", ""),
                 # ★板が上限(既定10:30)を過ぎた日は 0。★行は残す（`ANA_MERGE_HANDOFF.md` Q1-b）
                 "in_sample": int(rc.get("in_sample", True)),
-                "board_cutoff": rc.get("board_cutoff", "")}
+                "board_cutoff": rc.get("board_cutoff", ""),
+                # ★★発走時刻（★穴馬側の依頼・2026-09-23）。⚠`board_at` と並べれば
+                #   　「板が発走前に取れたか」が読める。★判定には使わない・記録だけ
+                "post": posts.get(rid, "")}
         print(f"　　{rc['label']}　軸 {ax}番"
               + (f"　→ ★**{f}着**" if f is not None else "　（着順不明）"))
         for t in rc["tickets"]:
@@ -339,6 +343,29 @@ def main():
           + (f" ・ {ANAFWD}" if ana_rows else ""))
     print(f"　　git add {OUTDIR} {ANAFWD} data/nk && git commit -m '{date} の答え合わせ'")
     return 0
+
+
+def post_map(ymd):
+    """→ {raceid: 発走時刻 "HH:MM"}。★出馬表から読むだけ（⚠判定には使わない・記録用）。
+
+    ⚠★**なぜ要るか（穴馬側の依頼・2026-09-23）**——
+    　★**`in_sample` は板の★絶対時刻（上限10:30）しか見ていない**（`ml/raceday.py`）。
+    　⚠**「板が★発走前に取れたか」は別の話**で、★そこが揃っていないと標本が同質にならない。
+    　★**実測（確定複勝配当が板の[下限,上限]に収まるか）**:
+    | | 板 | 発走 | ★収まった |
+    |---|---|---|---|
+    | **9/12 中山1R** | 09:54 | **09:45** | ⚠**3/3**＝★**締切の板** |
+    | 9/20 中山10R | 08:25 | 15:05 | **0/3**＝★朝の板 |
+    | 9/21 阪神9R | 09:25 | 14:25 | **0/3**＝★朝の板 |
+    　→ ★**朝の板は確定を外す。9/12 だけが外さない**。⚠**qp が別の土俵で計算されている**。
+    ★**主判定から外すかは穴馬側が決めた**（`ANA_RULE.md` §5-2・読み方の規則5）。★ここは材料を残すだけ。
+    """
+    p = os.path.join(ROOT, f"data/nk/entries{ymd}.json")
+    if not os.path.exists(p):
+        return {}
+    d = json.load(io.open(p, encoding="utf-8"))
+    return {rc["raceid"]: (rc.get("post") or "")
+            for rc in (d.get("races", []) if isinstance(d, dict) else d)}
 
 
 def append(path, newrows, ymd):

@@ -597,6 +597,23 @@ def main():
                    "★夜の採点も SNS は ◎の複勝・単勝・着順しか見ない")
     sns["marks_rule"] = "◎=軸 / ○▲△=P紐(モデル順)1・2・3頭目（ANA_SNS_RULE.md §2・2026-09-13から）"
 
+    # ---- ★★◎の前走の中身（★投稿文に添える材料・利用者の指定 2026-09-26）
+    #   ⚠**毎回自動で出す**（★手で思い出す運用にしない）。★該当0本の日は走らせない。
+    #   ⚠**`reco_sns_last.py` は `reco_sns_why.capture()` 経由で軸判定をやり直すので数分かかる**。
+    #   　★**判定は向こうが作った物をそのまま使う**ので、⚠**ここの買い目には影響しない**。
+    #   ⚠**落ちても朝の一括は止めない**（★材料が無いだけ。★買い目は既に確定している）。
+    sns_last = ""
+    if sns["races"]:
+        rl = subprocess.run([sys.executable, "ml/reco_sns_last.py", ymd],
+                            cwd=ROOT, capture_output=True, text=True)
+        out = rl.stdout or ""
+        i = out.find("(252sns)")
+        sns_last = out[i:] if i >= 0 else ""
+        if not sns_last:
+            sns_last = ("⚠**◎の前走を出せなかった**"
+                        f"（★`python3 ml/reco_sns_last.py {ymd}` を手で叩いて確かめること）\n"
+                        + (rl.stderr or "")[-400:])
+
     # ---- まとめ
     n_waku = len(waku["wakuren"]) if waku else 0
     n_soft = len(waku["soft_sanrenpuku"]) if waku else 0
@@ -677,6 +694,10 @@ def main():
     detail = ("\n\n" + "=" * 78 + "\n★①本命 predict_nk.py の生出力\n" + "=" * 78 + "\n" + waku_txt
               + "\n\n" + "=" * 78 + "\n★③穴馬 reco_ana_day.py の生出力\n" + "=" * 78 + "\n" + ana_txt
               + "\n\n" + "=" * 78 + "\n★④SNS reco_sns_day.py の生出力\n" + "=" * 78 + "\n" + sns_txt)
+    if sns_last:                       # ★★画面にも出す（⚠print より前に足すこと）
+        detail += ("\n\n" + "=" * 78 + "\n★④SNS ◎の前走の中身 reco_sns_last.py の生出力\n"
+                   + "=" * 78 + "\n" + sns_last)
+        open(os.path.join(outdir, "sns_last.txt"), "w", encoding="utf-8").write(sns_last)
     print(brief)
     print(detail)
 
@@ -701,7 +722,8 @@ def main():
     json.dump(tickets, open(os.path.join(outdir, "tickets.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
     print(f"★保存: {OUTDIR}/{ymd}/tickets.json ・ brief.txt ・ sns_post.txt"
-          f" ／ ★正典 data/reco/reco_{ymd}.json")
+          + ("・ sns_last.txt" if sns_last else "")
+          + f" ／ ★正典 data/reco/reco_{ymd}.json")
     print("⚠★**買う前にコミットすること**（★結果を見る前に凍結した証拠になる）:")
     print(f"　　git add {OUTDIR}/{ymd} data/reco data/nk data/nk_odds_morn && "
           f"git commit -m '{d} の朝の買い目（結果を見る前）'")

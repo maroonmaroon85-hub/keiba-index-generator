@@ -1,0 +1,489 @@
+{
+ "date": "20260926",
+ "generated_at": "2026-09-26T00:46:16+00:00",
+ "git_head": "8731fd770c4935ee13c1a8d25800e74af8c97a07",
+ "note": "★朝に凍結した買い目。★夜の採点（ml/raceday_night.py）はこれだけを読む",
+ "results_gaps": [],
+ "waku": {
+  "odds_at": "2026-09-26 09:35:50",
+  "model": "ml/model_prod",
+  "wakuren": [
+   {
+    "raceid": "06264801",
+    "label": "中山1R",
+    "axis": 1,
+    "axis_name": "アルビオンライズ",
+    "combos": [
+     "1-3"
+    ],
+    "cost": 100
+   },
+   {
+    "raceid": "06264802",
+    "label": "中山2R",
+    "axis": 11,
+    "axis_name": "ハンサム",
+    "combos": [
+     "7-8"
+    ],
+    "cost": 100
+   },
+   {
+    "raceid": "06264807",
+    "label": "中山7R",
+    "axis": 6,
+    "axis_name": "ダノンファンスター",
+    "combos": [
+     "3-8"
+    ],
+    "cost": 100
+   },
+   {
+    "raceid": "09264801",
+    "label": "阪神1R",
+    "axis": 10,
+    "axis_name": "スカイメテオ",
+    "combos": [
+     "5-8"
+    ],
+    "cost": 100
+   }
+  ],
+  "soft_sanrenpuku": [],
+  "dropped_started": [],
+  "fetched_at": "09:39"
+ },
+ "ana": {
+  "races": [],
+  "dropped_jump": [
+   "中山4R"
+  ],
+  "dropped_started": [],
+  "field": {
+   "06264801": {
+    "evaluated": 13,
+    "runners": 13,
+    "dropped": 0
+   },
+   "06264802": {
+    "evaluated": 12,
+    "runners": 12,
+    "dropped": 0
+   },
+   "06264803": {
+    "evaluated": 0,
+    "runners": 16,
+    "dropped": 16
+   },
+   "06264805": {
+    "evaluated": 0,
+    "runners": 14,
+    "dropped": 14
+   },
+   "06264806": {
+    "evaluated": 0,
+    "runners": 7,
+    "dropped": 7
+   },
+   "06264807": {
+    "evaluated": 18,
+    "runners": 18,
+    "dropped": 0
+   },
+   "06264808": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "06264809": {
+    "evaluated": 8,
+    "runners": 8,
+    "dropped": 0
+   },
+   "06264810": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "06264811": {
+    "evaluated": 14,
+    "runners": 14,
+    "dropped": 0
+   },
+   "06264812": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "09264801": {
+    "evaluated": 11,
+    "runners": 11,
+    "dropped": 0
+   },
+   "09264802": {
+    "evaluated": 0,
+    "runners": 7,
+    "dropped": 7
+   },
+   "09264803": {
+    "evaluated": 15,
+    "runners": 15,
+    "dropped": 0
+   },
+   "09264804": {
+    "evaluated": 0,
+    "runners": 15,
+    "dropped": 15
+   },
+   "09264805": {
+    "evaluated": 0,
+    "runners": 15,
+    "dropped": 15
+   },
+   "09264806": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "09264807": {
+    "evaluated": 13,
+    "runners": 13,
+    "dropped": 0
+   },
+   "09264808": {
+    "evaluated": 11,
+    "runners": 11,
+    "dropped": 0
+   },
+   "09264809": {
+    "evaluated": 8,
+    "runners": 8,
+    "dropped": 0
+   },
+   "09264810": {
+    "evaluated": 14,
+    "runners": 14,
+    "dropped": 0
+   },
+   "09264811": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "09264812": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   }
+  },
+  "gap": 0.15,
+  "lfix": 10.0
+ },
+ "sns": {
+  "races": [
+   {
+    "raceid": "06264808",
+    "axis": 10,
+    "tickets": [
+     {
+      "label": "P馬単M4点",
+      "kind": "馬単M",
+      "n": 4,
+      "himo": [
+       12,
+       1
+      ],
+      "himo_rank": [
+       12,
+       1,
+       7,
+       13
+      ],
+      "combos": [
+       [
+        10,
+        12
+       ],
+       [
+        12,
+        10
+       ],
+       [
+        10,
+        1
+       ],
+       [
+        1,
+        10
+       ]
+      ],
+      "cost": 400
+     },
+     {
+      "label": "X三連単A4点",
+      "kind": "三連単A",
+      "n": 4,
+      "himo": [
+       12,
+       1,
+       11
+      ],
+      "himo_rank": [
+       12,
+       1,
+       11,
+       7
+      ],
+      "combos": [
+       [
+        10,
+        12,
+        1
+       ],
+       [
+        10,
+        1,
+        12
+       ],
+       [
+        10,
+        12,
+        11
+       ],
+       [
+        10,
+        11,
+        12
+       ]
+      ],
+      "cost": 400
+     }
+    ],
+    "board_at": "2026-09-26 09:38:53+0900",
+    "in_sample": true,
+    "board_cutoff": "10:30",
+    "label": "中山 8R ３歳以上１勝クラス",
+    "marks": {
+     "◎": 10,
+     "○": 12,
+     "▲": 1,
+     "△": 7
+    }
+   },
+   {
+    "raceid": "09264809",
+    "axis": 5,
+    "tickets": [
+     {
+      "label": "P馬単M4点",
+      "kind": "馬単M",
+      "n": 4,
+      "himo": [
+       8,
+       2
+      ],
+      "himo_rank": [
+       8,
+       2,
+       3,
+       7
+      ],
+      "combos": [
+       [
+        5,
+        8
+       ],
+       [
+        8,
+        5
+       ],
+       [
+        5,
+        2
+       ],
+       [
+        2,
+        5
+       ]
+      ],
+      "cost": 400
+     },
+     {
+      "label": "X三連単A4点",
+      "kind": "三連単A",
+      "n": 4,
+      "himo": [
+       8,
+       2,
+       3
+      ],
+      "himo_rank": [
+       8,
+       2,
+       3,
+       1
+      ],
+      "combos": [
+       [
+        5,
+        8,
+        2
+       ],
+       [
+        5,
+        2,
+        8
+       ],
+       [
+        5,
+        8,
+        3
+       ],
+       [
+        5,
+        3,
+        8
+       ]
+      ],
+      "cost": 400
+     }
+    ],
+    "board_at": "2026-09-26 09:39:18+0900",
+    "in_sample": true,
+    "board_cutoff": "10:30",
+    "label": "阪神 9R ヤマボウシ賞(1勝クラス)",
+    "marks": {
+     "◎": 5,
+     "○": 8,
+     "▲": 2,
+     "△": 3
+    }
+   }
+  ],
+  "dropped_jump": [
+   "中山4R"
+  ],
+  "dropped_started": [],
+  "field": {
+   "06264801": {
+    "evaluated": 13,
+    "runners": 13,
+    "dropped": 0
+   },
+   "06264802": {
+    "evaluated": 12,
+    "runners": 12,
+    "dropped": 0
+   },
+   "06264803": {
+    "evaluated": 0,
+    "runners": 16,
+    "dropped": 16
+   },
+   "06264805": {
+    "evaluated": 0,
+    "runners": 14,
+    "dropped": 14
+   },
+   "06264806": {
+    "evaluated": 0,
+    "runners": 7,
+    "dropped": 7
+   },
+   "06264807": {
+    "evaluated": 18,
+    "runners": 18,
+    "dropped": 0
+   },
+   "06264808": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "06264809": {
+    "evaluated": 8,
+    "runners": 8,
+    "dropped": 0
+   },
+   "06264810": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "06264811": {
+    "evaluated": 14,
+    "runners": 14,
+    "dropped": 0
+   },
+   "06264812": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "09264801": {
+    "evaluated": 11,
+    "runners": 11,
+    "dropped": 0
+   },
+   "09264802": {
+    "evaluated": 0,
+    "runners": 7,
+    "dropped": 7
+   },
+   "09264803": {
+    "evaluated": 15,
+    "runners": 15,
+    "dropped": 0
+   },
+   "09264804": {
+    "evaluated": 0,
+    "runners": 15,
+    "dropped": 15
+   },
+   "09264805": {
+    "evaluated": 0,
+    "runners": 15,
+    "dropped": 15
+   },
+   "09264806": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "09264807": {
+    "evaluated": 13,
+    "runners": 13,
+    "dropped": 0
+   },
+   "09264808": {
+    "evaluated": 11,
+    "runners": 11,
+    "dropped": 0
+   },
+   "09264809": {
+    "evaluated": 8,
+    "runners": 8,
+    "dropped": 0
+   },
+   "09264810": {
+    "evaluated": 14,
+    "runners": 14,
+    "dropped": 0
+   },
+   "09264811": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   },
+   "09264812": {
+    "evaluated": 16,
+    "runners": 16,
+    "dropped": 0
+   }
+  },
+  "gap": 0.1,
+  "lfix": 8.0,
+  "note": "★印の導出用。⚠**この tickets は買わない**——`reco_ana_day` の買い目（P馬単M4点＋X三連単A4点＝800円）がそのまま入っているが、`ANA_SNS_RULE.md` §3 のSNS用は 複勝1＋単勝1＋P馬連2＝400円で別物。★夜の採点も SNS は ◎の複勝・単勝・着順しか見ない",
+  "marks_rule": "◎=軸 / ○▲△=P紐(モデル順)1・2・3頭目（ANA_SNS_RULE.md §2・2026-09-13から）"
+ }
+}

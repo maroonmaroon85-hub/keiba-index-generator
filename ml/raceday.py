@@ -68,6 +68,30 @@ MORN = "data/nk_odds_morn/place{ymd}.jsonl"
 #   ⚠**年32本では、あとから時刻で層別して読むことは不可能**。★**入口で切るしかない**。
 #   → ★**超えた日は `in_sample=0` にする。★記録は残す**（捨てない）。
 BOARD_CUTOFF = "10:30"
+JST = datetime.timezone(datetime.timedelta(hours=9))   # ★上限は★日本時間で見る
+
+
+def board_hhmm(at):
+    """`board_at` → ★**日本時間の "HH:MM"**（読めなければ ""）。
+
+    ⚠★★**2026-09-26 に直した**——**それまで `at[11:16]` と★文字列を切っていた**。
+    　★**`fetched_at` はオフセット付き**（規則3）だが、⚠**切り出しはオフセットを見ない**。
+    　★**Macは JST なので偶然正しかった**。⚠**クラウド（UTC）で走らせると壊れる**:
+    　　★**10:30 JST ＝ 01:30 UTC**。→ ⚠**01:30〜10:30 UTC（＝10:30〜19:30 JST）に取った板が、
+    　　　`"02:00" <= "10:30"` のように★上限を過ぎているのに通る**。
+    　→ ⚠★**上限が守ろうとしている当のもの（標本が静かに甘くなること）が壊れる**。
+    ★**必ず JST に直してから切る**。
+    """
+    at = (at or "").strip()
+    if not at:
+        return ""
+    try:
+        d = datetime.datetime.fromisoformat(at.replace(" ", "T", 1))
+    except ValueError:
+        return at[11:16] if len(at) >= 16 else ""     # ★読めなければ従来どおり（★退行しない）
+    if d.tzinfo is None:
+        return d.strftime("%H:%M")                    # ★裸の時刻は書いた側の地方時と見なす
+    return d.astimezone(JST).strftime("%H:%M")
 
 # ★★障害戦は穴馬側でも除外する（`ANA_MERGE_HANDOFF.md` Q2・穴馬側の推奨をそのまま採用）
 #   ★**生データのトラック種別は 芝/ダ の2値で「障」が無い**（`features.py`）
@@ -323,7 +347,7 @@ def run_ana(ymd, sns, gap=None):
         b = st["boards"].get(r["raceid"])
         r["board_at"] = b[1] if b else ""
         # ★板が上限を過ぎた日は標本に入れない（★記録は残す）
-        hhmm = r["board_at"][11:16] if len(r["board_at"]) >= 16 else ""
+        hhmm = board_hhmm(r["board_at"])          # ★★JSTに直してから切る（⚠文字列切りではない）
         r["in_sample"] = bool(hhmm) and hhmm <= BOARD_CUTOFF
         r["board_cutoff"] = BOARD_CUTOFF
     rec["dropped_jump"] = st.get("dropped", [])
